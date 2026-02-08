@@ -1,0 +1,18 @@
+legacy/*
+todo.md
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Secrets & Recovery
+recovery-kit/
+config/.env
+
+# IDEs
+.vscode/
+.idea/
+
+claude.md
