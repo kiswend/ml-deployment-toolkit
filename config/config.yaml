@@ -16,11 +16,11 @@ infra:
       api_token: "${PROXMOX_VE_API_TOKEN}"
       ssh_user: "${PROXMOX_VE_SSH_USERNAME}"
       ssh_password: "${PROXMOX_VE_SSH_PASSWORD}"
-    # Node mapping: logical -> physical hosts (for anti-affinity)
-    nodes:
-      node_1: "node0"
-      node_2: "node2"
-      node_3: "node0"
+    # Maps deployment template placement groups → Proxmox physical nodes
+    placement:
+      placement-group-1: "node0"
+      placement-group-2: "node2"
+      placement-group-3: "node0"
     # Storage and network
     storage_pool: "local-lvm"
     network_bridge: "vmbr0"
