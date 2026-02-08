@@ -1,11 +1,17 @@
 legacy/*
 todo.md
 
-# Terraform
+# Terraform / OpenTofu
 .terraform/
 *.tfstate
-*.tfstate.backup
+*.tfstate.*
 .terraform.lock.hcl
+tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Secrets & Recovery
 recovery-kit/
@@ -15,4 +21,5 @@ config/.env
 .vscode/
 .idea/
 
-claude.md
+# OS
+.DS_Store

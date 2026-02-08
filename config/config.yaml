@@ -1,69 +1,106 @@
 # ------------------------------------------------------------------
-# INFRASTRUCTURE & CLUSTER CONFIGURATION (V3)
+# INFRASTRUCTURE & CLUSTER CONFIGURATION
 # ------------------------------------------------------------------
 
 # ------------------------------------------------------------------
 # 1. INFRASTRUCTURE PROVIDER
 # ------------------------------------------------------------------
 infra:
-  provider: "proxmox"
+  provider: "proxmox"  # proxmox | aws | digitalocean
 
-  # --- Proxmox Parameters ---
+  # --- Proxmox ---
   proxmox:
     endpoint: "${PROXMOX_VE_ENDPOINT}"
     cluster: "ml-cluster"
     credentials:
-      # Token in full format: user@pam!token_id=secret
       api_token: "${PROXMOX_VE_API_TOKEN}"
       ssh_user: "${PROXMOX_VE_SSH_USERNAME}"
       ssh_password: "${PROXMOX_VE_SSH_PASSWORD}"
-    
-    # Node Mapping: Maps abstract template nodes to physical hosts
+    # Node mapping: logical -> physical hosts (for anti-affinity)
     nodes:
-      node_1: "pve-01"
-      node_2: "pve-02"
-      node_3: "pve-03"
+      node_1: "node0"
+      node_2: "node2"
+      node_3: "node0"
+    # Storage and network
+    storage_pool: "local-lvm"
+    network_bridge: "vmbr0"
+
+  # # --- AWS ---
+  # aws:
+  #   region: "${AWS_REGION}"
+  #   credentials:
+  #     access_key: "${AWS_ACCESS_KEY_ID}"
+  #     secret_key: "${AWS_SECRET_ACCESS_KEY}"
+  #   vpc_cidr: "10.0.0.0/16"
+  #   availability_zones:
+  #     - "${AWS_REGION}a"
+  #     - "${AWS_REGION}b"
+  #     - "${AWS_REGION}c"
+
+  # # --- DigitalOcean ---
+  # digitalocean:
+  #   region: "${DO_REGION}"
+  #   credentials:
+  #     token: "${DIGITALOCEAN_TOKEN}"
+  #   vpc_cidr: "10.10.0.0/16"
 
 # ------------------------------------------------------------------
 # 2. DEPLOYMENT TOPOLOGY
 # ------------------------------------------------------------------
-template: "ha-small"
+template: "tiny"  # tiny | small | small3m3w
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
 # ------------------------------------------------------------------
 cluster:
   name: "control-center"
-  vip: "192.168.88.12"
-  
-  # Artifact Repository (Mirror/Cache)
+
+  # Kubernetes API endpoint
+  vip: "192.168.88.12"              # Proxmox: floating IP
+
+  # Versions (latest stable)
+  talos_version: "v1.9.2"
+  kubernetes_version: "1.32.0"
+
+  # Artifact Repository (OCI cache)
   artifact_repo:
     url: "${OCI_URL}"
     credentials:
       username: "${OCI_USERNAME}"
       password: "${OCI_PASSWORD}"
 
-  # Flux Bootstrap Mode
+  # Flux configuration
   flux:
-    mode: "none" # none (Manual Push - Day 0) | oci (Pull from Harbor - Day 2)
-    version: "2.2.0"
+    version: "2.4.0"
+    mode: "none"      # none (CC - install only) | oci (App Env - pull from Harbor)
 
 # ------------------------------------------------------------------
-# 4. EXTERNAL SERVICES & DNS
+# 4. DNS
 # ------------------------------------------------------------------
 dns:
-  provider: "cloudflare" # route53 | cloudflare | manual
+  provider: "digitalocean"
   domain: "${DOMAIN_NAME}"
-  email: "admin@${DOMAIN_NAME}"
-  # Credentials handled via env vars for provider
+  # Provider-specific configuration
+  # For DigitalOcean:
+  digitalocean:
+    token: "${DIGITALOCEAN_TOKEN}"
+  
+  # For Cloudflare:
+  # cloudflare:
+  #   api_token: "${CLOUDFLARE_API_TOKEN}"
+  #   proxied: false
+
+  # For AWS:
+  # aws:
+  #   region: "${AWS_REGION}"
+  #   # If using IRSA (IAM Roles), Terraform will inject annotations automatically
+  #   # If using keys (not recommended):
+  #   # access_key: ...
 
 # ------------------------------------------------------------------
-# 5. APPLICATION PARAMETERS (Runtime Bridge)
+# 5. APPLICATION PARAMETERS
 # ------------------------------------------------------------------
 app:
-  # Load Balancer IP Management
   lb_ipam:
     range: "192.168.88.100-192.168.88.110"
-  
-  # Observability / Alerts
   alert_email: "ops@${DOMAIN_NAME}"
