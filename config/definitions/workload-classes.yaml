@@ -1,0 +1,25 @@
+# Workload classes for Talos Kubernetes nodes
+# Defines image source and Talos patches per workload class
+
+control-plane:
+  vm_type: "talos"
+  image:
+    url: "https://factory.talos.dev/image/88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b/v1.9.2/nocloud-amd64.raw.gz"
+    content_type: "iso"
+    datastore: "local"
+    file_name: "talos-v1.9.2-amd64.img"
+    decompression: "gz"
+  talos-patches:
+    - patch-cilium-install.yaml
+
+worker-general:
+  vm_type: "talos"
+  image:
+    url: "https://factory.talos.dev/image/88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b/v1.9.2/nocloud-amd64.raw.gz"
+    content_type: "iso"
+    datastore: "local"
+    file_name: "talos-v1.9.2-amd64.img"
+    decompression: "gz"
+  talos-patches:
+    - patch-cilium-install.yaml
+    - patch-openebs.yaml

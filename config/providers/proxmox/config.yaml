@@ -1,0 +1,40 @@
+# Proxmox Infrastructure Configuration
+# Provider-specific settings for Proxmox Virtual Environment
+
+# Talos Configuration (fallback image if workload class doesn't specify one)
+talos:
+  image:
+    url: "https://factory.talos.dev/image/88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b/v1.9.2/nocloud-amd64.raw.gz"
+    content_type: "iso"
+    datastore: "local"
+    decompression: "gz"
+
+# VM Defaults
+vm_defaults:
+  cpu_type: "host"
+  scsihw: "virtio-scsi-pci"
+  boot_order: "scsi0"
+  qemu_agent: true
+
+  network:
+    bridge: "vmbr0"
+    model: "virtio"
+    firewall: false
+
+  disk:
+    type: "scsi"
+    format: "raw"
+    discard: true
+
+# Storage Configuration
+storage:
+  default_pool: "local-lvm"
+
+# VM ID Configuration
+vm_id:
+  start: 300
+
+# Provider-specific Talos patches
+talos-patches:
+  config-patch-control-plane:
+    patches/patch-vip.yaml.tpl

@@ -1,0 +1,28 @@
+# Proxmox-specific storage type mappings
+# Maps abstract storage types to Proxmox storage configurations
+
+local-standard:
+  type: "scsi"
+  storage_pool: "local-lvm"
+  cache: "writeback"
+  discard: true
+
+local-ssd:
+  type: "scsi"
+  storage_pool: "local-ssd"
+  cache: "writeback"
+  discard: true
+  ssd: true
+
+network-standard:
+  type: "scsi"
+  storage_pool: "ceph-pool"
+  cache: "none"
+  discard: false
+
+network-fast:
+  type: "scsi"
+  storage_pool: "ceph-ssd-pool"
+  cache: "writeback"
+  discard: true
+  ssd: true

@@ -1,0 +1,15 @@
+# Abstract instance type catalog
+# Provider-specific mappings live in config/providers/<provider>/instance-types.yaml
+types:
+  - name: gp-2vcpu-8gb
+    # cpu: 2, memory: 8192
+  - name: co-8vcpu-16gb
+    # cpu: 8, memory: 16384
+  - name: mo-4vcpu-32gb
+    # cpu: 4, memory: 32768
+  - name: so-4vcpu-8gb-nvme
+    # cpu: 4, memory: 8192
+  - name: co-4vcpu-8gb
+    # cpu: 4, memory: 8192
+  - name: co-2vcpu-4gb
+    # cpu: 2, memory: 4096

@@ -1,6 +1,10 @@
 # ------------------------------------------------------------------
 # INFRASTRUCTURE & CLUSTER CONFIGURATION
 # ------------------------------------------------------------------
+# Secrets live in config/.env (sourced via Makefile).
+# Proxmox credentials: native PROXMOX_VE_* env vars.
+# Flux-config secrets: TF_VAR_* env vars (digitalocean_token, oci_username, oci_password).
+# ------------------------------------------------------------------
 
 # ------------------------------------------------------------------
 # 1. INFRASTRUCTURE PROVIDER
@@ -10,38 +14,24 @@ infra:
 
   # --- Proxmox ---
   proxmox:
-    endpoint: "${PROXMOX_VE_ENDPOINT}"
-    cluster: "ml-cluster"
-    credentials:
-      api_token: "${PROXMOX_VE_API_TOKEN}"
-      ssh_user: "${PROXMOX_VE_SSH_USERNAME}"
-      ssh_password: "${PROXMOX_VE_SSH_PASSWORD}"
     # Maps deployment template placement groups → Proxmox physical nodes
     placement:
       placement-group-1: "node0"
       placement-group-2: "node2"
       placement-group-3: "node0"
-    # Storage and network
-    storage_pool: "local-lvm"
-    network_bridge: "vmbr0"
 
   # # --- AWS ---
   # aws:
-  #   region: "${AWS_REGION}"
-  #   credentials:
-  #     access_key: "${AWS_ACCESS_KEY_ID}"
-  #     secret_key: "${AWS_SECRET_ACCESS_KEY}"
+  #   region: "us-east-1"
   #   vpc_cidr: "10.0.0.0/16"
   #   availability_zones:
-  #     - "${AWS_REGION}a"
-  #     - "${AWS_REGION}b"
-  #     - "${AWS_REGION}c"
+  #     - "us-east-1a"
+  #     - "us-east-1b"
+  #     - "us-east-1c"
 
   # # --- DigitalOcean ---
   # digitalocean:
-  #   region: "${DO_REGION}"
-  #   credentials:
-  #     token: "${DIGITALOCEAN_TOKEN}"
+  #   region: "nyc1"
   #   vpc_cidr: "10.10.0.0/16"
 
 # ------------------------------------------------------------------
@@ -64,10 +54,7 @@ cluster:
 
   # Artifact Repository (OCI cache)
   artifact_repo:
-    url: "${OCI_URL}"
-    credentials:
-      username: "${OCI_USERNAME}"
-      password: "${OCI_PASSWORD}"
+    url: "oci://registry.example.com/mojaloop"
 
   # Flux configuration
   flux:
@@ -79,23 +66,15 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "${DOMAIN_NAME}"
-  # Provider-specific configuration
-  # For DigitalOcean:
-  digitalocean:
-    token: "${DIGITALOCEAN_TOKEN}"
-  
+  domain: "example.com"
+
   # For Cloudflare:
   # cloudflare:
-  #   api_token: "${CLOUDFLARE_API_TOKEN}"
   #   proxied: false
 
   # For AWS:
   # aws:
-  #   region: "${AWS_REGION}"
-  #   # If using IRSA (IAM Roles), Terraform will inject annotations automatically
-  #   # If using keys (not recommended):
-  #   # access_key: ...
+  #   region: "us-east-1"
 
 # ------------------------------------------------------------------
 # 5. APPLICATION PARAMETERS
@@ -103,4 +82,4 @@ dns:
 app:
   lb_ipam:
     range: "192.168.88.100-192.168.88.110"
-  alert_email: "ops@${DOMAIN_NAME}"
+  alert_email: "ops@example.com"

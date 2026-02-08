@@ -1,0 +1,11 @@
+# Abstract storage type catalog
+# Provider-specific mappings live in config/providers/<provider>/storage-types.yaml
+types:
+  - name: local-standard
+    # iops: 3000, throughput: 200
+  - name: local-fast
+    # iops: 10000, throughput: 1000
+  - name: standard
+    # iops: 1000, throughput: 100
+  - name: bulk
+    # iops: 500, throughput: 50
