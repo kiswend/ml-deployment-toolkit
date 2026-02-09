@@ -9,7 +9,7 @@ h1m1:
     - name: m-0
       placement_group: placement-group-1
       cores: 4
-      memory: 7000
+      memory: 12000
       workload_class: mixed-plane
       storage:
         - storage_pool: local-lvm

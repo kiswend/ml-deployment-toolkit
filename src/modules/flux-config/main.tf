@@ -120,6 +120,20 @@ resource "kubectl_manifest" "kustomization_platform" {
         kind = "OCIRepository"
         name = "ml-gitops"
       }
+      healthChecks = [
+        {
+          apiVersion = "apps/v1"
+          kind       = "Deployment"
+          name       = "external-secrets-external-secrets-webhook"
+          namespace  = "external-secrets"
+        },
+        {
+          apiVersion = "apps/v1"
+          kind       = "Deployment"
+          name       = "cert-manager-cert-manager-webhook"
+          namespace  = "cert-manager"
+        }
+      ]
       postBuild = {
         substituteFrom = [
           {
