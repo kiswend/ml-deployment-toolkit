@@ -1,8 +1,9 @@
 # Proxmox Infrastructure Configuration
 # Provider-specific settings for Proxmox Virtual Environment
 
-# Talos image download settings (URL constructed by Terraform from workload-classes.yaml)
+# Talos image settings
 talos:
+  platform: "nocloud"
   image:
     content_type: "iso"
     datastore: "local"

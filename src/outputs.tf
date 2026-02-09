@@ -5,9 +5,14 @@ output "cluster_name" {
   value       = local.config.cluster.name
 }
 
-output "cluster_vip" {
-  description = "The VIP endpoint of the cluster"
-  value       = local.config.cluster.vip
+output "cluster_endpoint" {
+  description = "The API endpoint of the cluster"
+  value = (
+    local.provider_name == "proxmox" ? try(local.config.cluster.vip, null)
+    : local.provider_name == "digitalocean" && length(module.digitalocean) > 0 ? module.digitalocean[0].cluster_endpoint
+    : local.provider_name == "aws" && length(module.aws) > 0 ? module.aws[0].cluster_endpoint
+    : null
+  )
 }
 
 output "kubeconfig_path" {
@@ -16,8 +21,12 @@ output "kubeconfig_path" {
 }
 
 output "talosconfig_path" {
-  description = "Path to the generated talosconfig file"
-  value       = local.provider_name == "proxmox" && length(module.proxmox) > 0 ? module.proxmox[0].talosconfig_path : null
+  description = "Path to the generated talosconfig file (on-prem only)"
+  value = (
+    local.provider_name == "proxmox" && length(module.proxmox) > 0
+    ? module.proxmox[0].talosconfig_path
+    : null
+  )
 }
 
 output "flux_installed" {

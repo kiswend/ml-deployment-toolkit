@@ -17,7 +17,7 @@ infra:
     # Maps deployment template placement groups → Proxmox physical nodes
     placement:
       placement-group-1: "node0"
-      placement-group-2: "node2"
+      placement-group-2: "node1"
       placement-group-3: "node0"
 
   # # --- AWS ---
@@ -37,13 +37,13 @@ infra:
 # ------------------------------------------------------------------
 # 2. DEPLOYMENT TOPOLOGY
 # ------------------------------------------------------------------
-template: "micro"  # micro | tiny | small | small3m3w
+template: "h1m1"  # h1m1 | h2c3w3 | h3c3w3
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
 # ------------------------------------------------------------------
 cluster:
-  name: "control-center"
+  name: "cc"
 
   # Kubernetes API endpoint
   vip: "192.168.88.10"              # Proxmox: floating IP

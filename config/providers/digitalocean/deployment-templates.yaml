@@ -1,0 +1,37 @@
+# -----------------------------------------------------------------------------
+# DigitalOcean Deployment Templates (DOKS Managed Kubernetes)
+# Defines cluster topologies with node pools
+# Control plane is fully managed by DigitalOcean
+# -----------------------------------------------------------------------------
+
+micro:
+  node_pools:
+    - name: default
+      size: s-4vcpu-8gb
+      count: 1
+      tags:
+        - ml
+
+tiny:
+  node_pools:
+    - name: default
+      size: s-4vcpu-8gb
+      count: 2
+      tags:
+        - ml
+
+small:
+  node_pools:
+    - name: default
+      size: s-4vcpu-8gb
+      count: 3
+      tags:
+        - ml
+
+small3m3w:
+  node_pools:
+    - name: default
+      size: s-4vcpu-8gb
+      count: 6
+      tags:
+        - ml

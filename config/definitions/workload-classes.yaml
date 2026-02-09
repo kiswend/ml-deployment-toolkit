@@ -8,7 +8,6 @@ kubernetes_version: "1.34.0"
 # Talos image factory schematic (extensions baked into the image)
 talos_image:
   schematic: "88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b"
-  platform: "nocloud"
   arch: "amd64"
 
 # --- Workload classes ---

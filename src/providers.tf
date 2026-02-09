@@ -11,6 +11,16 @@ provider "proxmox" {
   }
 }
 
+# DigitalOcean Provider - reads token from TF_VAR_digitalocean_token
+provider "digitalocean" {
+  token = var.digitalocean_token
+}
+
+# AWS Provider - reads region from config, credentials from env (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+provider "aws" {
+  region = try(local.config_raw.infra.aws.region, "us-east-1")
+}
+
 # Kubernetes Provider - configured with kubeconfig from cluster bootstrap
 provider "kubernetes" {
   config_path = local.kubeconfig_path

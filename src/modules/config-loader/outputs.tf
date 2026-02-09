@@ -53,6 +53,11 @@ output "label_taint_patches" {
   value       = local.label_taint_patches
 }
 
+output "deployment_template" {
+  description = "Raw deployment template data (provider-specific structure)"
+  value       = local.deployment_template
+}
+
 output "cluster" {
   description = "Cluster configuration"
   value       = local.config.cluster

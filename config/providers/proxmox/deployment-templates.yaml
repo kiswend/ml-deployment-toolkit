@@ -3,9 +3,10 @@
 # Defines cluster topologies with direct VM specs
 # -----------------------------------------------------------------------------
 
-micro:
+
+h1m1:
   instances:
-    - name: cc-mixed-0
+    - name: m-0
       placement_group: placement-group-1
       cores: 4
       memory: 7000
@@ -21,9 +22,10 @@ micro:
         - ml
         - ml-mixed
 
-tiny:
+h2c3w3:
   instances:
-    - name: cc-master-0
+    # Control plane nodes — all on host 1
+    - name: c-0
       placement_group: placement-group-1
       cores: 4
       memory: 7000
@@ -36,26 +38,7 @@ tiny:
         - ml
         - ml-master
 
-    - name: cc-worker-0
-      placement_group: placement-group-1
-      cores: 4
-      memory: 7000
-      workload_class: worker-general
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi1
-      tags:
-        - ml
-        - ml-worker
-
-small:
-  instances:
-    # Control plane nodes
-    - name: master-0
+    - name: c-1
       placement_group: placement-group-1
       cores: 4
       memory: 7000
@@ -68,8 +51,8 @@ small:
         - ml
         - ml-master
 
-    - name: master-1
-      placement_group: placement-group-2
+    - name: c-2
+      placement_group: placement-group-1
       cores: 4
       memory: 7000
       workload_class: control-plane
@@ -81,113 +64,9 @@ small:
         - ml
         - ml-master
 
-    - name: master-2
-      placement_group: placement-group-3
-      cores: 4
-      memory: 7000
-      workload_class: control-plane
-      storage:
-        - storage_pool: local-lvm
-          size: 32
-          interface: scsi0
-      tags:
-        - ml
-        - ml-master
-
-    # Worker nodes
-    - name: worker-0
-      placement_group: placement-group-1
-      cores: 4
-      memory: 7000
-      workload_class: worker-general
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi1
-      tags:
-        - ml
-        - ml-worker
-
-    - name: worker-1
-      placement_group: placement-group-2
-      cores: 4
-      memory: 7000
-      workload_class: worker-general
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi1
-      tags:
-        - ml
-        - ml-worker
-
-    - name: worker-2
-      placement_group: placement-group-3
-      cores: 4
-      memory: 7000
-      workload_class: worker-general
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi1
-      tags:
-        - ml
-        - ml-worker
-
-small3m3w:
-  instances:
-    # Control plane nodes - distributed across placement groups
-    - name: m-0
-      placement_group: placement-group-1
-      cores: 4
-      memory: 7000
-      workload_class: control-plane
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-      tags:
-        - ml
-        - ml-master
-
-    - name: m-1
-      placement_group: placement-group-2
-      cores: 4
-      memory: 7000
-      workload_class: control-plane
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-      tags:
-        - ml
-        - ml-master
-
-    - name: m-2
-      placement_group: placement-group-3
-      cores: 4
-      memory: 7000
-      workload_class: control-plane
-      storage:
-        - storage_pool: local-lvm
-          size: 64
-          interface: scsi0
-      tags:
-        - ml
-        - ml-master
-
-    # Worker nodes - distributed across placement groups
+    # Worker nodes — all on host 2
     - name: w-0
-      placement_group: placement-group-1
+      placement_group: placement-group-2
       cores: 4
       memory: 7000
       workload_class: worker-general
@@ -219,6 +98,98 @@ small3m3w:
         - ml-worker
 
     - name: w-2
+      placement_group: placement-group-2
+      cores: 4
+      memory: 7000
+      workload_class: worker-general
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-worker
+
+h3c3w3:
+  instances:
+    # Host 1 — one control plane + one worker
+    - name: c-0
+      placement_group: placement-group-1
+      cores: 4
+      memory: 7000
+      workload_class: control-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 32
+          interface: scsi0
+      tags:
+        - ml
+        - ml-master
+
+    - name: w-0
+      placement_group: placement-group-1
+      cores: 4
+      memory: 7000
+      workload_class: worker-general
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-worker
+
+    # Host 2 — one control plane + one worker
+    - name: c-1
+      placement_group: placement-group-2
+      cores: 4
+      memory: 7000
+      workload_class: control-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 32
+          interface: scsi0
+      tags:
+        - ml
+        - ml-master
+
+    - name: w-1
+      placement_group: placement-group-2
+      cores: 4
+      memory: 7000
+      workload_class: worker-general
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-worker
+
+    # Host 3 — one control plane + one worker
+    - name: c-2
+      placement_group: placement-group-3
+      cores: 4
+      memory: 7000
+      workload_class: control-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 32
+          interface: scsi0
+      tags:
+        - ml
+        - ml-master
+
+    - name: w-2
       placement_group: placement-group-3
       cores: 4
       memory: 7000
@@ -233,3 +204,4 @@ small3m3w:
       tags:
         - ml
         - ml-worker
+

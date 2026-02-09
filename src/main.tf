@@ -11,7 +11,15 @@ locals {
   config = module.config.config
 
   # Kubeconfig path from provider module (for K8s/Helm/Kubectl providers)
-  kubeconfig_path = local.provider_name == "proxmox" && length(module.proxmox) > 0 ? module.proxmox[0].kubeconfig_path : null
+  kubeconfig_path = (
+    local.provider_name == "proxmox" && length(module.proxmox) > 0
+    ? module.proxmox[0].kubeconfig_path
+    : local.provider_name == "digitalocean" && length(module.digitalocean) > 0
+    ? module.digitalocean[0].kubeconfig_path
+    : local.provider_name == "aws" && length(module.aws) > 0
+    ? module.aws[0].kubeconfig_path
+    : null
+  )
 }
 
 # Load configuration from YAML files
@@ -40,6 +48,37 @@ module "proxmox" {
   provider_config_path = "../config/providers/proxmox/config.yaml"
 }
 
+# DigitalOcean Cluster (DOKS Managed Kubernetes)
+module "digitalocean" {
+  count  = local.provider_name == "digitalocean" ? 1 : 0
+  source = "./modules/digitalocean"
+
+  cluster            = module.config.cluster
+  kubernetes_version = module.config.kubernetes_version
+  node_pools         = try(module.config.deployment_template.node_pools, [])
+
+  artifacts_path       = module.config.paths.artifacts
+  provider_config_path = "../config/providers/digitalocean/config.yaml"
+
+  region             = try(local.config_raw.infra.digitalocean.region, "nyc1")
+  digitalocean_token = var.digitalocean_token
+}
+
+# AWS Cluster (EKS Managed Kubernetes)
+module "aws" {
+  count  = local.provider_name == "aws" ? 1 : 0
+  source = "./modules/aws"
+
+  cluster            = module.config.cluster
+  kubernetes_version = module.config.kubernetes_version
+  node_groups        = try(module.config.deployment_template.node_groups, [])
+
+  artifacts_path       = module.config.paths.artifacts
+  provider_config_path = "../config/providers/aws/config.yaml"
+
+  region = try(local.config_raw.infra.aws.region, "us-east-1")
+}
+
 # FluxCD Bootstrap - install controllers (always, for all flux.mode values)
 module "flux_bootstrap" {
   count  = local.provider_name != "" ? 1 : 0
@@ -48,7 +87,9 @@ module "flux_bootstrap" {
   flux_version = local.config_raw.cluster.flux.version
 
   depends_on = [
-    module.proxmox
+    module.proxmox,
+    module.digitalocean,
+    module.aws
   ]
 }
 
