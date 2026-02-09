@@ -46,11 +46,11 @@ cluster:
   name: "control-center"
 
   # Kubernetes API endpoint
-  vip: "192.168.88.12"              # Proxmox: floating IP
+  vip: "192.168.88.10"              # Proxmox: floating IP
 
   # Versions (latest stable)
-  talos_version: "v1.9.2"
-  kubernetes_version: "1.32.0"
+  talos_version: "v1.12.3"
+  kubernetes_version: "1.34.0"
 
   # Artifact Repository (OCI cache)
   artifact_repo:
@@ -58,7 +58,7 @@ cluster:
 
   # Flux configuration
   flux:
-    version: "2.4.0"
+    version: "2.7.2"
     mode: "none"      # none (CC - install only) | oci (App Env - pull from Harbor)
 
 # ------------------------------------------------------------------
@@ -66,7 +66,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "example.com"
+  domain: "technologystic.com"
 
   # For Cloudflare:
   # cloudflare:

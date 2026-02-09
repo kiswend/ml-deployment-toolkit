@@ -1,7 +1,13 @@
 variable "flux_version" {
-  description = "Flux version to install"
+  description = "Flux distribution version (e.g. 2.7.2)"
   type        = string
-  default     = "2.4.0"
+  default     = "2.7.2"
+}
+
+variable "operator_version" {
+  description = "Flux Operator Helm chart version"
+  type        = string
+  default     = "0.40.0"
 }
 
 variable "flux_namespace" {

@@ -1,6 +1,6 @@
 output "flux_installed" {
   description = "Whether FluxCD controllers are installed"
-  value       = helm_release.flux.status == "deployed"
+  value       = helm_release.flux_operator.status == "deployed"
 }
 
 output "flux_namespace" {
