@@ -22,7 +22,8 @@ spec:
         kind: HelmRepository
         name: minio
       interval: 12h
-  targetNamespace: cc-system
+  releaseName: minio
+  targetNamespace: minio
   install:
     createNamespace: false
     remediation:

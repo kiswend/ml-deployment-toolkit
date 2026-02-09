@@ -43,7 +43,6 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 | Component | Tool | Purpose | Cloud equivalent |
 |-----------|------|---------|-----------------|
 | CNI | Cilium | Networking, network policies, internal mTLS | Managed CNI |
-| Gateway | Cilium GatewayClass | Gateway API controller for on-prem ingress | Cloud LB + ingress |
 | Load balancing | Cilium LB-IPAM | L2 announcement + IP pool allocation | Cloud load balancers |
 | Storage | OpenEBS (hostpath) | Local persistent volumes | Cloud CSI (EBS, DO Block Storage) |
 | Object storage | MinIO | S3-compatible storage for state/backups | Managed S3/Spaces |
@@ -67,11 +66,11 @@ A single OCI artifact contains six Kustomize roots. Flux deploys a subset based 
 
 ```
 gitops/
-  platform/        # Always deployed — provider-agnostic services (cert-manager, external-dns, ESO, metrics-server)
-  platform-config/ # Always deployed — provider-agnostic config (ClusterIssuers, DNS-01 secret)
-  onprem/          # Conditionally deployed — on-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS, GatewayClass)
-  cc/              # Control Center operators (vault-operator)
-  cc-config/       # Control Center services + ingress (Vault, Harbor, MinIO, Gateway, HTTPRoutes)
+  platform/        # Always deployed — shared services (cert-manager, external-dns, ESO, metrics-server, GatewayClass)
+  platform-config/ # Always deployed — shared config (ClusterIssuers, DNS-01 secret, Gateway with wildcard TLS)
+  onprem/          # Conditionally deployed — on-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS)
+  cc/              # Control Center operators (vault-operator) + namespace definitions (vault, harbor, minio)
+  cc-config/       # Control Center services (Vault + HTTPRoute in vault ns, Harbor + HTTPRoute in harbor ns, MinIO + HTTPRoute in minio ns)
   env/             # App Environment services (Mojaloop app)
 ```
 
@@ -96,7 +95,7 @@ A pre-rendered Cilium manifest is hosted on private storage and referenced in th
 **Phase 2 — Flux HelmRelease (steady-state):**
 Once the cluster is running and Flux is reconciling, a Cilium HelmRelease in `gitops/onprem/` takes over management. Flux adopts the existing Cilium installation, enabling version upgrades, configuration changes, and Helm values management through GitOps.
 
-The `onprem/` kustomization also deploys Cilium configuration CRDs (L2AnnouncementPolicy, CiliumLoadBalancerIPPool) that configure LB-IPAM — the on-prem equivalent of cloud load balancers.
+The `onprem/` kustomization also deploys Cilium configuration CRDs (L2AnnouncementPolicy, CiliumLoadBalancerIPPool) that configure LB-IPAM — the on-prem equivalent of cloud load balancers. The GatewayClass (Cilium as Gateway API controller) is in `platform/` since it's shared across all providers.
 
 On managed Kubernetes, the cloud provider supplies the CNI natively — neither phase applies.
 
@@ -122,15 +121,19 @@ On cloud, MinIO is replaced by managed object storage (S3, DigitalOcean Spaces).
 
 **CC Service Ingress (Gateway API):**
 
-CC services are exposed via Gateway API with TLS termination. A single Gateway in `cc-system` namespace receives a LoadBalancer IP from LB-IPAM (on-prem) or cloud LB, and HTTPRoutes direct traffic to each service:
+CC services are exposed via a shared Gateway in `platform-system` namespace with a wildcard TLS listener (`*.${domain}`). The Gateway receives a LoadBalancer IP from LB-IPAM (on-prem) or cloud LB. Each service has its own HTTPRoute in its dedicated namespace:
 
-| Hostname | Backend | Port |
-|----------|---------|------|
-| `vault.${domain}` | vault | 8200 |
-| `harbor.${domain}` | harbor | 80 |
-| `minio.${domain}` | minio-console | 9001 |
+| Hostname | HTTPRoute namespace | Backend | Port |
+|----------|-------------------|---------|------|
+| `vault.${domain}` | vault | vault | 8200 |
+| `harbor.${domain}` | harbor | harbor | 80 |
+| `minio.${domain}` | minio | minio-console | 9001 |
 
-TLS certificates are auto-provisioned by cert-manager using DNS-01 challenges (DigitalOcean DNS TXT validation). DNS-01 is required for on-prem because Let's Encrypt cannot reach private IPs for HTTP-01 challenges. external-dns watches `gateway-httproute` sources and creates DNS A records pointing each hostname to the Gateway's LB IP.
+HTTPRoutes reference the Gateway cross-namespace via `parentRefs.namespace: platform-system`. Backend services are in the same namespace as the HTTPRoute — no ReferenceGrant needed.
+
+A single wildcard TLS certificate (`*.${domain}`) is auto-provisioned by cert-manager using DNS-01 challenges (DigitalOcean DNS TXT validation). DNS-01 is required for on-prem because Let's Encrypt cannot reach private IPs for HTTP-01 challenges. external-dns watches `gateway-httproute` sources and creates DNS A records pointing each hostname to the Gateway's LB IP.
+
+**Namespace isolation:** Vault, Harbor, and MinIO each run in their own namespace (`vault`, `harbor`, `minio`) for least-privilege security. The vault-operator remains in `cc-system`. This prevents a compromised Harbor pod from accessing Vault's ServiceAccount tokens and Secrets.
 
 ### Stage 4: Adopter App Environment
 
