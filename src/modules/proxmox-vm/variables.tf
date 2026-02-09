@@ -4,24 +4,18 @@
 variable "instances" {
   description = "List of Talos instances to create"
   type = list(object({
-    name           = string
-    instance_type  = string
-    workload_class = string
-    storage        = list(any)
-    tags           = list(string)
-    placement      = any
+    name            = string
+    cores           = number
+    memory          = number
+    sockets         = optional(number, 1)
+    workload_class  = string
+    storage         = list(any)
+    tags            = list(string)
+    placement_group = string
     resolved_placement = object({
       placement_group = string
     })
   }))
-}
-
-variable "provider_mappings" {
-  description = "Provider-specific mappings for instance and storage types"
-  type = object({
-    instance_types = map(any)
-    storage_types  = map(any)
-  })
 }
 
 variable "provider_config_path" {
@@ -35,8 +29,19 @@ variable "talos_configs" {
   default     = {}
 }
 
-variable "workload_classes" {
-  description = "Workload classes configuration with VM types and images"
-  type        = any
-  default     = {}
+variable "talos_image" {
+  description = "Talos image URL and file name (constructed by config-loader)"
+  type = object({
+    url       = string
+    file_name = string
+  })
+}
+
+variable "provider_image_config" {
+  description = "Provider-specific image download settings"
+  type = object({
+    content_type  = string
+    datastore     = string
+    decompression = string
+  })
 }

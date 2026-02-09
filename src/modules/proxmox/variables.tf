@@ -5,19 +5,38 @@ variable "instances" {
   type        = any
 }
 
-variable "provider_mappings" {
-  description = "Provider-specific mappings for instance and storage types"
-  type        = any
-}
-
 variable "cluster" {
-  description = "Cluster configuration (name, vip, versions, flux)"
+  description = "Cluster configuration (name, vip, flux)"
   type        = any
 }
 
 variable "workload_classes" {
-  description = "Workload classes configuration with VM types and images"
+  description = "Workload classes configuration"
   type        = any
+  default     = {}
+}
+
+variable "talos_version" {
+  description = "Talos version (from workload-classes.yaml)"
+  type        = string
+}
+
+variable "kubernetes_version" {
+  description = "Kubernetes version (from workload-classes.yaml)"
+  type        = string
+}
+
+variable "talos_image" {
+  description = "Talos image URL and file name (constructed by config-loader)"
+  type = object({
+    url       = string
+    file_name = string
+  })
+}
+
+variable "label_taint_patches" {
+  description = "Dynamic label/taint patches per workload class"
+  type        = map(string)
   default     = {}
 }
 

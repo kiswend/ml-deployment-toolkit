@@ -31,20 +31,9 @@ variable "talos_endpoints" {
   default     = []
 }
 
-variable "patch_folder" {
-  description = "Path to the folder containing Talos configuration patches"
-  type        = string
-}
-
 variable "artifacts_folder" {
   description = "Path to the folder where artifacts will be stored"
   type        = string
-}
-
-variable "additional_patches" {
-  description = "List of additional patch contents to apply"
-  type        = list(string)
-  default     = []
 }
 
 variable "generate_per_instance" {
@@ -58,6 +47,7 @@ variable "instances" {
   type = list(object({
     name             = string
     workload_class   = string
+    talos_type       = string
     workload_patches = optional(list(string), [])
   }))
   default = []

@@ -5,29 +5,16 @@ locals {
   # Read Proxmox provider configuration from YAML
   provider_config = yamldecode(file(var.provider_config_path))
 
-  # Process instances with provider-specific mappings
+  # Process instances with storage config
   instances_with_specs = [
     for instance in var.instances : merge(instance, {
-      vm_specs = lookup(var.provider_mappings.instance_types, instance.instance_type, {
-        cores   = 2
-        memory  = 4096
-        sockets = 1
-      })
-
-      storage_config = flatten([
-        for storage_item in instance.storage : [
-          for storage_key, storage_value in storage_item : {
-            size      = storage_value.size
-            interface = storage_value.interface
-            type = lookup(var.provider_mappings.storage_types, storage_value.class, {
-              type         = "scsi"
-              storage_pool = local.provider_config.storage.default_pool
-              cache        = "writeback"
-              discard      = true
-            })
-          }
-        ]
-      ])
+      storage_config = [
+        for storage_item in instance.storage : {
+          size         = storage_item.size
+          interface    = storage_item.interface
+          storage_pool = try(storage_item.storage_pool, local.provider_config.storage.default_pool)
+        }
+      ]
     })
   ]
 
@@ -53,13 +40,13 @@ resource "proxmox_virtual_environment_vm" "instance" {
   vm_id     = local.provider_config.vm_id.start + index(keys({ for inst in local.instances_with_specs : inst.name => inst }), each.key)
 
   cpu {
-    type    = try(each.value.vm_specs.cpu_type, local.provider_config.vm_defaults.cpu_type)
-    cores   = each.value.vm_specs.cores
-    sockets = try(each.value.vm_specs.sockets, 1)
+    type    = local.provider_config.vm_defaults.cpu_type
+    cores   = each.value.cores
+    sockets = each.value.sockets
   }
 
   memory {
-    dedicated = each.value.vm_specs.memory
+    dedicated = each.value.memory
   }
 
   scsi_hardware = local.provider_config.vm_defaults.scsihw
@@ -74,7 +61,7 @@ resource "proxmox_virtual_environment_vm" "instance" {
   dynamic "disk" {
     for_each = each.value.storage_config
     content {
-      datastore_id = disk.value.type.storage_pool
+      datastore_id = disk.value.storage_pool
       file_id      = disk.key == 0 ? local.instance_image_ids[each.value.name] : null
       interface    = disk.value.interface
       size         = disk.value.size
@@ -85,7 +72,7 @@ resource "proxmox_virtual_environment_vm" "instance" {
 
   # Cloud-init disk
   disk {
-    datastore_id = each.value.storage_config[0].type.storage_pool
+    datastore_id = each.value.storage_config[0].storage_pool
     interface    = "ide2"
     file_format  = "raw"
   }

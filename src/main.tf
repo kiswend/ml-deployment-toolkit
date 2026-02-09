@@ -18,15 +18,8 @@ locals {
 module "config" {
   source = "./modules/config-loader"
 
-  config_path             = "../config/config.yaml"
-  deployment_templates_path = "../config/definitions/deployment-templates.yaml"
-  instance_types_path     = "../config/definitions/instance-types.yaml"
-  storage_types_path      = "../config/definitions/storage-types.yaml"
-  workload_classes_path   = "../config/definitions/workload-classes.yaml"
-
-  # Provider-specific mappings
-  provider_instance_mapping_path = local.provider_name == "proxmox" ? "../config/providers/proxmox/instance-types.yaml" : ""
-  provider_storage_mapping_path  = local.provider_name == "proxmox" ? "../config/providers/proxmox/storage-types.yaml" : ""
+  config_path           = "../config/config.yaml"
+  workload_classes_path = "../config/definitions/workload-classes.yaml"
 }
 
 # Proxmox Cluster
@@ -34,10 +27,13 @@ module "proxmox" {
   count  = local.provider_name == "proxmox" ? 1 : 0
   source = "./modules/proxmox"
 
-  instances         = module.config.instances
-  provider_mappings = module.config.provider_mappings
-  cluster           = module.config.cluster
-  workload_classes  = module.config.workload_classes
+  instances           = module.config.instances
+  cluster             = module.config.cluster
+  workload_classes    = module.config.workload_classes
+  talos_version       = module.config.talos_version
+  kubernetes_version  = module.config.kubernetes_version
+  talos_image         = module.config.talos_image
+  label_taint_patches = module.config.label_taint_patches
 
   patches_path         = module.config.paths.patches
   artifacts_path       = module.config.paths.artifacts
@@ -61,13 +57,13 @@ module "flux_config" {
   count  = local.flux_mode == "oci" ? 1 : 0
   source = "./modules/flux-config"
 
-  cluster_name       = local.config.cluster.name
-  cluster_vip        = local.config.cluster.vip
-  domain             = local.config.dns.domain
-  dns_provider       = local.config.dns.provider
-  alert_email        = local.config.app.alert_email
-  lb_ipam_range      = local.config.app.lb_ipam.range
-  artifact_repo_url  = local.config.cluster.artifact_repo.url
+  cluster_name      = local.config.cluster.name
+  cluster_vip       = local.config.cluster.vip
+  domain            = local.config.dns.domain
+  dns_provider      = local.config.dns.provider
+  alert_email       = local.config.app.alert_email
+  lb_ipam_range     = local.config.app.lb_ipam.range
+  artifact_repo_url = local.config.cluster.artifact_repo.url
 
   digitalocean_token = var.digitalocean_token
   oci_username       = var.oci_username

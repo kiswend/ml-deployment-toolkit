@@ -24,7 +24,8 @@ output "instances" {
       name           = inst.name
       workload_class = inst.workload_class
       node           = local.nodes_map[inst.name]
-      specs          = inst.vm_specs
+      cores          = inst.cores
+      memory         = inst.memory
       tags           = inst.tags
     }
   }
@@ -43,7 +44,7 @@ output "control_plane_ips" {
       ],
       0
     )
-    if inst.workload_class == "control-plane"
+    if contains(["control-plane", "mixed-plane"], inst.workload_class)
   ]
 }
 

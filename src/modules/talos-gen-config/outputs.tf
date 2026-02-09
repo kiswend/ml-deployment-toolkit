@@ -37,31 +37,9 @@ output "talos_secrets_path" {
   value       = local_sensitive_file.machine_secrets.filename
 }
 
-output "controlplane_config_path" {
-  description = "Path to the controlplane configuration file"
-  value       = local_file.controlplane_config.filename
-}
-
-output "worker_config_path" {
-  description = "Path to the worker configuration file"
-  value       = local_file.worker_config.filename
-}
-
 output "talosconfig_path" {
   description = "Path to the talosconfig file for talosctl"
   value       = local_file.talosconfig.filename
-}
-
-output "controlplane_config" {
-  description = "The control plane machine configuration (sensitive)"
-  value       = data.talos_machine_configuration.controlplane.machine_configuration
-  sensitive   = true
-}
-
-output "worker_config" {
-  description = "The worker machine configuration (sensitive)"
-  value       = data.talos_machine_configuration.worker.machine_configuration
-  sensitive   = true
 }
 
 output "instance_configs" {

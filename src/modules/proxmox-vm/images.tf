@@ -1,5 +1,5 @@
 # OS Image Downloads for Proxmox
-# Downloads Talos OS images based on workload class configuration
+# Downloads Talos OS image based on constructed URL from config-loader
 
 locals {
   # Get unique Proxmox nodes from instances
@@ -8,49 +8,30 @@ locals {
     instance.resolved_placement.placement_group
   ])
 
-  # Build a map of instance to their image configuration from workload class
-  instance_images = {
-    for inst in local.instances_with_specs :
-    inst.name => try(var.workload_classes[inst.workload_class].image, local.provider_config.talos.image)
+  # Single image for all instances (same Talos version)
+  talos_image = {
+    url           = var.talos_image.url
+    file_name     = var.talos_image.file_name
+    content_type  = var.provider_image_config.content_type
+    datastore     = var.provider_image_config.datastore
+    decompression = var.provider_image_config.decompression
   }
 
-  # Get unique images needed (deduplicate by file_name)
-  unique_images = distinct([
-    for inst_name, img in local.instance_images :
-    {
-      url           = img.url
-      content_type  = img.content_type
-      datastore     = img.datastore
-      file_name     = try(img.file_name, basename(img.url))
-      decompression = try(img.decompression, null)
-      key           = try(img.file_name, md5(img.url))
-    }
-  ])
-
   # Create a flat map of node+image combinations that need to be downloaded
-  node_image_downloads = flatten([
-    for node in local.unique_nodes : [
-      for img in local.unique_images : {
-        node          = node
-        image_key     = img.key
-        url           = img.url
-        content_type  = img.content_type
-        datastore     = img.datastore
-        file_name     = img.file_name
-        decompression = img.decompression
-        download_key  = "${node}-${img.key}"
-      }
-    ]
-  ])
-
-  # Convert to map for for_each
   node_image_downloads_map = {
-    for item in local.node_image_downloads :
-    item.download_key => item
+    for node in local.unique_nodes :
+    node => {
+      node          = node
+      url           = local.talos_image.url
+      content_type  = local.talos_image.content_type
+      datastore     = local.talos_image.datastore
+      file_name     = local.talos_image.file_name
+      decompression = local.talos_image.decompression
+    }
   }
 }
 
-# Download OS images to each unique node
+# Download OS image to each unique node
 resource "proxmox_virtual_environment_download_file" "os_image" {
   for_each = local.node_image_downloads_map
 
@@ -72,12 +53,12 @@ resource "proxmox_virtual_environment_download_file" "os_image" {
   }
 }
 
-# Map instance name → downloaded image ID for VM creation
+# Map instance name -> downloaded image ID for VM creation
 locals {
   instance_image_ids = {
     for inst in local.instances_with_specs :
     inst.name => proxmox_virtual_environment_download_file.os_image[
-      "${local.nodes_map[inst.name]}-${try(var.workload_classes[inst.workload_class].image.file_name, md5(try(var.workload_classes[inst.workload_class].image.url, local.provider_config.talos.image.url)))}"
+      local.nodes_map[inst.name]
     ].id
   }
 }

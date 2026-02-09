@@ -16,7 +16,7 @@ output "instances" {
 }
 
 output "control_plane_instances" {
-  description = "List of control plane instances"
+  description = "List of control plane instances (includes mixed-plane)"
   value       = local.control_plane_instances
 }
 
@@ -25,17 +25,32 @@ output "worker_instances" {
   value       = local.worker_instances
 }
 
-output "provider_mappings" {
-  description = "Provider-specific mappings for instance and storage types"
+output "workload_classes" {
+  description = "Workload classes configuration"
+  value       = local.workload_classes.classes
+}
+
+output "talos_version" {
+  description = "Talos version (from workload-classes.yaml)"
+  value       = local.talos_version
+}
+
+output "kubernetes_version" {
+  description = "Kubernetes version (from workload-classes.yaml)"
+  value       = local.kubernetes_version
+}
+
+output "talos_image" {
+  description = "Talos image URL and file name (constructed from workload-classes.yaml)"
   value = {
-    instance_types = local.provider_instance_mapping
-    storage_types  = local.provider_storage_mapping
+    url       = local.talos_image_url
+    file_name = local.talos_image_file_name
   }
 }
 
-output "workload_classes" {
-  description = "Workload classes configuration with VM types and images"
-  value       = local.workload_classes
+output "label_taint_patches" {
+  description = "Dynamic label/taint patches per workload class"
+  value       = local.label_taint_patches
 }
 
 output "cluster" {

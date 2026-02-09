@@ -37,7 +37,7 @@ infra:
 # ------------------------------------------------------------------
 # 2. DEPLOYMENT TOPOLOGY
 # ------------------------------------------------------------------
-template: "tiny"  # tiny | small | small3m3w
+template: "micro"  # micro | tiny | small | small3m3w
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
@@ -47,10 +47,6 @@ cluster:
 
   # Kubernetes API endpoint
   vip: "192.168.88.10"              # Proxmox: floating IP
-
-  # Versions (latest stable)
-  talos_version: "v1.12.3"
-  kubernetes_version: "1.34.0"
 
   # Artifact Repository (OCI cache)
   artifact_repo:

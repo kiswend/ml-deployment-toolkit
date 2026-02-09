@@ -40,7 +40,7 @@ resource "proxmox_virtual_environment_file" "talos_meta" {
   node_name    = local.nodes_map[each.key]
 
   source_raw {
-    data = <<-EOF
+    data      = <<-EOF
       instance-id: ${each.value.name}
       local-hostname: ${each.value.name}
     EOF
