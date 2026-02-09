@@ -22,7 +22,8 @@ spec:
         kind: HelmRepository
         name: harbor
       interval: 12h
-  targetNamespace: cc-system
+  releaseName: harbor
+  targetNamespace: harbor
   install:
     createNamespace: false
     remediation:
@@ -60,6 +61,6 @@ spec:
       s3:
         region: us-east-1
         bucket: harbor
-        regionendpoint: http://minio.cc-system:9000
+        regionendpoint: http://minio.minio:9000
         encrypt: false
         secure: false

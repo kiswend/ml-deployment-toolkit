@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - cert-manager/letsencrypt.yaml
   - cert-manager/dns-secret.yaml
+  - gateway/gateway.yaml

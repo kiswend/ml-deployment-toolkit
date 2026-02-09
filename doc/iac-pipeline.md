@@ -223,11 +223,11 @@ OCIRepository (ml-gitops)
 ```
 
 Dependency chain ensures ordering:
-- `platform` deploys first (cert-manager, external-dns, Gateway API CRDs, ESO, metrics-server)
-- `platform-config` waits for platform (needs cert-manager running), deploys ClusterIssuers (DNS-01) and DNS token Secret
-- `onprem` waits for platform-config, deploys Cilium HelmRelease, LB-IPAM, OpenEBS, GatewayClass
-- `cc` waits for onprem (if present) or platform-config (if cloud) — deploys operators (vault-operator)
-- `cc-config` waits for cc — deploys Vault, Harbor, MinIO, Gateway, HTTPRoutes
+- `platform` deploys first (cert-manager, external-dns, Gateway API CRDs, ESO, metrics-server, GatewayClass)
+- `platform-config` waits for platform (needs cert-manager running), deploys ClusterIssuers (DNS-01), DNS token Secret, Gateway (wildcard TLS)
+- `onprem` waits for platform-config, deploys Cilium HelmRelease, LB-IPAM, OpenEBS
+- `cc` waits for onprem (if present) or platform-config (if cloud) — deploys operators (vault-operator), creates namespaces (vault, harbor, minio)
+- `cc-config` waits for cc — deploys Vault + HTTPRoute (vault ns), MinIO + HTTPRoute (minio ns), Harbor + HTTPRoute (harbor ns)
 - `env` waits for onprem (if present) or platform-config (if cloud) — deploys Mojaloop app
 
 On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, load balancers, storage, and S3 are used instead.

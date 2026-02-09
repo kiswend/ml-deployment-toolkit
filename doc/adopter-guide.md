@@ -256,11 +256,21 @@ kubectl get ocirepositories -n flux-system
 kubectl get kustomizations -n flux-system
 
 # For CC clusters — check Gateway API ingress
-kubectl get gatewayclass              # cilium → Accepted
-kubectl get gateway -n cc-system      # cc-gateway → Programmed, has LB IP
-kubectl get httproute -n cc-system    # vault, harbor, minio-console routes
-kubectl get certificates -n cc-system # TLS certs → Ready (DNS-01 validated)
-kubectl get clusterissuer             # letsencrypt-prod/staging → Ready
+kubectl get gatewayclass                       # cilium → Accepted
+kubectl get gateway -n platform-system         # main-gateway → Programmed, has LB IP
+kubectl get certificates -n platform-system    # wildcard-tls → Ready (DNS-01 validated)
+kubectl get clusterissuer                      # letsencrypt-prod/staging → Ready
+
+# Check namespace isolation
+kubectl get pods -n vault                      # vault pods
+kubectl get pods -n harbor                     # harbor pods
+kubectl get pods -n minio                      # minio pods
+kubectl get pods -n cc-system                  # only vault-operator
+
+# Check routes
+kubectl get httproute -n vault                 # vault route → Accepted
+kubectl get httproute -n harbor                # harbor route → Accepted
+kubectl get httproute -n minio                 # minio-console route → Accepted
 ```
 
 ### Accessing CC Services

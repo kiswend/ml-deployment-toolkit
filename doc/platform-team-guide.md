@@ -10,11 +10,11 @@ The OCI artifact is a single package containing six directories. Each directory 
 
 ```
 gitops/
-  platform/          # Shared platform services (cert-manager, external-dns, ESO, metrics-server)
-  platform-config/   # Shared platform config (ClusterIssuers with DNS-01, DNS token Secret)
-  onprem/            # On-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS, GatewayClass)
-  cc/                # Control Center operators (vault-operator)
-  cc-config/         # Control Center services + ingress (Vault, Harbor, MinIO, Gateway, HTTPRoutes)
+  platform/          # Shared platform services (cert-manager, external-dns, ESO, metrics-server, GatewayClass)
+  platform-config/   # Shared platform config (ClusterIssuers with DNS-01, DNS token Secret, Gateway with wildcard TLS)
+  onprem/            # On-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS)
+  cc/                # Control Center operators (vault-operator) + namespace definitions (vault, harbor, minio)
+  cc-config/         # Control Center services (Vault + HTTPRoute in vault ns, Harbor + HTTPRoute in harbor ns, MinIO + HTTPRoute in minio ns)
   env/               # App Environment services (Mojaloop app + dependencies)
 ```
 
@@ -38,7 +38,7 @@ Shared services deployed to every cluster. Add HelmReleases and Kustomizations h
 ```
 gitops/platform/
   kustomization.yaml           # Root kustomization — lists all resources
-  namespace.yaml               # Platform namespace(s)
+  namespace.yaml               # Platform namespace(s) — pod-security: privileged for Cilium envoy proxy
   cert-manager/
     helmrelease.yaml           # TLS automation (with Gateway API support enabled)
   external-dns/
@@ -47,7 +47,8 @@ gitops/platform/
     helmrelease.yaml           # External Secrets Operator
   metrics-server/
     helmrelease.yaml           # Kubelet metrics aggregation
-  ...
+  gateway/
+    gatewayclass.yaml          # Cilium GatewayClass (shared across all providers)
 ```
 
 ### platform-config/
@@ -60,6 +61,8 @@ gitops/platform-config/
   cert-manager/
     letsencrypt.yaml           # ClusterIssuers (prod + staging) with DNS-01 solver
     dns-secret.yaml            # DigitalOcean token for DNS-01 ACME challenges
+  gateway/
+    gateway.yaml               # Shared Gateway — wildcard TLS (*.${domain}), allowedRoutes from All namespaces
 ```
 
 ### onprem/
@@ -76,40 +79,41 @@ gitops/onprem/
     lb-ipam.yaml               # L2AnnouncementPolicy + CiliumLoadBalancerIPPool
   openebs/
     helmrelease.yaml           # OpenEBS hostpath storage
-  gateway/
-    gatewayclass.yaml          # Cilium GatewayClass (Gateway API controller)
 ```
+
+Note: GatewayClass (Cilium) has moved to `platform/gateway/gatewayclass.yaml` since it's shared across all providers.
 
 ### cc/
 
-Operators for the Control Center management plane:
+Operators for the Control Center management plane. Also defines namespaces for CC services (vault, harbor, minio):
 
 ```
 gitops/cc/
   kustomization.yaml
-  namespace.yaml
-  vault/
-    helmrelease.yaml           # Vault operator
-  ...
+  namespace.yaml               # cc-system + vault + harbor + minio namespaces
+  vault-operator/
+    helmrelease.yaml           # Vault operator (runs in cc-system)
 ```
 
 ### cc-config/
 
-Control Center services and ingress. Depends on cc/ (operators must be running):
+Control Center services. Depends on cc/ (operators and namespaces must be ready). Each service deploys into its own namespace with its own HTTPRoute:
 
 ```
 gitops/cc-config/
   kustomization.yaml
   vault/
-    vault.yaml                 # Vault CR + SecretStore
+    vault.yaml                 # Vault CR + RBAC (vault namespace)
+    secretstore.yaml           # ClusterSecretStore pointing to vault.vault:8200
+    httproute.yaml             # HTTPRoute for vault.${domain} (vault namespace)
   harbor/
-    helmrelease.yaml           # OCI registry
+    helmrelease.yaml           # OCI registry (harbor namespace)
+    externalsecret.yaml        # Harbor credentials from Vault
+    httproute.yaml             # HTTPRoute for harbor.${domain} (harbor namespace)
   minio/
-    helmrelease.yaml           # Object storage for state/backups
-  gateway/
-    gateway.yaml               # CC Gateway — HTTPS listeners for vault/harbor/minio
-    routes.yaml                # HTTPRoutes to backend services
-  ...
+    helmrelease.yaml           # Object storage (minio namespace)
+    externalsecret.yaml        # MinIO credentials from Vault
+    httproute.yaml             # HTTPRoute for minio.${domain} (minio namespace)
 ```
 
 ### env/
