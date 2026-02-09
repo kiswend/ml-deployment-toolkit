@@ -209,17 +209,26 @@ A single OCIRepository serves multiple Flux Kustomizations, each pointing to a d
 ```
 OCIRepository (ml-gitops)
     │
-    ├── Kustomization: platform     path: ./platform     (always)
+    ├── Kustomization: platform        path: ./platform        (always)
     │       ↓
-    ├── Kustomization: onprem       path: ./onprem       (if provider == proxmox)
+    ├── Kustomization: platform-config path: ./platform-config (always — ClusterIssuers, DNS-01 secret)
     │       ↓
-    └── Kustomization: cc|env       path: ./cc or ./env  (based on cluster.role)
+    ├── Kustomization: onprem          path: ./onprem          (if provider == proxmox)
+    │       ↓
+    ├── Kustomization: cc              path: ./cc              (if cluster.role == cc — operators)
+    │       ↓
+    ├── Kustomization: cc-config       path: ./cc-config       (if cluster.role == cc — services, Gateway, routes)
+    │
+    └── Kustomization: env             path: ./env             (if cluster.role == env)
 ```
 
 Dependency chain ensures ordering:
-- `platform` deploys first (cert-manager, external-dns, Gateway API, ESO, metrics-server)
-- `onprem` waits for platform (needs cert-manager etc.), deploys Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO
-- `cc` or `env` waits for onprem (if present) or platform (if cloud) — needs storage and networking ready
+- `platform` deploys first (cert-manager, external-dns, Gateway API CRDs, ESO, metrics-server)
+- `platform-config` waits for platform (needs cert-manager running), deploys ClusterIssuers (DNS-01) and DNS token Secret
+- `onprem` waits for platform-config, deploys Cilium HelmRelease, LB-IPAM, OpenEBS, GatewayClass
+- `cc` waits for onprem (if present) or platform-config (if cloud) — deploys operators (vault-operator)
+- `cc-config` waits for cc — deploys Vault, Harbor, MinIO, Gateway, HTTPRoutes
+- `env` waits for onprem (if present) or platform-config (if cloud) — deploys Mojaloop app
 
 On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, load balancers, storage, and S3 are used instead.
 

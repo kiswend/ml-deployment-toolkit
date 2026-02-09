@@ -254,7 +254,26 @@ kubectl get pods -n flux-system
 # If flux.mode is "oci", check reconciliation
 kubectl get ocirepositories -n flux-system
 kubectl get kustomizations -n flux-system
+
+# For CC clusters — check Gateway API ingress
+kubectl get gatewayclass              # cilium → Accepted
+kubectl get gateway -n cc-system      # cc-gateway → Programmed, has LB IP
+kubectl get httproute -n cc-system    # vault, harbor, minio-console routes
+kubectl get certificates -n cc-system # TLS certs → Ready (DNS-01 validated)
+kubectl get clusterissuer             # letsencrypt-prod/staging → Ready
 ```
+
+### Accessing CC Services
+
+Once the CC cluster is fully reconciled, services are available at their HTTPS subdomains:
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Vault | `https://vault.{domain}` | Secrets management UI/API |
+| Harbor | `https://harbor.{domain}` | OCI registry UI |
+| MinIO | `https://minio.{domain}` | Object storage console |
+
+TLS certificates are automatically provisioned by cert-manager using DNS-01 challenges (DigitalOcean DNS TXT validation). DNS A records are auto-created by external-dns from HTTPRoute hostnames.
 
 ### Outputs
 

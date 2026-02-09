@@ -33,7 +33,7 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 |-----------|------|---------|
 | Metrics | metrics-server | Kubelet metrics aggregation |
 | DNS | external-dns | Bridge K8s services to provider DNS (Route53, Cloudflare, DigitalOcean, PowerDNS) |
-| Certificates | cert-manager + Let's Encrypt | TLS automation, ACME issuers |
+| Certificates | cert-manager + Let's Encrypt | TLS automation, ACME DNS-01 issuers (DigitalOcean DNS validation) |
 | Ingress | Gateway API | Kubernetes-native ingress (replaces deprecated Ingress resource) |
 | Secrets | External Secrets Operator (ESO) | Vault/external secret store integration |
 | Partner Edge | Envoy | External mTLS with dynamic partner onboarding (xDS/SDS) |
@@ -43,6 +43,7 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 | Component | Tool | Purpose | Cloud equivalent |
 |-----------|------|---------|-----------------|
 | CNI | Cilium | Networking, network policies, internal mTLS | Managed CNI |
+| Gateway | Cilium GatewayClass | Gateway API controller for on-prem ingress | Cloud LB + ingress |
 | Load balancing | Cilium LB-IPAM | L2 announcement + IP pool allocation | Cloud load balancers |
 | Storage | OpenEBS (hostpath) | Local persistent volumes | Cloud CSI (EBS, DO Block Storage) |
 | Object storage | MinIO | S3-compatible storage for state/backups | Managed S3/Spaces |
@@ -62,26 +63,28 @@ The platform must support multiple DNS providers (e.g., AWS Route53, Cloudflare,
 
 ### GitOps Artifact Structure
 
-A single OCI artifact contains four Kustomize roots. Flux deploys a subset based on the cluster's provider and role:
+A single OCI artifact contains six Kustomize roots. Flux deploys a subset based on the cluster's provider and role:
 
 ```
 gitops/
-  platform/     # Always deployed — provider-agnostic services
-  onprem/       # Conditionally deployed — on-prem only (Talos/Proxmox)
-  cc/           # Control Center services
-  env/          # App Environment services
+  platform/        # Always deployed — provider-agnostic services (cert-manager, external-dns, ESO, metrics-server)
+  platform-config/ # Always deployed — provider-agnostic config (ClusterIssuers, DNS-01 secret)
+  onprem/          # Conditionally deployed — on-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS, GatewayClass)
+  cc/              # Control Center operators (vault-operator)
+  cc-config/       # Control Center services + ingress (Vault, Harbor, MinIO, Gateway, HTTPRoutes)
+  env/             # App Environment services (Mojaloop app)
 ```
 
 **Deployment matrix:**
 
 | Cluster | Provider | Kustomizations | Dependency chain |
 |---------|----------|---------------|-----------------|
-| CC | Proxmox | platform → onprem → cc | cc waits for onprem (needs storage, LB-IPAM) |
-| CC | DOKS/EKS | platform → cc | cc waits for platform |
-| Env | Proxmox | platform → onprem → env | env waits for onprem |
-| Env | DOKS/EKS | platform → env | env waits for platform |
+| CC | Proxmox | platform → platform-config → onprem → cc → cc-config | cc-config waits for onprem (needs storage, LB-IPAM, GatewayClass) |
+| CC | DOKS/EKS | platform → platform-config → cc → cc-config | cc-config waits for platform |
+| Env | Proxmox | platform → platform-config → onprem → env | env waits for onprem |
+| Env | DOKS/EKS | platform → platform-config → env | env waits for platform |
 
-Version coherence is guaranteed — all four directories ship in one artifact. A single OCI tag (e.g. `v1.0.0` or `latest`) covers the entire stack.
+Version coherence is guaranteed — all six directories ship in one artifact. A single OCI tag (e.g. `v1.0.0` or `latest`) covers the entire stack.
 
 ### Cilium: Two-Phase Deployment (On-prem)
 
@@ -116,6 +119,18 @@ On managed Kubernetes, the cloud provider supplies the CNI natively — neither 
 | tf-controller | Terraform automation for downstream environments | All |
 
 On cloud, MinIO is replaced by managed object storage (S3, DigitalOcean Spaces).
+
+**CC Service Ingress (Gateway API):**
+
+CC services are exposed via Gateway API with TLS termination. A single Gateway in `cc-system` namespace receives a LoadBalancer IP from LB-IPAM (on-prem) or cloud LB, and HTTPRoutes direct traffic to each service:
+
+| Hostname | Backend | Port |
+|----------|---------|------|
+| `vault.${domain}` | vault | 8200 |
+| `harbor.${domain}` | harbor | 80 |
+| `minio.${domain}` | minio-console | 9001 |
+
+TLS certificates are auto-provisioned by cert-manager using DNS-01 challenges (DigitalOcean DNS TXT validation). DNS-01 is required for on-prem because Let's Encrypt cannot reach private IPs for HTTP-01 challenges. external-dns watches `gateway-httproute` sources and creates DNS A records pointing each hostname to the Gateway's LB IP.
 
 ### Stage 4: Adopter App Environment
 

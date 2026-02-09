@@ -6,23 +6,28 @@ This guide covers the platform team's responsibilities: building, publishing, an
 
 ## Artifact Structure
 
-The OCI artifact is a single package containing three directories. Each directory is a Kustomize root that Flux reconciles independently:
+The OCI artifact is a single package containing six directories. Each directory is a Kustomize root that Flux reconciles independently:
 
 ```
 gitops/
-  platform/          # Shared platform services (Cilium, cert-manager, external-dns, etc.)
-  cc/                # Control Center services (Harbor, Vault, MinIO)
+  platform/          # Shared platform services (cert-manager, external-dns, ESO, metrics-server)
+  platform-config/   # Shared platform config (ClusterIssuers with DNS-01, DNS token Secret)
+  onprem/            # On-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS, GatewayClass)
+  cc/                # Control Center operators (vault-operator)
+  cc-config/         # Control Center services + ingress (Vault, Harbor, MinIO, Gateway, HTTPRoutes)
   env/               # App Environment services (Mojaloop app + dependencies)
 ```
 
 **Deployment matrix:**
 
-| Cluster role | Paths deployed | Order |
-|-------------|----------------|-------|
-| `cc` | `platform/` → `cc/` | platform first, cc depends on platform |
-| `env` | `platform/` → `env/` | platform first, env depends on platform |
+| Cluster role | Provider | Paths deployed | Order |
+|-------------|----------|----------------|-------|
+| `cc` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `cc/` → `cc-config/` | Full chain with on-prem services |
+| `cc` | DOKS/EKS | `platform/` → `platform-config/` → `cc/` → `cc-config/` | No onprem (cloud-native) |
+| `env` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `env/` | Full chain with on-prem services |
+| `env` | DOKS/EKS | `platform/` → `platform-config/` → `env/` | No onprem (cloud-native) |
 
-Flux uses `dependsOn` to enforce ordering — the role-specific Kustomization (cc or env) waits for platform to become healthy before reconciling.
+Flux uses `dependsOn` to enforce ordering — each Kustomization waits for its dependencies to become healthy before reconciling.
 
 ## Directory Conventions
 
@@ -34,29 +39,76 @@ Shared services deployed to every cluster. Add HelmReleases and Kustomizations h
 gitops/platform/
   kustomization.yaml           # Root kustomization — lists all resources
   namespace.yaml               # Platform namespace(s)
-  cilium/
-    helmrelease.yaml           # Cilium CNI
   cert-manager/
-    helmrelease.yaml           # TLS automation
+    helmrelease.yaml           # TLS automation (with Gateway API support enabled)
   external-dns/
-    helmrelease.yaml           # DNS bridge (provider-agnostic via postBuild vars)
+    helmrelease.yaml           # DNS bridge — watches service + gateway-httproute sources
+  external-secrets/
+    helmrelease.yaml           # External Secrets Operator
+  metrics-server/
+    helmrelease.yaml           # Kubelet metrics aggregation
   ...
+```
+
+### platform-config/
+
+Provider-agnostic configuration that depends on platform services being ready (e.g. cert-manager must exist before ClusterIssuers can be created):
+
+```
+gitops/platform-config/
+  kustomization.yaml
+  cert-manager/
+    letsencrypt.yaml           # ClusterIssuers (prod + staging) with DNS-01 solver
+    dns-secret.yaml            # DigitalOcean token for DNS-01 ACME challenges
+```
+
+### onprem/
+
+On-prem only services (Talos/Proxmox). Skipped on managed K8s where cloud-native equivalents exist:
+
+```
+gitops/onprem/
+  kustomization.yaml
+  namespace.yaml
+  cilium/
+    helmrelease.yaml           # Cilium CNI (Phase 2 — adopts bootstrap install)
+  lb-ipam/
+    lb-ipam.yaml               # L2AnnouncementPolicy + CiliumLoadBalancerIPPool
+  openebs/
+    helmrelease.yaml           # OpenEBS hostpath storage
+  gateway/
+    gatewayclass.yaml          # Cilium GatewayClass (Gateway API controller)
 ```
 
 ### cc/
 
-Services specific to the Control Center management plane:
+Operators for the Control Center management plane:
 
 ```
 gitops/cc/
   kustomization.yaml
   namespace.yaml
+  vault/
+    helmrelease.yaml           # Vault operator
+  ...
+```
+
+### cc-config/
+
+Control Center services and ingress. Depends on cc/ (operators must be running):
+
+```
+gitops/cc-config/
+  kustomization.yaml
+  vault/
+    vault.yaml                 # Vault CR + SecretStore
   harbor/
     helmrelease.yaml           # OCI registry
-  vault/
-    helmrelease.yaml           # Secrets management
   minio/
     helmrelease.yaml           # Object storage for state/backups
+  gateway/
+    gateway.yaml               # CC Gateway — HTTPS listeners for vault/harbor/minio
+    routes.yaml                # HTTPRoutes to backend services
   ...
 ```
 
@@ -258,7 +310,7 @@ make tag-gitops TAG=stable
 
 ### Version coherence
 
-All three directories (platform/, cc/, env/) ship in a single artifact. When you push `v1.2.0`, the adopter gets a coherent snapshot of all three paths. There is no risk of version drift between platform and role-specific paths.
+All six directories (platform/, platform-config/, onprem/, cc/, cc-config/, env/) ship in a single artifact. When you push `v1.2.0`, the adopter gets a coherent snapshot of all three paths. There is no risk of version drift between platform and role-specific paths.
 
 ## CI/CD Integration
 
