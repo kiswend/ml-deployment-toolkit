@@ -37,7 +37,7 @@ infra:
 # ------------------------------------------------------------------
 # 2. DEPLOYMENT TOPOLOGY
 # ------------------------------------------------------------------
-template: "h2c3w3"  # h1m1 | h2c3w3 | h3c3w3
+template: "h1m1"  # h1m1 | h2c3w3 | h3c3w3
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
@@ -62,7 +62,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "technologystic.com"
+  domain: "cc.ml.example.com"
 
   # For Cloudflare:
   # cloudflare:
@@ -78,4 +78,4 @@ dns:
 app:
   lb_ipam:
     range: "192.168.88.100-192.168.88.110"
-  alert_email: "ops@example.com"
+  alert_email: "nathan@example.com"

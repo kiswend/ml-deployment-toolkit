@@ -1,0 +1,44 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vault
+  namespace: cc-system
+spec:
+  parentRefs:
+    - name: cc-gateway
+  hostnames:
+    - "vault.${domain}"
+  rules:
+    - backendRefs:
+        - name: vault
+          port: 8200
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: harbor
+  namespace: cc-system
+spec:
+  parentRefs:
+    - name: cc-gateway
+  hostnames:
+    - "harbor.${domain}"
+  rules:
+    - backendRefs:
+        - name: harbor
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: minio-console
+  namespace: cc-system
+spec:
+  parentRefs:
+    - name: cc-gateway
+  hostnames:
+    - "minio.${domain}"
+  rules:
+    - backendRefs:
+        - name: cc-system-minio-console
+          port: 9001

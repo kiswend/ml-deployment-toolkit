@@ -31,6 +31,9 @@ spec:
     remediation:
       retries: 3
   values:
+    sources:
+      - service
+      - gateway-httproute
     provider:
       name: ${dns_provider}
     domainFilters:

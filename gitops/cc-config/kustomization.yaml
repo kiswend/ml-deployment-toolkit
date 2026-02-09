@@ -7,3 +7,5 @@ resources:
   - minio/helmrelease.yaml
   - harbor/externalsecret.yaml
   - harbor/helmrelease.yaml
+  - gateway/gateway.yaml
+  - gateway/routes.yaml
