@@ -1,0 +1,26 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: gateway-api
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: oci://ghcr.io/fluxcd/flux2-gateway-api
+  ref:
+    tag: v1.2.1
+  secretRef:
+    name: oci-credentials
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: gateway-api-crds
+  namespace: flux-system
+spec:
+  interval: 30m
+  prune: false
+  sourceRef:
+    kind: OCIRepository
+    name: gateway-api
+  path: ./config/crd
+  wait: true

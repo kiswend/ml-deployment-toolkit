@@ -44,18 +44,18 @@ template: "h1m1"  # h1m1 | h2c3w3 | h3c3w3
 # ------------------------------------------------------------------
 cluster:
   name: "cc"
+  role: "cc"                        # cc | env — determines which gitops paths are deployed
 
   # Kubernetes API endpoint
   vip: "192.168.88.10"              # Proxmox: floating IP
 
-  # Artifact Repository (OCI cache)
-  artifact_repo:
-    url: "oci://registry.example.com/mojaloop"
-
   # Flux configuration
   flux:
     version: "2.7.2"
-    mode: "none"      # none (CC - install only) | oci (App Env - pull from Harbor)
+    mode: "oci"                    # none (install controllers only) | oci (reconcile from artifact)
+    artifact:
+      url: "oci://ghcr.io/kiswend/ml-iac3"
+      version: "latest"             # OCI tag — use "latest" or pin to a specific version
 
 # ------------------------------------------------------------------
 # 4. DNS

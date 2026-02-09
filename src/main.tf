@@ -98,13 +98,17 @@ module "flux_config" {
   count  = local.flux_mode == "oci" ? 1 : 0
   source = "./modules/flux-config"
 
-  cluster_name      = local.config.cluster.name
-  cluster_vip       = local.config.cluster.vip
-  domain            = local.config.dns.domain
-  dns_provider      = local.config.dns.provider
-  alert_email       = local.config.app.alert_email
-  lb_ipam_range     = local.config.app.lb_ipam.range
-  artifact_repo_url = local.config.cluster.artifact_repo.url
+  cluster_name     = local.config.cluster.name
+  cluster_role     = local.config.cluster.role
+  cluster_vip      = try(local.config.cluster.vip, "")
+  domain           = local.config.dns.domain
+  dns_provider     = local.config.dns.provider
+  alert_email      = local.config.app.alert_email
+  lb_ipam_range    = local.config.app.lb_ipam.range
+  artifact_url     = local.config.cluster.flux.artifact.url
+  artifact_version = try(local.config.cluster.flux.artifact.version, "latest")
+
+  infra_provider = local.provider_name
 
   digitalocean_token = var.digitalocean_token
   oci_username       = var.oci_username

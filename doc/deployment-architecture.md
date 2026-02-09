@@ -23,19 +23,31 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 
 ### Stage 2: Platform Team
 
-**Bundle creation:** OCI bundles containing:
-- Terraform modules for infrastructure provisioning
-- Platform services (see below)
+**Bundle creation:** Two deliverables:
+- **IaC bundle** — Terraform modules for infrastructure provisioning (this repo, applied directly)
+- **GitOps artifact** — OCI artifact containing Flux Kustomization manifests for platform services
 
-**Platform Services:**
+**Platform Services (shared — all providers):**
 
 | Component | Tool | Purpose |
 |-----------|------|---------|
-| CNI & Internal Mesh | Cilium | Internal networking, network policies, internal mTLS |
-| Partner Edge | Envoy | External mTLS with dynamic partner onboarding (xDS/SDS) |
-| Certificates | cert-manager + trust-manager | TLS automation, CA distribution to network edge |
-| Storage | OpenEBS (Mayastor/LVM) | High-performance local storage for data layers |
+| Metrics | metrics-server | Kubelet metrics aggregation |
 | DNS | external-dns | Bridge K8s services to provider DNS (Route53, Cloudflare, DigitalOcean, PowerDNS) |
+| Certificates | cert-manager + Let's Encrypt | TLS automation, ACME issuers |
+| Ingress | Gateway API | Kubernetes-native ingress (replaces deprecated Ingress resource) |
+| Secrets | External Secrets Operator (ESO) | Vault/external secret store integration |
+| Partner Edge | Envoy | External mTLS with dynamic partner onboarding (xDS/SDS) |
+
+**On-prem only services (Talos/Proxmox):**
+
+| Component | Tool | Purpose | Cloud equivalent |
+|-----------|------|---------|-----------------|
+| CNI | Cilium | Networking, network policies, internal mTLS | Managed CNI |
+| Load balancing | Cilium LB-IPAM | L2 announcement + IP pool allocation | Cloud load balancers |
+| Storage | OpenEBS (hostpath) | Local persistent volumes | Cloud CSI (EBS, DO Block Storage) |
+| Object storage | MinIO | S3-compatible storage for state/backups | Managed S3/Spaces |
+
+On managed Kubernetes (EKS, DOKS), these capabilities are provided natively by the cloud provider — no Flux manifests needed.
 
 ### DNS Configuration Strategy
 
@@ -46,7 +58,44 @@ The platform must support multiple DNS providers (e.g., AWS Route53, Cloudflare,
 3.  **Secret Injection:** Terraform injects this blob into a Kubernetes Secret (e.g., `cluster-config`) in the GitOps controller's namespace.
 4.  **GitOps Consumption:** The FluxCD `HelmRelease` for `external-dns` references this secret using `valuesFrom`. This allows the GitOps manifest to remain generic while the specific configuration is supplied dynamically by the infrastructure layer.
 
-**Distribution:** Publish validated bundles to public OCI registry
+**Distribution:** Publish validated OCI artifact to registry (GHCR, Harbor, ECR)
+
+### GitOps Artifact Structure
+
+A single OCI artifact contains four Kustomize roots. Flux deploys a subset based on the cluster's provider and role:
+
+```
+gitops/
+  platform/     # Always deployed — provider-agnostic services
+  onprem/       # Conditionally deployed — on-prem only (Talos/Proxmox)
+  cc/           # Control Center services
+  env/          # App Environment services
+```
+
+**Deployment matrix:**
+
+| Cluster | Provider | Kustomizations | Dependency chain |
+|---------|----------|---------------|-----------------|
+| CC | Proxmox | platform → onprem → cc | cc waits for onprem (needs storage, LB-IPAM) |
+| CC | DOKS/EKS | platform → cc | cc waits for platform |
+| Env | Proxmox | platform → onprem → env | env waits for onprem |
+| Env | DOKS/EKS | platform → env | env waits for platform |
+
+Version coherence is guaranteed — all four directories ship in one artifact. A single OCI tag (e.g. `v1.0.0` or `latest`) covers the entire stack.
+
+### Cilium: Two-Phase Deployment (On-prem)
+
+Cilium is the CNI for on-prem clusters. It presents a bootstrap challenge: Cilium must be running before any pods can schedule (including Flux), but Cilium is distributed only as a Helm chart, and Talos cannot run Helm during provisioning.
+
+**Phase 1 — Talos extraManifests (bootstrap):**
+A pre-rendered Cilium manifest is hosted on private storage and referenced in the Talos machine config patch (`patch-cilium-install.yaml`). Talos downloads and applies it as a static manifest during node bootstrap, ensuring CNI is available before the kubelet starts scheduling pods.
+
+**Phase 2 — Flux HelmRelease (steady-state):**
+Once the cluster is running and Flux is reconciling, a Cilium HelmRelease in `gitops/onprem/` takes over management. Flux adopts the existing Cilium installation, enabling version upgrades, configuration changes, and Helm values management through GitOps.
+
+The `onprem/` kustomization also deploys Cilium configuration CRDs (L2AnnouncementPolicy, CiliumLoadBalancerIPPool) that configure LB-IPAM — the on-prem equivalent of cloud load balancers.
+
+On managed Kubernetes, the cloud provider supplies the CNI natively — neither phase applies.
 
 ### Stage 3: Adopter Control Center
 
@@ -58,13 +107,15 @@ The platform must support multiple DNS providers (e.g., AWS Route53, Cloudflare,
 
 **Control Center hosts:**
 
-| Service | Purpose |
-|---------|---------|
-| Harbor | Local OCI registry - source of truth and cache |
-| Vault | Secrets management, internal CA, partner keys |
-| MinIO | Infrastructure state and backup storage |
-| FluxCD | GitOps reconciliation (OCI-based, not Git) |
-| tf-controller | Terraform automation for downstream environments |
+| Service | Purpose | Provider |
+|---------|---------|----------|
+| Harbor | Local OCI registry — source of truth and cache | All |
+| Vault | Secrets management, internal CA, partner keys | All |
+| MinIO | Infrastructure state and backup storage | On-prem only |
+| FluxCD | GitOps reconciliation (OCI-based, not Git) | All |
+| tf-controller | Terraform automation for downstream environments | All |
+
+On cloud, MinIO is replaced by managed object storage (S3, DigitalOcean Spaces).
 
 ### Stage 4: Adopter App Environment
 
@@ -74,9 +125,9 @@ The platform must support multiple DNS providers (e.g., AWS Route53, Cloudflare,
 3. tf-controller provisions the App Environment
 4. App Environment pulls artifacts from CC Harbor
 
-**Customization:** Flux Kustomize patches handle provider differences:
-- AWS: NLB annotations, EBS storage classes
-- On-prem: MetalLB/IPAM, local storage
+**Customization:** Provider differences are handled by conditional Kustomization paths:
+- On-prem: `onprem/` kustomization deploys Cilium LB-IPAM, OpenEBS storage, MinIO
+- Cloud: managed CNI, cloud LB, cloud CSI, managed S3 — no additional manifests needed
 
 **Partner connectivity:**
 - Internal traffic: Cilium with network policies

@@ -8,11 +8,22 @@ ARTIFACTS_DIR := artifacts/terraform
 PLAN_FILE := $(ARTIFACTS_DIR)/tfplan
 TF_DIR := src
 
+# Load .env and map clean variable names to Terraform's TF_VAR_ convention
+LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
+	export TF_VAR_digitalocean_token=$${DIGITALOCEAN_TOKEN:-} \
+	       TF_VAR_oci_username=$${OCI_USERNAME:-} \
+	       TF_VAR_oci_password=$${OCI_PASSWORD:-}
+
 # Default target
 .DEFAULT_GOAL := help
 
+# GitOps artifact settings (override via env or command line)
+GITOPS_DIR := gitops
+OCI_REPO := $(shell grep -A2 'artifact:' config/config.yaml | grep 'url:' | sed 's/.*url: *"*oci:\/\///' | sed 's/"*$$//')
+GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest")
+
 # Phony targets (not files)
-.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list
+.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list push-gitops tag-gitops list-artifacts
 
 # Help target - displays available commands
 help:
@@ -32,6 +43,12 @@ help:
 	@echo "  make destroy      - Destroy all Terraform-managed infrastructure"
 	@echo "  make destroy-fast - Fast destroy without refresh (when resources already gone)"
 	@echo ""
+	@echo "GitOps Commands:"
+	@echo "  make push-gitops          - Push gitops/ as OCI artifact (version=git SHA)"
+	@echo "  make push-gitops GITOPS_VERSION=v1.0.0 - Push with explicit version"
+	@echo "  make tag-gitops TAG=latest - Tag an existing artifact"
+	@echo "  make list-artifacts       - List published artifact versions"
+	@echo ""
 	@echo "Utility Commands:"
 	@echo "  make validate     - Validate Terraform configuration"
 	@echo "  make fmt          - Format Terraform files"
@@ -42,12 +59,12 @@ help:
 # Initialize Terraform
 init:
 	@echo "Initializing Terraform..."
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform init -upgrade
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform init -upgrade
 
 # Validate Terraform configuration
 validate:
 	@echo "Validating Terraform configuration..."
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform validate
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform validate
 
 # Format Terraform files
 fmt:
@@ -58,7 +75,7 @@ fmt:
 plan: init
 	@echo "Creating Terraform plan..."
 	@mkdir -p $(ARTIFACTS_DIR)
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform plan -out=../$(PLAN_FILE)
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform plan -out=../$(PLAN_FILE)
 	@echo "Plan saved to $(PLAN_FILE)"
 
 # Apply Terraform changes using saved plan
@@ -69,20 +86,20 @@ apply:
 	fi
 	@echo "Applying Terraform changes from saved plan..."
 	@echo "Note: If you get 'stale plan' error, run 'make plan-apply' instead."
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform apply ../$(PLAN_FILE)
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform apply ../$(PLAN_FILE)
 
 # Plan and apply in one step (prevents stale plan issues)
 plan-apply: init
 	@echo "Creating and applying Terraform plan..."
 	@mkdir -p $(ARTIFACTS_DIR)
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform plan -out=../$(PLAN_FILE)
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform plan -out=../$(PLAN_FILE)
 	@echo "Plan created. Applying changes..."
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform apply ../$(PLAN_FILE)
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform apply ../$(PLAN_FILE)
 
 # Apply without plan (direct apply with auto-approve)
 apply-direct: init
 	@echo "WARNING: Applying changes directly without saved plan..."
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform apply -auto-approve
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform apply -auto-approve
 
 # Force apply - recreate plan and apply immediately
 apply-force: plan-apply
@@ -93,14 +110,14 @@ destroy:
 	@echo "WARNING: This will destroy all Terraform-managed infrastructure!"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform destroy -auto-approve
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform destroy -auto-approve
 
 # Fast destroy without refresh (use when resources are already gone)
 destroy-fast:
 	@echo "WARNING: Fast destroy without refresh - use when resources are already deleted!"
 	@echo "Press Ctrl+C to cancel, or wait 3 seconds to continue..."
 	@sleep 3
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform destroy -auto-approve -refresh=false
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform destroy -auto-approve -refresh=false
 
 # Clean up artifacts
 clean:
@@ -110,8 +127,42 @@ clean:
 
 # Show current Terraform state
 show:
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform show
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform show
 
 # List Terraform resources
 list:
-	@cd $(TF_DIR) && set -a && source ../$(ENV_FILE) && set +a && terraform state list
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform state list
+
+# --------------------------------------------------------------------------
+# GitOps OCI Artifact Management
+# --------------------------------------------------------------------------
+
+# Push gitops/ directory as OCI artifact
+push-gitops:
+	@echo "Pushing gitops artifact to oci://$(OCI_REPO):$(GITOPS_VERSION)..."
+	@set -a && source $(ENV_FILE) && set +a && \
+	flux push artifact oci://$(OCI_REPO):$(GITOPS_VERSION) \
+		--path=./$(GITOPS_DIR) \
+		--source="$(shell git config --get remote.origin.url)" \
+		--revision="$(shell git rev-parse --short HEAD)" \
+		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+	@echo "Tagging as latest..."
+	@set -a && source $(ENV_FILE) && set +a && \
+	flux tag artifact oci://$(OCI_REPO):$(GITOPS_VERSION) --tag=latest \
+		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+	@echo "Pushed oci://$(OCI_REPO):$(GITOPS_VERSION) (also tagged latest)"
+
+# Tag an existing artifact with an additional tag
+tag-gitops:
+	@if [ -z "$(TAG)" ]; then echo "Usage: make tag-gitops TAG=v1.0.0"; exit 1; fi
+	@set -a && source $(ENV_FILE) && set +a && \
+	flux tag artifact oci://$(OCI_REPO):$(GITOPS_VERSION) --tag=$(TAG) \
+		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+	@echo "Tagged oci://$(OCI_REPO):$(GITOPS_VERSION) as $(TAG)"
+
+# List published artifact versions
+list-artifacts:
+	@echo "Artifacts in oci://$(OCI_REPO):"
+	@set -a && source $(ENV_FILE) && set +a && \
+	flux list artifacts oci://$(OCI_REPO) \
+		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"

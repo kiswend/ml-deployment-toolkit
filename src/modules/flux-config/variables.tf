@@ -9,9 +9,20 @@ variable "cluster_name" {
   type        = string
 }
 
-variable "cluster_vip" {
-  description = "Cluster VIP address"
+variable "cluster_role" {
+  description = "Cluster role — determines which gitops path is deployed (cc or env)"
   type        = string
+
+  validation {
+    condition     = contains(["cc", "env"], var.cluster_role)
+    error_message = "cluster_role must be 'cc' or 'env'."
+  }
+}
+
+variable "cluster_vip" {
+  description = "Cluster VIP address (on-prem) or endpoint (cloud)"
+  type        = string
+  default     = ""
 }
 
 variable "domain" {
@@ -34,9 +45,15 @@ variable "lb_ipam_range" {
   type        = string
 }
 
-variable "artifact_repo_url" {
-  description = "OCI artifact repository URL"
+variable "artifact_url" {
+  description = "OCI artifact repository URL (e.g. oci://ghcr.io/mojaloop/ml-gitops)"
   type        = string
+}
+
+variable "artifact_version" {
+  description = "OCI artifact tag/version (e.g. latest, v1.0.0)"
+  type        = string
+  default     = "latest"
 }
 
 variable "digitalocean_token" {
@@ -58,4 +75,10 @@ variable "oci_password" {
   type        = string
   default     = ""
   sensitive   = true
+}
+
+variable "infra_provider" {
+  description = "Infrastructure provider name — used to conditionally deploy onprem kustomization"
+  type        = string
+  default     = ""
 }

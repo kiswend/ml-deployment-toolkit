@@ -61,14 +61,12 @@ All configuration lives under `config/`. Two ownership levels:
 
 | Path | Purpose |
 |------|---------|
-| `config/definitions/deployment-templates.yaml` | Cluster topologies (tiny, small, small3m3w) |
-| `config/definitions/instance-types.yaml` | Abstract instance type catalog (co-4vcpu-8gb, gp-2vcpu-8gb, etc.) |
-| `config/definitions/storage-types.yaml` | Abstract storage class catalog (local-fast, standard, bulk) |
-| `config/definitions/workload-classes.yaml` | Node role definitions + patch/image references |
-| `config/patches/talos/` | Talos machine config patches — static `.yaml` (cilium-install, openebs) and templates `.yaml.tpl` (vip) rendered by provider modules |
-| `config/providers/{proxmox,aws,...}/` | Provider-specific mappings: abstract types → provider specs |
+| `config/definitions/workload-classes.yaml` | Talos/K8s versions, node role definitions (control-plane, worker, mixed-plane) |
+| `config/patches/talos/` | Talos machine config patches — static `.yaml` (cilium-install, openebs, allow-scheduling-on-cp) and templates `.yaml.tpl` (vip) |
+| `config/providers/{proxmox,aws,digitalocean}/` | Provider-specific deployment templates, VM/instance defaults |
+| `gitops/` | FluxCD Kustomize manifests — platform services, on-prem gap fillers, CC/env apps |
 
-The adopter touches `config.yaml` + `.env`. Everything else ships with the bundle and defines how abstract resources map to concrete infrastructure.
+The adopter touches `config.yaml` + `.env`. Everything else ships with the bundle.
 
 ## 5. Module Pipeline
 
@@ -78,25 +76,24 @@ Loads all YAML configs from `config/` and normalizes them into a single structur
 
 **Inputs:**
 - `config/config.yaml` — adopter config
-- `config/definitions/deployment-templates.yaml` — topologies
-- `config/definitions/instance-types.yaml` — abstract instance catalog
-- `config/definitions/storage-types.yaml` — abstract storage catalog
-- `config/definitions/workload-classes.yaml` — node role definitions
-- `config/providers/{provider}/instance-types.yaml` — provider-specific instance mappings
-- `config/providers/{provider}/storage-types.yaml` — provider-specific storage mappings
+- `config/definitions/workload-classes.yaml` — Talos/K8s versions, node role definitions
+- `config/providers/{provider}/deployment-templates.yaml` — provider-specific cluster topologies
+- `config/providers/{provider}/config.yaml` — provider defaults (VM specs, image settings)
 
 **Processing:**
-1. Selects deployment template by name (e.g. "tiny" → 1 master + 1 worker)
-2. Resolves abstract placement → provider-specific values via `infra.{provider}.placement` in config.yaml (e.g. `placement-group-1` → Proxmox node `node0`, or → AWS AZ `us-east-1a`)
-3. Attaches workload class metadata (image URLs, patch lists) to each instance
-4. Separates instances by role (control plane vs worker)
+1. Selects deployment template by name from the active provider's templates (e.g. "h1m1" → 1 mixed-plane node)
+2. For on-prem: resolves placement groups → physical nodes, constructs Talos image URL from version + schematic, attaches workload class patches
+3. For managed K8s: passes through node pool/group definitions as-is
+4. Separates instances by role (control-plane/mixed-plane vs worker)
 
 **Outputs:**
-- `instances` — normalized list with resolved placement, instance types, storage
-- `control_plane_instances` / `worker_instances` — filtered lists
-- `provider_mappings` — raw provider-specific type mappings
-- `workload_classes` — full definitions (images, patches, cloud-init templates)
-- `kubernetes_version` / `talos_version`
+- `instances` — normalized list with resolved placement and workload class (on-prem only)
+- `control_plane_instances` / `worker_instances` — filtered lists (on-prem only)
+- `deployment_template` — raw template data for managed K8s (node_pools, node_groups)
+- `workload_classes` — class definitions with talos_type and patch lists
+- `talos_version` / `kubernetes_version` — from workload-classes.yaml (single source of truth)
+- `talos_image` — constructed URL and file name
+- `label_taint_patches` — dynamically generated patches for node labels/taints
 - `paths` — artifact and patch folder locations
 
 ### 5.2 Provider modules
@@ -114,9 +111,9 @@ Patches in `config/patches/talos/` come in two forms:
 - **Template patches** (`.yaml.tpl`) — rendered by the provider module with Terraform `templatefile()` before being passed to talos-gen-config (e.g. `patch-vip.yaml.tpl` rendered with `vip_address` and `interface`)
 
 Patch layering per instance:
-1. **Base patches** — applied to all Talos nodes (e.g. `patch-cilium-install.yaml`)
-2. **Provider patches** — rendered from templates with provider-specific values (e.g. VIP address, network interface)
-3. **Workload class patches** — role-specific (e.g. `patch-openebs.yaml` for workers, referenced in `workload-classes.yaml`)
+1. **Workload class patches** — defined in `workload-classes.yaml` per class (e.g. `patch-cilium-install.yaml` for all classes, `patch-openebs.yaml` for workers and mixed-plane, `patch-allow-scheduling-on-cp.yaml` for mixed-plane)
+2. **Provider patches** — rendered from templates with provider-specific values (e.g. VIP patch with `vip_address` and `interface`)
+3. **Label/taint patches** — dynamically generated for workload classes with `node_labels` or `node_taints`
 
 Outputs: `instance_configs` map (instance name → machine config YAML), `client_configuration` (for talosctl)
 
@@ -129,10 +126,10 @@ Artifacts:
 
 **proxmox-vm (infrastructure):**
 
-Maps abstract types to Proxmox-specific resources and provisions VMs.
+Provisions VMs on Proxmox using specs from deployment templates.
 
-- Maps abstract instance types → Proxmox specs (e.g. `co-4vcpu-8gb` → `{cores: 4, memory: 7000, sockets: 1, cpu_type: "host"}`)
-- Maps abstract storage classes → Proxmox pools (e.g. `local-standard` → `{storage_pool: "local-lvm", cache: "writeback", discard: true}`)
+- Reads cores, memory, storage directly from deployment template (no abstract type indirection)
+- Constructs Talos image URL from version + schematic (single source of truth in workload-classes.yaml)
 - Deduplicates OS image downloads across Proxmox nodes (unique by URL hash)
 - Uploads Talos machine configs as cloud-init snippets
 - Creates VMs with virtio network, SCSI storage, cloud-init on ide2
@@ -176,7 +173,7 @@ Installs FluxCD into the cluster. Provider-agnostic — works identically for on
 
 **Outputs:** `flux_installed`, `flux_namespace`, `bootstrap_complete`
 
-### 5.4 flux-config (target design)
+### 5.4 flux-config
 
 Generates and applies adopter personalization to Flux. Only runs when `flux.mode: oci`. Skipped when `flux.mode: none` (empty cluster for testing).
 
@@ -186,80 +183,101 @@ This module bridges the gap between infrastructure provisioning and platform ser
 
 | Mode | Behavior | Use case |
 |------|----------|----------|
-| `oci` | flux-config creates OCIRepository + Kustomization + ConfigMap + Secret | Normal operation (CC and App Env) |
+| `oci` | flux-config creates OCIRepository + Kustomizations + ConfigMap + Secret | Normal operation (CC and App Env) |
 | `none` | Flux controllers installed, no sources configured — cluster is empty | Testing, manual experimentation |
 
 #### OCI source chain
 
-The adopter sets `cluster.artifact_repo.url` to the OCI registry Flux should pull from. This differs by deployment type:
+The adopter sets `cluster.flux.artifact.url` to the OCI registry Flux should pull from. This differs by deployment type:
 
 **Control Center:**
-- `artifact_repo.url` = Platform Team's public OCI registry (e.g. `ghcr.io/mojaloop/platform`)
+- `artifact.url` = Platform Team's public OCI registry (e.g. `oci://ghcr.io/mojaloop/ml-gitops`)
 - Credentials optional (public repo)
 - Flux pulls the platform bundle → deploys platform services including Harbor
 - Once Harbor is running, it mirrors/caches the Platform Team's OCI content
 
 **App Environment:**
-- `artifact_repo.url` = CC Harbor (e.g. `harbor.cc.example.com/mojaloop/platform`)
+- `artifact.url` = CC Harbor (e.g. `oci://harbor.cc.example.com/mojaloop/ml-gitops`)
 - Credentials required (Harbor auth)
 - Flux pulls from Harbor → deploys platform services
 - App Env never touches the public internet — full sovereignty
 
-The flux-config module doesn't distinguish between CC and App Env. It reads `artifact_repo.url` and creates the OCIRepository. If credentials are configured, it creates a pull secret and attaches `secretRef`. If not, it creates an unauthenticated source.
+#### Kustomization paths
+
+A single OCIRepository serves multiple Flux Kustomizations, each pointing to a different `path` within the artifact:
+
+```
+OCIRepository (ml-gitops)
+    │
+    ├── Kustomization: platform     path: ./platform     (always)
+    │       ↓
+    ├── Kustomization: onprem       path: ./onprem       (if provider == proxmox)
+    │       ↓
+    └── Kustomization: cc|env       path: ./cc or ./env  (based on cluster.role)
+```
+
+Dependency chain ensures ordering:
+- `platform` deploys first (cert-manager, external-dns, Gateway API, ESO, metrics-server)
+- `onprem` waits for platform (needs cert-manager etc.), deploys Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO
+- `cc` or `env` waits for onprem (if present) or platform (if cloud) — needs storage and networking ready
+
+On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, load balancers, storage, and S3 are used instead.
 
 #### Inputs
 
 | Source | Values |
 |--------|--------|
-| `config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name, `artifact_repo.url` |
+| `config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, `artifact.url`/`version` |
 | `.env` | OCI credentials (if authenticated), DNS tokens, provider credentials needed at runtime |
 | Terraform outputs | cluster VIP |
 
 #### Kubernetes resources created
 
-1. **`OCIRepository`** — points Flux source-controller at `artifact_repo.url`. Attaches `secretRef` if OCI credentials are configured.
-2. **`Kustomization`** — references the OCIRepository, triggers reconciliation of the platform bundle
-3. **`ConfigMap` (`cluster-config`)** — adopter values for Flux variable substitution:
-   - `domain`, `alert_email`, `lb_ipam_range`, `dns_provider`, `cluster_name`, `cluster_vip`
-4. **`Secret` (`cluster-secrets`)** — sensitive adopter values:
-   - DNS tokens, provider credentials needed at runtime, OCI credentials (if authenticated)
-5. **Provider-specific `Kustomize` patches** — last-mile customization (e.g. AWS NLB annotations vs on-prem IPAM config)
+1. **`OCIRepository`** — points Flux source-controller at `artifact.url`. Attaches `secretRef` (type `kubernetes.io/dockerconfigjson`) if OCI credentials are configured.
+2. **`Kustomization` (platform)** — always deployed, shared services
+3. **`Kustomization` (onprem)** — conditionally deployed when `infra.provider == "proxmox"`, on-prem gap fillers
+4. **`Kustomization` (cc or env)** — role-specific services, depends on upstream kustomizations
+5. **`ConfigMap` (`cluster-config`)** — adopter values for Flux variable substitution:
+   - `cluster_name`, `cluster_vip`, `domain`, `dns_provider`, `alert_email`, `lb_ipam_range`
+6. **`Secret` (`cluster-secrets`)** — sensitive adopter values:
+   - `digitalocean_token`, `oci_username`, `oci_password`
 
 #### How Flux consumes these
 
 Platform Team HelmReleases and Kustomizations are authored generically in the OCI bundle. They reference adopter values via:
-- `valuesFrom` — HelmReleases pull values from the `cluster-config` ConfigMap and `cluster-secrets` Secret
-- `postBuild.substituteFrom` — Kustomizations substitute `${DOMAIN}`, `${CLUSTER_VIP}`, etc. from the same ConfigMap/Secret
+- `postBuild.substituteFrom` — Kustomizations substitute `${domain}`, `${cluster_vip}`, etc. from the ConfigMap/Secret
+- `valuesFrom` — HelmReleases pull values from the same ConfigMap/Secret
 
 The adopter never forks the platform bundle. All personalization flows through these locally-generated config resources.
 
 ## 6. Data Flow
 
-### Instance lifecycle
+### Instance lifecycle (on-prem)
 
 Trace a single instance from definition to running node:
 
 ```
-deployment-templates.yaml          config.yaml
-  instance: "cc-master-0"           infra.proxmox.placement:
-  instance_type: co-4vcpu-8gb         placement-group-1: "node0"
-  workload_class: control-plane        placement-group-2: "node2"
-  placement_group: placement-group-1   placement-group-3: "node0"
+providers/proxmox/                     config.yaml
+  deployment-templates.yaml              infra.proxmox.placement:
+    instance: "m-0"                        placement-group-1: "node0"
+    cores: 4, memory: 7168               template: "h1m1"
+    workload_class: mixed-plane
+    placement_group: placement-group-1
           │                                     │
           ▼                                     ▼
      config-loader ─────────────────────────────┘
           │
           │  resolved instance:
-          │    type: co-4vcpu-8gb
-          │    class: control-plane
-          │    node: node0
+          │    name: m-0
+          │    cores: 4, memory: 7168
+          │    class: mixed-plane (talos_type: controlplane)
+          │    target_node: node0
+          │    patches: cilium + openebs + allow-scheduling-on-cp + vip
           │
           ▼
-     provider module
-          │
-          │  co-4vcpu-8gb → {cores:4, mem:7000}
-          │  local-standard → {pool: local-lvm}
-          │  patches: cilium.yaml + vip.yaml.tpl(vip=192.168.88.12)
+     proxmox module
+          │  image URL: factory.talos.dev/image/{schematic}/{version}/nocloud-amd64.raw.gz
+          │  storage_pool: local-lvm
           │
           ▼
      running VM on node0
@@ -268,46 +286,45 @@ deployment-templates.yaml          config.yaml
 
 ### Flux config flow
 
-Two deployment scenarios — same flux-config module, different `artifact_repo.url`:
-
 ```
-Control Center:                        App Environment:
-  artifact_repo.url =                    artifact_repo.url =
-    ghcr.io/mojaloop/platform              harbor.cc.example.com/platform
-  credentials: (none)                    credentials: harbor auth
-          │                                       │
-          └──────────────┬────────────────────────┘
-                         │
-config.yaml              │           .env                    TF outputs
-  domain: example.com    │             DIGITALOCEAN_TOKEN=xxx  cluster_vip
-  dns_provider: do       │             OCI_PASSWORD=xxx          = 192.168.88.12
-  lb_ipam: ...           │                  │                        │
-          │              │                  │                        │
-          └──────────────┼──────────────────┼────────────────────────┘
-                         │                  │
-                         ▼                  ▼
+config.yaml              .env                    TF outputs
+  artifact.url=          OCI_USERNAME=xxx        cluster_vip
+    oci://ghcr.io/...    OCI_PASSWORD=xxx          = 192.168.88.10
+  cluster.role=cc        DIGITALOCEAN_TOKEN=xxx
+  infra.provider=proxmox
+  domain, dns, app...
+          │                  │                        │
+          └──────────────────┼────────────────────────┘
+                             │
+                             ▼
                    flux-config module (flux.mode: oci)
-                         │
-        ┌────────────────┼────────────────────────┐
-        │                │                        │
-        ▼                ▼                        ▼
-  ConfigMap          Secret                 OCIRepository +
-  cluster-config     cluster-secrets        Kustomization
-    domain=...         do_token=xxx           url=artifact_repo.url
-    lb_ipam=...        oci_password=xxx       secretRef (if creds)
-    cluster_vip=...    ...
-        │                │
-        └────────┬───────┘
-                 │
-                 ▼
-        Flux postBuild.substituteFrom
-        Flux valuesFrom (HelmRelease)
-                 │
-                 ▼
-        Platform HelmReleases rendered with adopter values
-          external-dns → digitalocean provider + token
-          cert-manager → domain = example.com
-          cilium       → lb_ipam = 192.168.88.100-110
+                             │
+        ┌────────────────────┼──────────────────────────┐
+        │                    │                          │
+        ▼                    ▼                          ▼
+  ConfigMap              Secret                   OCIRepository
+  cluster-config         cluster-secrets          (ml-gitops)
+    domain=...             do_token=xxx              │
+    lb_ipam=...            oci_password=xxx          │
+    cluster_vip=...        ...                       │
+        │                    │              ┌────────┼────────┐
+        └────────┬───────────┘              │        │        │
+                 │                          ▼        ▼        ▼
+                 │                    Kustomization paths:
+                 │                    platform  onprem*  cc|env
+                 │                    (* if provider=proxmox)
+                 │                          │        │        │
+                 └──────────────────────────┼────────┼────────┘
+                                            │
+                                            ▼
+                                 Flux postBuild.substituteFrom
+                                 Flux valuesFrom (HelmRelease)
+                                            │
+                                            ▼
+                                 HelmReleases rendered with adopter values
+                                   external-dns → ${dns_provider} + ${digitalocean_token}
+                                   cert-manager → ${domain}
+                                   cilium       → ${lb_ipam_range} (on-prem only)
 ```
 
 ## 7. Artifacts
