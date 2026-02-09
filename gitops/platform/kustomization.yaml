@@ -5,5 +5,4 @@ resources:
   - metrics-server/helmrelease.yaml
   - cert-manager/helmrelease.yaml
   - external-dns/helmrelease.yaml
-  - gateway-api/gateway-api.yaml
   - external-secrets/helmrelease.yaml

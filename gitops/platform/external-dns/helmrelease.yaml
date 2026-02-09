@@ -37,3 +37,6 @@ spec:
       - ${domain}
     txtOwnerId: ${cluster_name}
     policy: sync
+    env:
+      - name: DO_TOKEN
+        value: ${digitalocean_token}

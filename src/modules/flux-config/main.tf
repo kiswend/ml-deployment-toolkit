@@ -35,6 +35,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     dns_provider  = var.dns_provider
     alert_email   = var.alert_email
     lb_ipam_range = var.lb_ipam_range
+    lb_ipam_start = split("-", var.lb_ipam_range)[0]
+    lb_ipam_stop  = split("-", var.lb_ipam_range)[1]
   }
 }
 
