@@ -34,3 +34,5 @@ spec:
       retries: 3
   values:
     installCRDs: true
+    config:
+      enableGatewayAPI: true
