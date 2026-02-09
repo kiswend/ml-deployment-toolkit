@@ -82,3 +82,24 @@ variable "infra_provider" {
   type        = string
   default     = ""
 }
+
+variable "minio_root_user" {
+  description = "MinIO root username"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "minio_root_password" {
+  description = "MinIO root password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "harbor_admin_password" {
+  description = "Harbor admin password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

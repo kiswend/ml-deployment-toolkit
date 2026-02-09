@@ -1,0 +1,65 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: harbor
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://helm.goharbor.io
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: harbor
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: harbor
+      version: "1.x"
+      sourceRef:
+        kind: HelmRepository
+        name: harbor
+      interval: 12h
+  targetNamespace: cc-system
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  dependsOn:
+    - name: minio
+  valuesFrom:
+    - kind: Secret
+      name: harbor-credentials
+      targetPath: harborAdminPassword
+      valuesKey: adminPassword
+  values:
+    expose:
+      type: clusterIP
+      tls:
+        enabled: false
+    externalURL: https://harbor.${domain}
+    persistence:
+      enabled: true
+      persistentVolumeClaim:
+        registry:
+          size: 20Gi
+        database:
+          size: 2Gi
+        redis:
+          size: 1Gi
+        trivy:
+          size: 5Gi
+    # Use MinIO for S3-compatible storage backend
+    imageChartStorage:
+      type: s3
+      s3:
+        region: us-east-1
+        bucket: harbor
+        regionendpoint: http://minio.cc-system:9000
+        encrypt: false
+        secure: false

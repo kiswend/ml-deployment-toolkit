@@ -114,6 +114,10 @@ module "flux_config" {
   oci_username       = var.oci_username
   oci_password       = var.oci_password
 
+  minio_root_user      = var.minio_root_user
+  minio_root_password  = var.minio_root_password
+  harbor_admin_password = var.harbor_admin_password
+
   depends_on = [
     module.flux_bootstrap
   ]

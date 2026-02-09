@@ -12,7 +12,10 @@ TF_DIR := src
 LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	export TF_VAR_digitalocean_token=$${DIGITALOCEAN_TOKEN:-} \
 	       TF_VAR_oci_username=$${OCI_USERNAME:-} \
-	       TF_VAR_oci_password=$${OCI_PASSWORD:-}
+	       TF_VAR_oci_password=$${OCI_PASSWORD:-} \
+	       TF_VAR_minio_root_user=$${MINIO_ROOT_USER:-} \
+	       TF_VAR_minio_root_password=$${MINIO_ROOT_PASSWORD:-} \
+	       TF_VAR_harbor_admin_password=$${HARBOR_ADMIN_PASSWORD:-}
 
 # Default target
 .DEFAULT_GOAL := help

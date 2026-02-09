@@ -1,6 +1,6 @@
 # Flux Config Module
 # Creates Kubernetes resources for Flux OCI-based GitOps
-# Deploys: 1 OCIRepository + 3-4 Kustomizations (platform → platform-config → [onprem] → role-specific)
+# Deploys: 1 OCIRepository + 3-5 Kustomizations (platform → platform-config → [onprem] → role-specific → [cc-config])
 
 locals {
   has_oci_credentials = var.oci_username != "" && var.oci_password != ""
@@ -48,9 +48,12 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
   }
 
   data = {
-    digitalocean_token = var.digitalocean_token
-    oci_username       = var.oci_username
-    oci_password       = var.oci_password
+    digitalocean_token    = var.digitalocean_token
+    oci_username          = var.oci_username
+    oci_password          = var.oci_password
+    minio_root_user       = var.minio_root_user
+    minio_root_password   = var.minio_root_password
+    harbor_admin_password = var.harbor_admin_password
   }
 
   type = "Opaque"
@@ -261,5 +264,47 @@ resource "kubectl_manifest" "kustomization_role" {
   depends_on = [
     kubectl_manifest.kustomization_platform_config,
     kubectl_manifest.kustomization_onprem
+  ]
+}
+
+# Kustomization: cc-config (Vault CR, ESO SecretStore, MinIO, Harbor — depends on cc installing vault-operator CRDs)
+resource "kubectl_manifest" "kustomization_cc_config" {
+  count = var.cluster_role == "cc" ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "cc-config"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      path     = "./cc-config"
+      prune    = true
+      dependsOn = [
+        { name = "cc" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_role
   ]
 }

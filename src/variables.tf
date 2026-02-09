@@ -21,3 +21,24 @@ variable "oci_password" {
   default     = ""
   sensitive   = true
 }
+
+variable "minio_root_user" {
+  description = "MinIO root username for Control Center"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "minio_root_password" {
+  description = "MinIO root password for Control Center"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "harbor_admin_password" {
+  description = "Harbor admin password for Control Center"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
