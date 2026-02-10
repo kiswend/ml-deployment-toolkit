@@ -33,29 +33,41 @@ config-loader → managed-k8s provisioning → flux-bootstrap → flux-config
 ## 3. Adopter Workflow
 
 1. **Pull the IaC bundle** (OCI artifact or Git clone during development)
-2. **Configure credentials:** Copy `config/.env.sample` → `config/.env`, fill in provider credentials, OCI auth, DNS tokens
-3. **Configure infrastructure:** Edit `config/config.yaml` — select provider, deployment template, cluster name/VIP, DNS, app settings
-4. **Deploy:**
+2. **Create environment directory:** `mkdir -p config/environments/<env>`
+3. **Configure credentials:** Copy `config/.env.sample` → `config/environments/<env>/.env`, fill in provider credentials, OCI auth, DNS tokens
+4. **Configure infrastructure:** Create/edit `config/environments/<env>/config.yaml` — select provider, deployment template, cluster name/VIP, DNS, app settings
+5. **Deploy:**
    ```bash
-   make init        # Initialize Terraform providers
-   make plan        # Review execution plan
-   make apply       # Provision infrastructure
+   make plan ENV=<env>      # Review execution plan
+   make apply ENV=<env>     # Provision infrastructure
    ```
-5. **Outputs:**
-   - `artifacts/kubernetes/kubeconfig` — cluster access
-   - `artifacts/talos-config/talosconfig` — Talos API access (on-prem only)
+6. **Outputs:**
+   - `artifacts/<env>/kubernetes/kubeconfig` — cluster access
+   - `artifacts/<env>/talos-config/talosconfig` — Talos API access (on-prem only)
    - Flux running and reconciling platform services with adopter values applied
+
+### Multiple environments from a single clone
+
+```bash
+# Deploy Control Center
+make plan-apply ENV=cc
+
+# Deploy App Environment
+make plan-apply ENV=env-prod
+```
+
+Each environment has its own config, secrets, Terraform state, and artifacts — fully independent.
 
 ## 4. Configuration System
 
 All configuration lives under `config/`. Two ownership levels:
 
-### Adopter-owned (edited per deployment)
+### Adopter-owned (edited per environment)
 
 | File | Purpose |
 |------|---------|
-| `config/config.yaml` | Main infrastructure config: provider, template, cluster, DNS, app settings |
-| `config/.env` | Secrets and credentials (git-ignored) |
+| `config/environments/<env>/config.yaml` | Infrastructure config: provider, template, cluster, DNS, app settings |
+| `config/environments/<env>/.env` | Secrets and credentials (git-ignored) |
 
 ### Platform-team-owned (bundled, not normally edited)
 
@@ -66,7 +78,11 @@ All configuration lives under `config/`. Two ownership levels:
 | `config/providers/{proxmox,aws,digitalocean}/` | Provider-specific deployment templates, VM/instance defaults |
 | `gitops/` | FluxCD Kustomize manifests — platform services, on-prem gap fillers, CC/env apps |
 
-The adopter touches `config.yaml` + `.env`. Everything else ships with the bundle.
+The adopter touches `config/environments/<env>/config.yaml` + `.env`. Everything else ships with the bundle.
+
+### Environment isolation
+
+The `ENV=` variable (default: `cc`) selects the active environment. Terraform state and artifacts are stored per-environment under `artifacts/<env>/`. The Makefile passes `-backend-config` to `terraform init` to route state to the correct location.
 
 ## 5. Module Pipeline
 
@@ -75,7 +91,7 @@ The adopter touches `config.yaml` + `.env`. Everything else ships with the bundl
 Loads all YAML configs from `config/` and normalizes them into a single structured output.
 
 **Inputs:**
-- `config/config.yaml` — adopter config
+- `config/environments/<env>/config.yaml` — adopter config
 - `config/definitions/workload-classes.yaml` — Talos/K8s versions, node role definitions
 - `config/providers/{provider}/deployment-templates.yaml` — provider-specific cluster topologies
 - `config/providers/{provider}/config.yaml` — provider defaults (VM specs, image settings)
@@ -94,7 +110,7 @@ Loads all YAML configs from `config/` and normalizes them into a single structur
 - `talos_version` / `kubernetes_version` — from workload-classes.yaml (single source of truth)
 - `talos_image` — constructed URL and file name
 - `label_taint_patches` — dynamically generated patches for node labels/taints
-- `paths` — artifact and patch folder locations
+- `paths` — shared patch folder location
 
 ### 5.2 Provider modules
 
@@ -118,11 +134,11 @@ Patch layering per instance:
 Outputs: `instance_configs` map (instance name → machine config YAML), `client_configuration` (for talosctl)
 
 Artifacts:
-- `artifacts/talos-config/controlplane.yaml` — base control-plane config
-- `artifacts/talos-config/worker.yaml` — base worker config
-- `artifacts/talos-config/{instance-name}.yaml` — per-instance configs
-- `artifacts/talos-config/talosconfig` — talosctl client config
-- `artifacts/talos-secrets/secrets.yaml` — cluster secrets backup
+- `artifacts/<env>/talos-config/controlplane.yaml` — base control-plane config
+- `artifacts/<env>/talos-config/worker.yaml` — base worker config
+- `artifacts/<env>/talos-config/{instance-name}.yaml` — per-instance configs
+- `artifacts/<env>/talos-config/talosconfig` — talosctl client config
+- `artifacts/<env>/talos-secrets/secrets.yaml` — cluster secrets backup
 
 **proxmox-vm (infrastructure):**
 
@@ -147,7 +163,7 @@ Bootstraps etcd on the first control-plane node, generates kubeconfig, waits for
 
 Outputs: `kubeconfig_path`, `bootstrap_complete`
 
-Artifacts: `artifacts/kubernetes/kubeconfig`
+Artifacts: `artifacts/<env>/kubernetes/kubeconfig`
 
 #### 5.2.2 Managed: aws/gcp/digitalocean (target design)
 
@@ -241,8 +257,8 @@ On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, lo
 
 | Source | Values |
 |--------|--------|
-| `config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, `oci.repo.url`/`version` |
-| `.env` | OCI credentials (if authenticated), DNS tokens, provider credentials needed at runtime |
+| `config/environments/<env>/config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, `oci.repo.url`/`version` |
+| `config/environments/<env>/.env` | OCI credentials (if authenticated), DNS tokens, provider credentials needed at runtime |
 | Terraform outputs | cluster VIP |
 
 #### Kubernetes resources created
@@ -271,7 +287,7 @@ The adopter never forks the platform bundle. All personalization flows through t
 Trace a single instance from definition to running node:
 
 ```
-providers/proxmox/                     config.yaml
+providers/proxmox/                     config/environments/<env>/config.yaml
   deployment-templates.yaml              infra.proxmox.placement:
     instance: "m-0"                        placement-group-1: "node0"
     cores: 4, memory: 7168               template: "h1m1"
@@ -301,59 +317,60 @@ providers/proxmox/                     config.yaml
 ### Flux config flow
 
 ```
-config.yaml              .env                    TF outputs
-  oci.repo.url=          OCI_REPO_USERNAME=xxx   cluster_vip
-    oci://ghcr.io/...    OCI_REPO_PASSWORD=xxx     = 192.168.88.10
-  cluster.role=cc        DIGITALOCEAN_TOKEN=xxx
+config/environments/<env>/   config/environments/<env>/   TF outputs
+  config.yaml                  .env                       cluster_vip
+  oci.repo.url=                OCI_REPO_USERNAME=xxx        = 192.168.88.10
+    oci://ghcr.io/...          OCI_REPO_PASSWORD=xxx
+  cluster.role=cc              DIGITALOCEAN_TOKEN=xxx
   infra.provider=proxmox
   domain, dns, app...
-          │                  │                        │
-          └──────────────────┼────────────────────────┘
-                             │
-                             ▼
-                   flux-config module (oci.repo.active: true)
-                             │
-        ┌────────────────────┼──────────────────────────┐
-        │                    │                          │
-        ▼                    ▼                          ▼
-  ConfigMap              Secret                   OCIRepository
-  cluster-config         cluster-secrets          (ml-gitops)
-    domain=...             do_token=xxx              │
-    lb_ipam=...            oci_repo_password=xxx     │
-    cluster_vip=...        ...                       │
-        │                    │              ┌────────┼────────┐
-        └────────┬───────────┘              │        │        │
-                 │                          ▼        ▼        ▼
-                 │                    Kustomization paths:
-                 │                    platform  onprem*  cc|env
-                 │                    (* if provider=proxmox)
-                 │                          │        │        │
-                 └──────────────────────────┼────────┼────────┘
-                                            │
-                                            ▼
-                                 Flux postBuild.substituteFrom
-                                 Flux valuesFrom (HelmRelease)
-                                            │
-                                            ▼
-                                 HelmReleases rendered with adopter values
-                                   external-dns → ${dns_provider} + ${digitalocean_token}
-                                   cert-manager → ${domain}
-                                   cilium       → ${lb_ipam_range} (on-prem only)
+          │                      │                          │
+          └──────────────────────┼──────────────────────────┘
+                                 │
+                                 ▼
+                       flux-config module (oci.repo.active: true)
+                                 │
+        ┌────────────────────────┼──────────────────────────┐
+        │                        │                          │
+        ▼                        ▼                          ▼
+  ConfigMap                  Secret                   OCIRepository
+  cluster-config             cluster-secrets          (ml-gitops)
+    domain=...                 do_token=xxx              │
+    lb_ipam=...                oci_repo_password=xxx     │
+    cluster_vip=...            ...                       │
+        │                        │              ┌────────┼────────┐
+        └────────┬───────────────┘              │        │        │
+                 │                              ▼        ▼        ▼
+                 │                        Kustomization paths:
+                 │                        platform  onprem*  cc|env
+                 │                        (* if provider=proxmox)
+                 │                              │        │        │
+                 └──────────────────────────────┼────────┼────────┘
+                                                │
+                                                ▼
+                                     Flux postBuild.substituteFrom
+                                     Flux valuesFrom (HelmRelease)
+                                                │
+                                                ▼
+                                     HelmReleases rendered with adopter values
+                                       external-dns → ${dns_provider} + ${digitalocean_token}
+                                       cert-manager → ${domain}
+                                       cilium       → ${lb_ipam_range} (on-prem only)
 ```
 
 ## 7. Artifacts
 
-What `make apply` produces:
+What `make apply ENV=<env>` produces:
 
 | Artifact | Path | Provider |
 |----------|------|----------|
-| Kubeconfig | `artifacts/kubernetes/kubeconfig` | All |
-| Talos client config | `artifacts/talos-config/talosconfig` | On-prem only |
-| Per-instance Talos configs | `artifacts/talos-config/{instance}.yaml` | On-prem only |
-| Base Talos configs | `artifacts/talos-config/controlplane.yaml`, `worker.yaml` | On-prem only |
-| Talos secrets backup | `artifacts/talos-secrets/secrets.yaml` | On-prem only |
-| Terraform state | `artifacts/terraform/terraform.tfstate` | All |
-| Terraform plan | `artifacts/terraform/tfplan` | All |
+| Kubeconfig | `artifacts/<env>/kubernetes/kubeconfig` | All |
+| Talos client config | `artifacts/<env>/talos-config/talosconfig` | On-prem only |
+| Per-instance Talos configs | `artifacts/<env>/talos-config/{instance}.yaml` | On-prem only |
+| Base Talos configs | `artifacts/<env>/talos-config/controlplane.yaml`, `worker.yaml` | On-prem only |
+| Talos secrets backup | `artifacts/<env>/talos-secrets/secrets.yaml` | On-prem only |
+| Terraform state | `artifacts/<env>/terraform/terraform.tfstate` | All |
+| Terraform plan | `artifacts/<env>/terraform/tfplan` | All |
 
 ## 8. Module Dependency Chain
 

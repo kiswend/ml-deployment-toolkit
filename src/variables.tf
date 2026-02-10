@@ -1,3 +1,10 @@
+# Environment name — selects config/environments/<env_name>/
+variable "env_name" {
+  description = "Environment name (maps to config/environments/<env_name>/)"
+  type        = string
+  default     = "cc"
+}
+
 # Sensitive variables injected via TF_VAR_* environment variables
 # Used by flux-config module to create Kubernetes secrets
 

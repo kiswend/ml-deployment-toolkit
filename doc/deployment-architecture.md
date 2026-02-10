@@ -119,9 +119,9 @@ The shared Gateway in `platform-config/` references `gatewayClassName: cilium` w
 
 **Bootstrap process:**
 1. Pull OCI bundle via CLI
-2. Configure `config/.env` with provider credentials
-3. Configure `config/config.yaml` with infrastructure settings
-4. Run `terraform apply`
+2. Configure `config/environments/<env>/.env` with provider credentials
+3. Configure `config/environments/<env>/config.yaml` with infrastructure settings
+4. Run `make plan-apply ENV=<env>`
 
 **Control Center hosts:**
 

@@ -36,7 +36,5 @@ terraform {
     }
   }
 
-  backend "local" {
-    path = "../artifacts/terraform/terraform.tfstate"
-  }
+  backend "local" {}
 }
