@@ -42,12 +42,12 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 
 | Component | Tool | Purpose | Cloud equivalent |
 |-----------|------|---------|-----------------|
-| CNI | Cilium | Networking, network policies, internal mTLS | Managed CNI |
+| CNI + Gateway | Cilium HelmRelease (`gatewayAPI.enabled`) | Networking, policies, mTLS, Gateway API controller + GatewayClass | Cilium (managed by cloud provider, GatewayClass pre-created) |
 | Load balancing | Cilium LB-IPAM | L2 announcement + IP pool allocation | Cloud load balancers |
 | Storage | OpenEBS (hostpath) | Local persistent volumes | Cloud CSI (EBS, DO Block Storage) |
 | Object storage | MinIO | S3-compatible storage for state/backups | Managed S3/Spaces |
 
-On managed Kubernetes (EKS, DOKS), these capabilities are provided natively by the cloud provider — no Flux manifests needed.
+On managed Kubernetes (EKS, DOKS), Cilium is provided as a managed CNI (default on DOKS, optional on EKS) with Gateway API support. Storage, load balancing, and object storage are cloud-native — no Flux manifests needed for those.
 
 ### DNS Configuration Strategy
 
@@ -62,28 +62,31 @@ The platform must support multiple DNS providers (e.g., AWS Route53, Cloudflare,
 
 ### GitOps Artifact Structure
 
-A single OCI artifact contains six Kustomize roots. Flux deploys a subset based on the cluster's provider and role:
+A single OCI artifact contains seven Kustomize roots. Flux deploys a subset based on the cluster's provider and role:
 
 ```
 gitops/
-  platform/        # Always deployed — shared services (cert-manager, external-dns, ESO, metrics-server, GatewayClass)
+  platform/        # Always deployed — shared services (cert-manager, external-dns, ESO, metrics-server)
   platform-config/ # Always deployed — shared config (ClusterIssuers, DNS-01 secret, Gateway with wildcard TLS)
-  onprem/          # Conditionally deployed — on-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS)
+  onprem/          # Conditionally deployed — on-prem only (Cilium HelmRelease with gatewayAPI.enabled, LB-IPAM, OpenEBS)
   cc/              # Control Center operators (vault-operator) + namespace definitions (vault, harbor, minio)
-  cc-config/       # Control Center services (Vault + HTTPRoute in vault ns, Harbor + HTTPRoute in harbor ns, MinIO + HTTPRoute in minio ns)
+  cc-config/       # Control Center services (Vault CR in vault ns, Harbor HelmRelease in harbor ns, MinIO HelmRelease in minio ns)
+  cc-routes/       # Control Center HTTPRoutes (vault, harbor, minio — deployed after cc-config services are healthy)
   env/             # App Environment services (Mojaloop app)
 ```
+
+Note: GatewayClass is not in the artifact. It is auto-created by Cilium — either by the on-prem HelmRelease (`gatewayAPI.enabled: true`) or by the cloud-managed Cilium installation.
 
 **Deployment matrix:**
 
 | Cluster | Provider | Kustomizations | Dependency chain |
 |---------|----------|---------------|-----------------|
-| CC | Proxmox | platform → platform-config → onprem → cc → cc-config | cc-config waits for onprem (needs storage, LB-IPAM, GatewayClass) |
-| CC | DOKS/EKS | platform → platform-config → cc → cc-config | cc-config waits for platform |
+| CC | Proxmox | platform → platform-config → onprem → cc → cc-config → cc-routes | cc-routes waits for cc-config health checks (services running) |
+| CC | DOKS/EKS | platform → platform-config → cc → cc-config → cc-routes | cc-routes waits for cc-config health checks (services running) |
 | Env | Proxmox | platform → platform-config → onprem → env | env waits for onprem |
 | Env | DOKS/EKS | platform → platform-config → env | env waits for platform |
 
-Version coherence is guaranteed — all six directories ship in one artifact. A single OCI tag (e.g. `v1.0.0` or `latest`) covers the entire stack.
+Version coherence is guaranteed — all seven directories ship in one artifact. A single OCI tag (e.g. `v1.0.0` or `latest`) covers the entire stack.
 
 ### Cilium: Two-Phase Deployment (On-prem)
 
@@ -95,9 +98,22 @@ A pre-rendered Cilium manifest is hosted on private storage and referenced in th
 **Phase 2 — Flux HelmRelease (steady-state):**
 Once the cluster is running and Flux is reconciling, a Cilium HelmRelease in `gitops/onprem/` takes over management. Flux adopts the existing Cilium installation, enabling version upgrades, configuration changes, and Helm values management through GitOps.
 
-The `onprem/` kustomization also deploys Cilium configuration CRDs (L2AnnouncementPolicy, CiliumLoadBalancerIPPool) that configure LB-IPAM — the on-prem equivalent of cloud load balancers. The GatewayClass (Cilium as Gateway API controller) is in `platform/` since it's shared across all providers.
+The `onprem/` kustomization also deploys Cilium configuration CRDs (L2AnnouncementPolicy, CiliumLoadBalancerIPPool) that configure LB-IPAM — the on-prem equivalent of cloud load balancers. The Cilium HelmRelease includes `gatewayAPI.enabled: true`, which auto-creates the GatewayClass (`cilium`).
 
-On managed Kubernetes, the cloud provider supplies the CNI natively — neither phase applies.
+On managed Kubernetes, the cloud provider supplies Cilium as a managed CNI (default on DOKS, optional on EKS) — neither bootstrap phase applies. The GatewayClass is pre-created by the cloud provider (DOKS, GKE) or auto-created by a self-installed Cilium (EKS BYOCNI).
+
+### Cilium and GatewayClass: Provider Model
+
+Cilium is the CNI on all providers. The GatewayClass is never deployed by the gitops artifact — it is always a byproduct of the Cilium installation:
+
+| Provider | Cilium installation | GatewayClass | Gateway API CRDs |
+|----------|--------------------|--------------|--------------------|
+| Proxmox | Self-managed: Talos extraManifests (bootstrap) → Flux HelmRelease (steady-state) | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed via Talos extraManifests |
+| DigitalOcean DOKS | Managed (default CNI) | Pre-created by DigitalOcean (VPC-native + K8s 1.33+) | Pre-installed |
+| AWS EKS | Self-installed (BYOCNI or CNI chaining) — future `eks/` kustomization | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed before Cilium |
+| GCP GKE | Managed (Dataplane V2 = Cilium) | Auto-created by GKE | Pre-installed |
+
+The shared Gateway in `platform-config/` references `gatewayClassName: cilium` which exists on all providers regardless of who created it.
 
 ### Stage 3: Adopter Control Center
 

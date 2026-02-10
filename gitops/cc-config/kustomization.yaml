@@ -3,10 +3,7 @@ kind: Kustomization
 resources:
   - vault/vault.yaml
   - vault/secretstore.yaml
-  - vault/httproute.yaml
   - minio/externalsecret.yaml
   - minio/helmrelease.yaml
-  - minio/httproute.yaml
   - harbor/externalsecret.yaml
   - harbor/helmrelease.yaml
-  - harbor/httproute.yaml
