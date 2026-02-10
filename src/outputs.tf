@@ -34,7 +34,7 @@ output "flux_installed" {
   value       = length(module.flux_bootstrap) > 0 ? module.flux_bootstrap[0].flux_installed : false
 }
 
-output "flux_mode" {
-  description = "Flux operating mode (none or oci)"
-  value       = local.config.cluster.flux.mode
+output "oci_repo_active" {
+  description = "Whether Flux OCI reconciliation is active"
+  value       = local.oci_active
 }

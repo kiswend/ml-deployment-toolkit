@@ -76,13 +76,13 @@ AWS_SECRET_ACCESS_KEY="your-secret-key"
 TF_VAR_digitalocean_token="your-do-token"
 ```
 
-#### Flux OCI credentials (all providers)
+#### OCI-REPO credentials (all providers)
 
 Required when pulling from a private OCI registry. Also used by `make push-gitops` for authentication.
 
 ```bash
-OCI_USERNAME="your-github-username"
-OCI_PASSWORD="ghp_xxxxxxxxxxxx"
+OCI_REPO_USERNAME="your-github-username"
+OCI_REPO_PASSWORD="ghp_xxxxxxxxxxxx"
 ```
 
 Generate a GitHub PAT:
@@ -95,11 +95,20 @@ gh auth refresh -s read:packages,write:packages
 gh auth token
 ```
 
-For public GHCR packages, OCI credentials are not required for pull. They are still needed for push (`make push-gitops`).
+For public GHCR packages, OCI-REPO credentials are not required for pull. They are still needed for push (`make push-gitops`).
+
+#### OCI-PROXY credentials (optional)
+
+Only needed when `oci.proxy.active: true` in `config.yaml` and Harbor requires authentication.
+
+```bash
+OCI_PROXY_USERNAME=""
+OCI_PROXY_PASSWORD=""
+```
 
 ### config/config.yaml — Infrastructure
 
-The config file has 5 sections. Edit the values for your environment:
+The config file has 6 sections. Edit the values for your environment:
 
 #### 1. Provider selection
 
@@ -175,10 +184,6 @@ cluster:
   vip: "192.168.88.10"               # Proxmox: floating VIP for K8s API
   flux:
     version: "2.7.2"                  # FluxCD version
-    mode: "none"                      # none | oci
-    artifact:
-      url: "oci://ghcr.io/mojaloop/ml-gitops"
-      version: "latest"               # OCI tag — "latest" or pinned version
 ```
 
 **Cluster role:**
@@ -187,15 +192,6 @@ cluster:
 |------|---------------|----------|
 | `cc` | `platform/` + `cc/` | Control Center — hosts Harbor, Vault, MinIO |
 | `env` | `platform/` + `env/` | App Environment — hosts Mojaloop workloads |
-
-**Flux mode:**
-
-| Mode | Behavior |
-|------|----------|
-| `none` | Flux controllers installed but no sources configured — empty cluster |
-| `oci` | Flux reconciles from the OCI artifact (normal operation) |
-
-Start with `mode: "none"` to validate infrastructure, then switch to `"oci"` to enable GitOps.
 
 #### 4. DNS
 
@@ -213,6 +209,30 @@ app:
     range: "192.168.88.100-192.168.88.110"   # On-prem LB IP range
   alert_email: "ops@example.com"
 ```
+
+#### 6. OCI configuration
+
+```yaml
+oci:
+  repo:
+    active: true                    # Enable Flux OCI reconciliation
+    url: "oci://ghcr.io/mojaloop/ml-gitops"
+    version: "latest"               # OCI tag — "latest" or pinned version
+  proxy:
+    active: false                   # Enable container image proxy through Harbor
+    url: "harbor.cc.example.com"    # Harbor proxy cache URL
+```
+
+**OCI repo** — The platform team's OCI registry where the Flux gitops artifact lives. Required for Flux. Set `active: false` to install Flux controllers only (empty cluster for testing).
+
+**OCI proxy** — CC's Harbor as a transparent pull-through cache for container images. Configured at Talos level (`machine.registries.mirrors`) so containerd routes image pulls through Harbor. CC typically has it inactive (CC IS the proxy). App Environments enable it to cache images locally.
+
+| Scenario | `oci.repo.active` | `oci.proxy.active` |
+|----------|-------------------|---------------------|
+| CC cluster | `true` | `false` (CC IS the proxy) |
+| App Env (internet) | `true` (direct GHCR) | `true` |
+| App Env (air-gapped) | `true` (URL points through Harbor) | `true` |
+| Testing (empty cluster) | `false` | `false` |
 
 ## Deployment
 
@@ -251,7 +271,7 @@ kubectl get nodes
 # Check Flux controllers
 kubectl get pods -n flux-system
 
-# If flux.mode is "oci", check reconciliation
+# If oci.repo.active is true, check reconciliation
 kubectl get ocirepositories -n flux-system
 kubectl get kustomizations -n flux-system
 
@@ -368,7 +388,7 @@ The URL pattern is `harbor.$DOMAIN/v2/<project>/<image-path>/tags/list`, where `
 
 ## Upgrading
 
-### Upgrade platform services (Flux mode: oci)
+### Upgrade platform services (oci.repo.active: true)
 
 When the platform team publishes a new artifact version:
 
@@ -381,10 +401,9 @@ No action needed. Flux polls the OCI source every 10 minutes and applies changes
 Update `config/config.yaml`:
 
 ```yaml
-cluster:
-  flux:
-    artifact:
-      version: "v1.2.0"   # New version
+oci:
+  repo:
+    version: "v1.2.0"   # New version
 ```
 
 Then re-apply:
@@ -444,7 +463,7 @@ make destroy-fast     # Skip refresh (3-second safety delay)
 |---------|-------|-----|
 | `make apply` — stale plan error | State changed between plan and apply | Use `make plan-apply` instead |
 | Flux pods not running | Flux bootstrap failed | Check `kubectl get pods -n flux-system`, re-run `make plan-apply` |
-| OCIRepository `not ready` | Wrong URL or missing credentials | Verify `artifact.url` in config.yaml, check `.env` has correct `OCI_USERNAME` / `OCI_PASSWORD` values |
+| OCIRepository `not ready` | Wrong URL or missing credentials | Verify `oci.repo.url` in config.yaml, check `.env` has correct `OCI_REPO_USERNAME` / `OCI_REPO_PASSWORD` values |
 | Kustomization stuck on `dependency not ready` | Platform kustomization has errors | Run `kubectl get kustomizations -n flux-system` — fix platform errors first |
 | Proxmox VMs not getting IP | DHCP or network misconfiguration | Check Proxmox VM console, verify bridge network settings |
 | EKS node group unhealthy | IAM or subnet issues | Check `aws eks describe-nodegroup`, verify IAM policies |

@@ -2,10 +2,10 @@
 # Orchestrates infrastructure deployment using YAML configuration files
 
 locals {
-  # Read base config to determine provider and flux mode
+  # Read base config to determine provider and OCI repo active state
   config_raw    = yamldecode(file("../config/config.yaml"))
   provider_name = local.config_raw.infra.provider
-  flux_mode     = local.config_raw.cluster.flux.mode
+  oci_active    = try(local.config_raw.oci.repo.active, false)
 
   # Config-loader outputs
   config = module.config.config
@@ -46,6 +46,11 @@ module "proxmox" {
   patches_path         = module.config.paths.patches
   artifacts_path       = module.config.paths.artifacts
   provider_config_path = "../config/providers/proxmox/config.yaml"
+
+  oci_proxy_active   = try(local.config_raw.oci.proxy.active, false)
+  oci_proxy_url      = try(local.config_raw.oci.proxy.url, "")
+  oci_proxy_username = var.oci_proxy_username
+  oci_proxy_password = var.oci_proxy_password
 }
 
 # DigitalOcean Cluster (DOKS Managed Kubernetes)
@@ -79,7 +84,7 @@ module "aws" {
   region = try(local.config_raw.infra.aws.region, "us-east-1")
 }
 
-# FluxCD Bootstrap - install controllers (always, for all flux.mode values)
+# FluxCD Bootstrap - install controllers (always)
 module "flux_bootstrap" {
   count  = local.provider_name != "" ? 1 : 0
   source = "./modules/flux-bootstrap"
@@ -93,9 +98,9 @@ module "flux_bootstrap" {
   ]
 }
 
-# FluxCD Config - OCI source + Kustomization (only when flux.mode == "oci")
+# FluxCD Config - OCI source + Kustomization (only when oci.repo.active is true)
 module "flux_config" {
-  count  = local.flux_mode == "oci" ? 1 : 0
+  count  = local.oci_active ? 1 : 0
   source = "./modules/flux-config"
 
   cluster_name     = local.config.cluster.name
@@ -105,14 +110,16 @@ module "flux_config" {
   dns_provider     = local.config.dns.provider
   alert_email      = local.config.app.alert_email
   lb_ipam_range    = local.config.app.lb_ipam.range
-  artifact_url     = local.config.cluster.flux.artifact.url
-  artifact_version = try(local.config.cluster.flux.artifact.version, "latest")
+  artifact_url     = local.config_raw.oci.repo.url
+  artifact_version = try(local.config_raw.oci.repo.version, "latest")
 
   infra_provider = local.provider_name
 
   digitalocean_token = var.digitalocean_token
-  oci_username       = var.oci_username
-  oci_password       = var.oci_password
+  oci_repo_username  = var.oci_repo_username
+  oci_repo_password  = var.oci_repo_password
+  oci_proxy_username = var.oci_proxy_username
+  oci_proxy_password = var.oci_proxy_password
 
   minio_root_user      = var.minio_root_user
   minio_root_password  = var.minio_root_password

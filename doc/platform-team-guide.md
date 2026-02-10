@@ -124,7 +124,7 @@ gitops/cc-config/
 
 The proxy cache setup files:
 
-- `proxy-cache-oci-secret.yaml` — Kubernetes Secret with OCI credentials via Flux `${oci_username}` / `${oci_password}` substitution. Mounted by the Job for authenticated upstream access.
+- `proxy-cache-oci-secret.yaml` — Kubernetes Secret with OCI credentials via Flux `${oci_repo_username}` / `${oci_repo_password}` substitution. Mounted by the Job for authenticated upstream access.
 - `proxy-cache-externalsecret.yaml` — ExternalSecret pulling Harbor admin password from Vault (via ClusterSecretStore) into the `harbor` namespace.
 - `proxy-cache-configmap.yaml` — Idempotent shell script that creates registry endpoints and proxy cache projects via Harbor's REST API. Handles create-or-update logic and type mismatch recovery (registry type is immutable — the script deletes and recreates if the type changes).
 - `proxy-cache-job.yaml` — One-shot Job (alpine:3, backoffLimit: 5) that waits for Harbor readiness then runs the setup script.
@@ -175,8 +175,10 @@ Adopter-specific values are injected at reconciliation time via Flux `postBuild.
 | Variable | Source | Example |
 |----------|--------|---------|
 | `${digitalocean_token}` | `.env` | API token |
-| `${oci_username}` | `.env` | Registry username |
-| `${oci_password}` | `.env` | Registry password |
+| `${oci_repo_username}` | `.env` | OCI repo registry username |
+| `${oci_repo_password}` | `.env` | OCI repo registry password |
+| `${oci_proxy_username}` | `.env` | OCI proxy (Harbor) username |
+| `${oci_proxy_password}` | `.env` | OCI proxy (Harbor) password |
 
 ### Example: using variables in a HelmRelease
 
@@ -220,8 +222,8 @@ gh auth token
 Then add to `config/.env`:
 
 ```bash
-OCI_USERNAME="your-github-username"
-OCI_PASSWORD="ghp_xxxxxxxxxxxx"
+OCI_REPO_USERNAME="your-github-username"
+OCI_REPO_PASSWORD="ghp_xxxxxxxxxxxx"
 ```
 
 All `make` gitops targets (`push-gitops`, `tag-gitops`, `list-artifacts`) use these credentials automatically via `--creds`.
@@ -246,8 +248,8 @@ make list-artifacts
 
 What `make push-gitops` does:
 1. Packages the entire `gitops/` directory as an OCI artifact
-2. Authenticates with credentials from `config/.env` (`OCI_USERNAME` / `OCI_PASSWORD`)
-3. Pushes to the registry URL defined in `config/config.yaml` under `cluster.flux.artifact.url`
+2. Authenticates with credentials from `config/.env` (`OCI_REPO_USERNAME` / `OCI_REPO_PASSWORD`)
+3. Pushes to the registry URL defined in `config/config.yaml` under `oci.repo.url`
 4. Tags with the git SHA (or explicit version)
 5. Also tags as `latest`
 
@@ -256,11 +258,11 @@ What `make push-gitops` does:
 The artifact URL in `config/config.yaml` determines where artifacts are pushed and pulled:
 
 ```yaml
-cluster:
-  flux:
-    artifact:
-      url: "oci://ghcr.io/mojaloop/ml-gitops"
-      version: "latest"
+oci:
+  repo:
+    active: true
+    url: "oci://ghcr.io/mojaloop/ml-gitops"
+    version: "latest"
 ```
 
 The URL format is `oci://<registry>/<owner>/<package-name>`:
@@ -335,7 +337,7 @@ Flux detects the new artifact version (polls every 10 minutes or on next reconci
 make tag-gitops TAG=stable
 
 # Adopters can then pin to "stable" in their config.yaml:
-# cluster.flux.artifact.version: "stable"
+# oci.repo.version: "stable"
 ```
 
 ### Version coherence

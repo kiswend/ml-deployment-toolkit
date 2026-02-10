@@ -8,15 +8,29 @@ variable "digitalocean_token" {
   sensitive   = true
 }
 
-variable "oci_username" {
-  description = "OCI registry username for Flux OCIRepository"
+variable "oci_repo_username" {
+  description = "OCI repo registry username for Flux OCIRepository"
   type        = string
   default     = ""
   sensitive   = true
 }
 
-variable "oci_password" {
-  description = "OCI registry password for Flux OCIRepository"
+variable "oci_repo_password" {
+  description = "OCI repo registry password for Flux OCIRepository"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oci_proxy_username" {
+  description = "OCI proxy (Harbor) username for container image pull-through cache"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oci_proxy_password" {
+  description = "OCI proxy (Harbor) password for container image pull-through cache"
   type        = string
   default     = ""
   sensitive   = true
