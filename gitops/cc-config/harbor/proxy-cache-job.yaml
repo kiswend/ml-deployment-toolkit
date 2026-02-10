@@ -25,6 +25,9 @@ spec:
             - name: admin-secret
               mountPath: /secrets
               readOnly: true
+            - name: oci-secret
+              mountPath: /oci-secrets
+              readOnly: true
       volumes:
         - name: scripts
           configMap:
@@ -33,3 +36,6 @@ spec:
         - name: admin-secret
           secret:
             secretName: harbor-admin
+        - name: oci-secret
+          secret:
+            secretName: oci-credentials
