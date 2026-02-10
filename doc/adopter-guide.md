@@ -285,6 +285,78 @@ Once the CC cluster is fully reconciled, services are available at their HTTPS s
 
 TLS certificates are automatically provisioned by cert-manager using DNS-01 challenges (DigitalOcean DNS TXT validation). DNS A records are auto-created by external-dns from HTTPRoute hostnames.
 
+### Harbor Proxy Cache
+
+Harbor is automatically configured as a pull-through cache for upstream OCI registries. A setup Job runs after Harbor deploys and creates proxy cache projects for the major registries:
+
+| Upstream registry | Harbor project | Registry adapter | Auth |
+|-------------------|---------------|-----------------|------|
+| docker.io | `docker-hub` | `docker-hub` | Public (no credentials) |
+| ghcr.io | `ghcr` | `github-ghcr` | Authenticated (OCI credentials from `.env`) |
+| quay.io | `quay` | `docker-registry` | Public |
+| registry.k8s.io | `k8s` | `docker-registry` | Public |
+
+App Environments pull all images through Harbor instead of hitting public registries directly. This enables air-gapped operation — once an image is cached, internet access is no longer required.
+
+**Verify proxy cache setup:**
+
+```bash
+export KUBECONFIG=$(pwd)/artifacts/kubernetes/kubeconfig
+
+# Check the setup Job completed
+kubectl get job harbor-proxy-cache-setup -n harbor
+
+# View setup logs
+kubectl logs job/harbor-proxy-cache-setup -n harbor
+
+# Check registry endpoints
+kubectl get secret harbor-admin -n harbor -o jsonpath='{.data.password}' | base64 -d
+# Use the password below as HARBOR_PASS
+```
+
+**Test with curl:**
+
+```bash
+HARBOR_PASS="<harbor-admin-password>"
+DOMAIN="<your-domain>"
+
+# List tags from a public Docker Hub image
+curl -sk -u "admin:$HARBOR_PASS" \
+  "https://harbor.$DOMAIN/v2/docker-hub/library/alpine/tags/list"
+
+# List tags from a public ghcr.io image
+curl -sk -u "admin:$HARBOR_PASS" \
+  "https://harbor.$DOMAIN/v2/ghcr/fluxcd/flux-cli/tags/list"
+
+# List tags from a private ghcr.io repo (requires OCI credentials configured)
+curl -sk -u "admin:$HARBOR_PASS" \
+  "https://harbor.$DOMAIN/v2/ghcr/<owner>/<repo>/tags/list"
+
+# Pull a manifest through the proxy
+curl -sk -u "admin:$HARBOR_PASS" \
+  -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+  "https://harbor.$DOMAIN/v2/docker-hub/library/nginx/manifests/latest"
+
+# List all proxy cache projects via Harbor API
+curl -sk -u "admin:$HARBOR_PASS" \
+  "https://harbor.$DOMAIN/api/v2.0/projects"
+
+# List all registry endpoints via Harbor API
+curl -sk -u "admin:$HARBOR_PASS" \
+  "https://harbor.$DOMAIN/api/v2.0/registries"
+```
+
+The URL pattern is `harbor.$DOMAIN/v2/<project>/<image-path>/tags/list`, where `<project>` maps to the upstream registry.
+
+**Pull path reference for App Environments:**
+
+| Original image | Via Harbor proxy |
+|----------------|-----------------|
+| `docker.io/library/nginx:latest` | `harbor.$DOMAIN/docker-hub/library/nginx:latest` |
+| `ghcr.io/fluxcd/flux-cli:v2.7.5` | `harbor.$DOMAIN/ghcr/fluxcd/flux-cli:v2.7.5` |
+| `quay.io/cilium/cilium:v1.16` | `harbor.$DOMAIN/quay/cilium/cilium:v1.16` |
+| `registry.k8s.io/metrics-server:v0.7` | `harbor.$DOMAIN/k8s/metrics-server:v0.7` |
+
 ### Outputs
 
 | Artifact | Path | Provider |

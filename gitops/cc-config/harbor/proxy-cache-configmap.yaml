@@ -16,7 +16,7 @@ data:
 
     # OCI registry credentials (for authenticated upstream registries like ghcr.io)
     OCI_USER=$(cat /oci-secrets/username)
-    OCI_PASS=$(cat /oci-secrets/password)
+    OCI_TOKEN=$(cat /oci-secrets/password)
 
     # Wait for Harbor API
     echo "Waiting for Harbor API..."
@@ -34,31 +34,45 @@ data:
 
     REG_ID=""
 
-    # create_registry <name> <type> <url> [<username> <password>]
+    # create_registry <name> <type> <url> [<credential_json>]
+    # If the registry exists with a different type, it is deleted and recreated (type is immutable).
     create_registry() {
-      name=$1; type=$2; url=$3; cred_user=$4; cred_pass=$5
-      echo "Creating registry endpoint: $name ($url)..."
+      name=$1; type=$2; url=$3; cred_json=$4
 
-      cred_json=""
-      if [ -n "$cred_user" ] && [ -n "$cred_pass" ]; then
-        cred_json=",\"credential\":{\"type\":\"basic\",\"access_key\":\"$cred_user\",\"access_secret\":\"$cred_pass\"}"
+      if [ -z "$cred_json" ]; then
+        cred_json="{}"
       fi
 
-      payload="{\"name\":\"$name\",\"type\":\"$type\",\"url\":\"$url\",\"insecure\":false$cred_json}"
+      payload="{\"name\":\"$name\",\"type\":\"$type\",\"url\":\"$url\",\"insecure\":false,\"credential\":$cred_json}"
 
-      status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
-        -X POST "$HARBOR_URL/api/v2.0/registries" \
-        -u "$HARBOR_USER:$HARBOR_PASS" \
-        -H "Content-Type: application/json" \
-        -d "$payload")
+      echo "Creating registry endpoint: $name ($type -> $url)..."
 
-      case "$status" in
-        201) echo "  Created: $name" ;;
-        409)
-          echo "  Already exists: $name, updating..."
-          existing_id=$(curl -s -u "$HARBOR_USER:$HARBOR_PASS" \
-            "$HARBOR_URL/api/v2.0/registries" | \
-            jq -r ".[] | select(.name==\"$name\") | .id")
+      # Check if registry already exists
+      existing=$(curl -s -u "$HARBOR_USER:$HARBOR_PASS" "$HARBOR_URL/api/v2.0/registries" | \
+        jq -r ".[] | select(.name==\"$name\")")
+
+      if [ -n "$existing" ]; then
+        existing_id=$(echo "$existing" | jq -r ".id")
+        existing_type=$(echo "$existing" | jq -r ".type")
+
+        if [ "$existing_type" != "$type" ]; then
+          echo "  Type mismatch ($existing_type != $type), recreating..."
+          # Delete project first (if exists), then registry
+          curl -s -o /dev/null -u "$HARBOR_USER:$HARBOR_PASS" -X DELETE "$HARBOR_URL/api/v2.0/projects/$name"
+          curl -s -o /dev/null -u "$HARBOR_USER:$HARBOR_PASS" -X DELETE "$HARBOR_URL/api/v2.0/registries/$existing_id"
+          # Create fresh
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "$HARBOR_URL/api/v2.0/registries" \
+            -u "$HARBOR_USER:$HARBOR_PASS" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+          if [ "$status" = "201" ]; then
+            echo "  Recreated: $name ($type)"
+          else
+            echo "  ERROR recreating $name: HTTP $status"; cat /tmp/response.json; return 1
+          fi
+        else
+          echo "  Already exists, updating credentials..."
           update_status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
             -X PUT "$HARBOR_URL/api/v2.0/registries/$existing_id" \
             -u "$HARBOR_USER:$HARBOR_PASS" \
@@ -69,9 +83,18 @@ data:
           else
             echo "  ERROR updating $name: HTTP $update_status"; cat /tmp/response.json; return 1
           fi
-          ;;
-        *) echo "  ERROR: HTTP $status"; cat /tmp/response.json; return 1 ;;
-      esac
+        fi
+      else
+        status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+          -X POST "$HARBOR_URL/api/v2.0/registries" \
+          -u "$HARBOR_USER:$HARBOR_PASS" \
+          -H "Content-Type: application/json" \
+          -d "$payload")
+        case "$status" in
+          201) echo "  Created: $name" ;;
+          *)   echo "  ERROR: HTTP $status"; cat /tmp/response.json; return 1 ;;
+        esac
+      fi
 
       REG_ID=$(curl -s -u "$HARBOR_USER:$HARBOR_PASS" \
         "$HARBOR_URL/api/v2.0/registries" | \
@@ -102,8 +125,8 @@ data:
     create_registry "docker-hub" "docker-hub" "https://hub.docker.com"
     create_project "docker-hub" "$REG_ID"
 
-    # GitHub Container Registry (authenticated — private packages require OCI credentials)
-    create_registry "ghcr" "docker-registry" "https://ghcr.io" "$OCI_USER" "$OCI_PASS"
+    # GitHub Container Registry (authenticated — uses github-ghcr adapter with token)
+    create_registry "ghcr" "github-ghcr" "https://ghcr.io" "{\"type\":\"basic\",\"access_key\":\"$OCI_USER\",\"access_secret\":\"$OCI_TOKEN\"}"
     create_project "ghcr" "$REG_ID"
 
     # Quay.io (public)
