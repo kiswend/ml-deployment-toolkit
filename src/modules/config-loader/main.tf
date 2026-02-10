@@ -39,6 +39,7 @@ locals {
   # Process instances — only for on-prem templates that define them
   instances = try([
     for instance in local.deployment_template.instances : merge(instance, {
+      name = "${local.config.cluster.name}-${instance.name}"
       tags = try(instance.tags, [])
       resolved_placement = {
         placement_group = try(
