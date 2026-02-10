@@ -41,7 +41,7 @@ h2c1w3:
     - name: w-0
       placement_group: placement-group-1
       cores: 4
-      memory: 7000
+      memory: 8000
       workload_class: worker-general
       storage:
         - storage_pool: local-lvm
