@@ -42,7 +42,7 @@ resource "proxmox_virtual_environment_download_file" "os_image" {
   url                     = each.value.url
   file_name               = each.value.file_name
   decompression_algorithm = each.value.decompression
-  overwrite               = false
+  overwrite_unmanaged     = true
 
   lifecycle {
     ignore_changes = [
