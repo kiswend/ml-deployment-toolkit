@@ -3,7 +3,7 @@
 # Deploys: 1 OCIRepository + 3-6 Kustomizations (platform → platform-config → [onprem] → role-specific → [cc-config] → [cc-routes])
 
 locals {
-  has_oci_credentials = var.oci_username != "" && var.oci_password != ""
+  has_oci_credentials = var.oci_repo_username != "" && var.oci_repo_password != ""
   is_onprem           = var.infra_provider == "proxmox"
 
   # Extract registry host from artifact URL (e.g. "oci://ghcr.io/kiswend/ml-iac3" → "ghcr.io")
@@ -13,9 +13,9 @@ locals {
   dockerconfigjson = local.has_oci_credentials ? jsonencode({
     auths = {
       (local.oci_registry) = {
-        username = var.oci_username
-        password = var.oci_password
-        auth     = base64encode("${var.oci_username}:${var.oci_password}")
+        username = var.oci_repo_username
+        password = var.oci_repo_password
+        auth     = base64encode("${var.oci_repo_username}:${var.oci_repo_password}")
       }
     }
   }) : ""
@@ -49,8 +49,10 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
 
   data = {
     digitalocean_token    = var.digitalocean_token
-    oci_username          = var.oci_username
-    oci_password          = var.oci_password
+    oci_repo_username     = var.oci_repo_username
+    oci_repo_password     = var.oci_repo_password
+    oci_proxy_username    = var.oci_proxy_username
+    oci_proxy_password    = var.oci_proxy_password
     minio_root_user       = var.minio_root_user
     minio_root_password   = var.minio_root_password
     harbor_admin_password = var.harbor_admin_password

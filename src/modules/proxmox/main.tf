@@ -28,6 +28,15 @@ locals {
   # Render provider-specific VIP patch
   provider_patches_config = try(local.provider_config.talos-patches, {})
 
+  # Registry mirror patch (applied to all instances when proxy is active)
+  registry_mirror_patch = var.oci_proxy_active ? [
+    templatefile("${var.patches_path}/patch-registry-mirror.yaml.tpl", {
+      proxy_url      = var.oci_proxy_url
+      proxy_username = var.oci_proxy_username
+      proxy_password = var.oci_proxy_password
+    })
+  ] : []
+
   # Build provider patches by class, also apply control-plane patches to mixed-plane
   provider_patches_by_class = merge(
     {
@@ -76,7 +85,8 @@ module "talos_config" {
       workload_patches = concat(
         lookup(local.workload_class_patches, inst.workload_class, []),
         lookup(local.provider_patches_by_class, inst.workload_class, []),
-        try([var.label_taint_patches[inst.workload_class]], [])
+        try([var.label_taint_patches[inst.workload_class]], []),
+        local.registry_mirror_patch
       )
     }
   ]

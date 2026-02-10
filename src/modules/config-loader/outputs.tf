@@ -73,11 +73,6 @@ output "app" {
   value       = local.config.app
 }
 
-output "artifact_repo" {
-  description = "OCI artifact repository configuration"
-  value       = try(local.config.cluster.artifact_repo, {})
-}
-
 output "paths" {
   description = "Standard paths for artifacts and patches"
   value = {

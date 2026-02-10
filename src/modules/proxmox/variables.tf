@@ -54,3 +54,29 @@ variable "provider_config_path" {
   description = "Path to Proxmox provider config.yaml"
   type        = string
 }
+
+variable "oci_proxy_active" {
+  description = "Enable container image proxy through Harbor"
+  type        = bool
+  default     = false
+}
+
+variable "oci_proxy_url" {
+  description = "Harbor proxy cache URL (no protocol prefix)"
+  type        = string
+  default     = ""
+}
+
+variable "oci_proxy_username" {
+  description = "Harbor proxy cache username"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oci_proxy_password" {
+  description = "Harbor proxy cache password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

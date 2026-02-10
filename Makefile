@@ -11,8 +11,10 @@ TF_DIR := src
 # Load .env and map clean variable names to Terraform's TF_VAR_ convention
 LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	export TF_VAR_digitalocean_token=$${DIGITALOCEAN_TOKEN:-} \
-	       TF_VAR_oci_username=$${OCI_USERNAME:-} \
-	       TF_VAR_oci_password=$${OCI_PASSWORD:-} \
+	       TF_VAR_oci_repo_username=$${OCI_REPO_USERNAME:-} \
+	       TF_VAR_oci_repo_password=$${OCI_REPO_PASSWORD:-} \
+	       TF_VAR_oci_proxy_username=$${OCI_PROXY_USERNAME:-} \
+	       TF_VAR_oci_proxy_password=$${OCI_PROXY_PASSWORD:-} \
 	       TF_VAR_minio_root_user=$${MINIO_ROOT_USER:-} \
 	       TF_VAR_minio_root_password=$${MINIO_ROOT_PASSWORD:-} \
 	       TF_VAR_harbor_admin_password=$${HARBOR_ADMIN_PASSWORD:-}
@@ -22,7 +24,7 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 
 # GitOps artifact settings (override via env or command line)
 GITOPS_DIR := gitops
-OCI_REPO := $(shell grep -A2 'artifact:' config/config.yaml | grep 'url:' | sed 's/.*url: *"*oci:\/\///' | sed 's/"*$$//')
+OCI_REPO := $(shell grep -A4 'repo:' config/config.yaml | grep 'url:' | head -1 | sed 's/.*url: *"*oci:\/\///' | sed 's/"*$$//')
 GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest")
 
 # Phony targets (not files)
@@ -148,11 +150,11 @@ push-gitops:
 		--path=./$(GITOPS_DIR) \
 		--source="$(shell git config --get remote.origin.url)" \
 		--revision="$(shell git rev-parse --short HEAD)" \
-		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+		--creds="$$OCI_REPO_USERNAME:$$OCI_REPO_PASSWORD"
 	@echo "Tagging as latest..."
 	@set -a && source $(ENV_FILE) && set +a && \
 	flux tag artifact oci://$(OCI_REPO):$(GITOPS_VERSION) --tag=latest \
-		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+		--creds="$$OCI_REPO_USERNAME:$$OCI_REPO_PASSWORD"
 	@echo "Pushed oci://$(OCI_REPO):$(GITOPS_VERSION) (also tagged latest)"
 
 # Tag an existing artifact with an additional tag
@@ -160,7 +162,7 @@ tag-gitops:
 	@if [ -z "$(TAG)" ]; then echo "Usage: make tag-gitops TAG=v1.0.0"; exit 1; fi
 	@set -a && source $(ENV_FILE) && set +a && \
 	flux tag artifact oci://$(OCI_REPO):$(GITOPS_VERSION) --tag=$(TAG) \
-		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+		--creds="$$OCI_REPO_USERNAME:$$OCI_REPO_PASSWORD"
 	@echo "Tagged oci://$(OCI_REPO):$(GITOPS_VERSION) as $(TAG)"
 
 # List published artifact versions
@@ -168,4 +170,4 @@ list-artifacts:
 	@echo "Artifacts in oci://$(OCI_REPO):"
 	@set -a && source $(ENV_FILE) && set +a && \
 	flux list artifacts oci://$(OCI_REPO) \
-		--creds="$$OCI_USERNAME:$$OCI_PASSWORD"
+		--creds="$$OCI_REPO_USERNAME:$$OCI_REPO_PASSWORD"

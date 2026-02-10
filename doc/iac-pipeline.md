@@ -161,7 +161,7 @@ Outputs: `kubeconfig_path`, cluster provisioned
 
 ### 5.3 flux-bootstrap
 
-Installs FluxCD into the cluster. Provider-agnostic — works identically for on-prem and managed. Runs for all `flux.mode` values (including `none`).
+Installs FluxCD into the cluster. Provider-agnostic — works identically for on-prem and managed. Always runs.
 
 **Components installed:**
 - source-controller
@@ -175,32 +175,34 @@ Installs FluxCD into the cluster. Provider-agnostic — works identically for on
 
 ### 5.4 flux-config
 
-Generates and applies adopter personalization to Flux. Only runs when `flux.mode: oci`. Skipped when `flux.mode: none` (empty cluster for testing).
+Generates and applies adopter personalization to Flux. Only runs when `oci.repo.active: true`. Skipped when `oci.repo.active: false` (empty cluster for testing).
 
 This module bridges the gap between infrastructure provisioning and platform service configuration — it creates the Kubernetes resources that tell Flux what to deploy and how to customize it for this specific adopter.
 
-#### flux.mode
+#### oci.repo.active
 
-| Mode | Behavior | Use case |
-|------|----------|----------|
-| `oci` | flux-config creates OCIRepository + Kustomizations + ConfigMap + Secret | Normal operation (CC and App Env) |
-| `none` | Flux controllers installed, no sources configured — cluster is empty | Testing, manual experimentation |
+| Value | Behavior | Use case |
+|-------|----------|----------|
+| `true` | flux-config creates OCIRepository + Kustomizations + ConfigMap + Secret | Normal operation (CC and App Env) |
+| `false` | Flux controllers installed, no sources configured — cluster is empty | Testing, manual experimentation |
 
 #### OCI source chain
 
-The adopter sets `cluster.flux.artifact.url` to the OCI registry Flux should pull from. This differs by deployment type:
+The adopter sets `oci.repo.url` to the OCI registry Flux should pull from. This differs by deployment type:
 
 **Control Center:**
-- `artifact.url` = Platform Team's public OCI registry (e.g. `oci://ghcr.io/mojaloop/ml-gitops`)
+- `oci.repo.url` = Platform Team's public OCI registry (e.g. `oci://ghcr.io/mojaloop/ml-gitops`)
 - Credentials optional (public repo)
 - Flux pulls the platform bundle → deploys platform services including Harbor
 - Once Harbor is running, it mirrors/caches the Platform Team's OCI content
+- `oci.proxy.active: false` — CC IS the proxy
 
 **App Environment:**
-- `artifact.url` = CC Harbor (e.g. `oci://harbor.cc.example.com/mojaloop/ml-gitops`)
-- Credentials required (Harbor auth)
-- Flux pulls from Harbor → deploys platform services
-- App Env never touches the public internet — full sovereignty
+- `oci.repo.url` = CC Harbor (e.g. `oci://harbor.cc.example.com/mojaloop/ml-gitops`) or direct GHCR
+- Credentials required (Harbor auth or GHCR PAT)
+- Flux pulls from the repo URL → deploys platform services
+- `oci.proxy.active: true` — Talos registry mirrors route container pulls through Harbor
+- App Env can operate air-gapped when both repo and proxy point through Harbor
 
 #### Kustomization paths
 
@@ -239,20 +241,20 @@ On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, lo
 
 | Source | Values |
 |--------|--------|
-| `config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, `artifact.url`/`version` |
+| `config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, `oci.repo.url`/`version` |
 | `.env` | OCI credentials (if authenticated), DNS tokens, provider credentials needed at runtime |
 | Terraform outputs | cluster VIP |
 
 #### Kubernetes resources created
 
-1. **`OCIRepository`** — points Flux source-controller at `artifact.url`. Attaches `secretRef` (type `kubernetes.io/dockerconfigjson`) if OCI credentials are configured.
+1. **`OCIRepository`** — points Flux source-controller at `oci.repo.url`. Attaches `secretRef` (type `kubernetes.io/dockerconfigjson`) if OCI repo credentials are configured.
 2. **`Kustomization` (platform)** — always deployed, shared services
 3. **`Kustomization` (onprem)** — conditionally deployed when `infra.provider == "proxmox"`, on-prem gap fillers
 4. **`Kustomization` (cc or env)** — role-specific services, depends on upstream kustomizations
 5. **`ConfigMap` (`cluster-config`)** — adopter values for Flux variable substitution:
    - `cluster_name`, `cluster_vip`, `domain`, `dns_provider`, `alert_email`, `lb_ipam_range`
 6. **`Secret` (`cluster-secrets`)** — sensitive adopter values:
-   - `digitalocean_token`, `oci_username`, `oci_password`
+   - `digitalocean_token`, `oci_repo_username`, `oci_repo_password`, `oci_proxy_username`, `oci_proxy_password`
 
 #### How Flux consumes these
 
@@ -300,8 +302,8 @@ providers/proxmox/                     config.yaml
 
 ```
 config.yaml              .env                    TF outputs
-  artifact.url=          OCI_USERNAME=xxx        cluster_vip
-    oci://ghcr.io/...    OCI_PASSWORD=xxx          = 192.168.88.10
+  oci.repo.url=          OCI_REPO_USERNAME=xxx   cluster_vip
+    oci://ghcr.io/...    OCI_REPO_PASSWORD=xxx     = 192.168.88.10
   cluster.role=cc        DIGITALOCEAN_TOKEN=xxx
   infra.provider=proxmox
   domain, dns, app...
@@ -309,7 +311,7 @@ config.yaml              .env                    TF outputs
           └──────────────────┼────────────────────────┘
                              │
                              ▼
-                   flux-config module (flux.mode: oci)
+                   flux-config module (oci.repo.active: true)
                              │
         ┌────────────────────┼──────────────────────────┐
         │                    │                          │
@@ -317,7 +319,7 @@ config.yaml              .env                    TF outputs
   ConfigMap              Secret                   OCIRepository
   cluster-config         cluster-secrets          (ml-gitops)
     domain=...             do_token=xxx              │
-    lb_ipam=...            oci_password=xxx          │
+    lb_ipam=...            oci_repo_password=xxx     │
     cluster_vip=...        ...                       │
         │                    │              ┌────────┼────────┐
         └────────┬───────────┘              │        │        │

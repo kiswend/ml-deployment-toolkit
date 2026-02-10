@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------
 # Secrets live in config/.env (sourced via Makefile).
 # Proxmox credentials: native PROXMOX_VE_* env vars.
-# Flux-config secrets: TF_VAR_* env vars (digitalocean_token, oci_username, oci_password).
+# Flux-config secrets: TF_VAR_* env vars (digitalocean_token, oci_repo_*, oci_proxy_*).
 # ------------------------------------------------------------------
 
 # ------------------------------------------------------------------
@@ -52,10 +52,6 @@ cluster:
   # Flux configuration
   flux:
     version: "2.7.2"
-    mode: "oci"                    # none (install controllers only) | oci (reconcile from artifact)
-    artifact:
-      url: "oci://ghcr.io/kiswend/ml-iac3"
-      version: "latest"             # OCI tag — use "latest" or pin to a specific version
 
 # ------------------------------------------------------------------
 # 4. DNS
@@ -79,3 +75,19 @@ app:
   lb_ipam:
     range: "192.168.88.100-192.168.88.110"
   alert_email: "nathan@example.com"
+
+# ------------------------------------------------------------------
+# 6. OCI CONFIGURATION
+# ------------------------------------------------------------------
+oci:
+  # OCI-REPO: Platform team's OCI registry where the Flux gitops artifact lives
+  repo:
+    active: true                    # Enable Flux OCI reconciliation
+    url: "oci://ghcr.io/kiswend/ml-iac3"
+    version: "latest"               # OCI tag — use "latest" or pin to a specific version
+
+  # OCI-PROXY: Harbor as transparent pull-through cache for container images
+  # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
+  proxy:
+    active: false                   # Enable container image proxy through Harbor
+    url: "harbor.cc.ml.example.com"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
