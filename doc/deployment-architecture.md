@@ -70,7 +70,7 @@ gitops/
   platform-config/ # Always deployed — shared config (ClusterIssuers, DNS-01 secret, Gateway with wildcard TLS)
   onprem/          # Conditionally deployed — on-prem only (Cilium HelmRelease with gatewayAPI.enabled, LB-IPAM, OpenEBS)
   cc/              # Control Center operators (vault-operator) + namespace definitions (vault, harbor, minio)
-  cc-config/       # Control Center services (Vault CR in vault ns, Harbor HelmRelease in harbor ns, MinIO HelmRelease in minio ns)
+  cc-config/       # Control Center services (Vault CR, Harbor + proxy cache setup, MinIO — each in own namespace)
   cc-routes/       # Control Center HTTPRoutes (vault, harbor, minio — deployed after cc-config services are healthy)
   env/             # App Environment services (Mojaloop app)
 ```
@@ -127,7 +127,7 @@ The shared Gateway in `platform-config/` references `gatewayClassName: cilium` w
 
 | Service | Purpose | Provider |
 |---------|---------|----------|
-| Harbor | Local OCI registry — source of truth and cache | All |
+| Harbor | Local OCI registry — source of truth + pull-through cache for docker.io, ghcr.io, quay.io, registry.k8s.io | All |
 | Vault | Secrets management, internal CA, partner keys | All |
 | MinIO | Infrastructure state and backup storage | On-prem only |
 | FluxCD | GitOps reconciliation (OCI-based, not Git) | All |
@@ -150,6 +150,17 @@ HTTPRoutes reference the Gateway cross-namespace via `parentRefs.namespace: plat
 A single wildcard TLS certificate (`*.${domain}`) is auto-provisioned by cert-manager using DNS-01 challenges (DigitalOcean DNS TXT validation). DNS-01 is required for on-prem because Let's Encrypt cannot reach private IPs for HTTP-01 challenges. external-dns watches `gateway-httproute` sources and creates DNS A records pointing each hostname to the Gateway's LB IP.
 
 **Namespace isolation:** Vault, Harbor, and MinIO each run in their own namespace (`vault`, `harbor`, `minio`) for least-privilege security. The vault-operator remains in `cc-system`. This prevents a compromised Harbor pod from accessing Vault's ServiceAccount tokens and Secrets.
+
+**Harbor proxy cache:** A setup Job (in `cc-config/harbor/`) configures Harbor as a pull-through cache for upstream OCI registries. App Environments pull all container images through Harbor instead of hitting public registries directly:
+
+| Upstream registry | Harbor proxy project | Pull path |
+|-------------------|---------------------|-----------|
+| docker.io | `docker-hub` | `harbor.${domain}/docker-hub/<image>` |
+| ghcr.io | `ghcr` | `harbor.${domain}/ghcr/<image>` |
+| quay.io | `quay` | `harbor.${domain}/quay/<image>` |
+| registry.k8s.io | `k8s` | `harbor.${domain}/k8s/<image>` |
+
+This enables air-gapped operation — once an image is cached, the App Environment no longer needs public internet access.
 
 ### Stage 4: Adopter App Environment
 

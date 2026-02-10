@@ -7,3 +7,6 @@ resources:
   - minio/helmrelease.yaml
   - harbor/externalsecret.yaml
   - harbor/helmrelease.yaml
+  - harbor/proxy-cache-externalsecret.yaml
+  - harbor/proxy-cache-configmap.yaml
+  - harbor/proxy-cache-job.yaml

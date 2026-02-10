@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harbor-proxy-cache-setup
+  namespace: harbor
+data:
+  setup.sh: |
+    #!/bin/sh
+    set -e
+
+    apk add --no-cache curl jq > /dev/null 2>&1
+
+    HARBOR_URL="http://harbor-core:80"
+    HARBOR_USER="admin"
+    HARBOR_PASS=$(cat /secrets/password)
+
+    # Wait for Harbor API
+    echo "Waiting for Harbor API..."
+    retries=0
+    until curl -sf -u "$HARBOR_USER:$HARBOR_PASS" "$HARBOR_URL/api/v2.0/health" > /dev/null 2>&1; do
+      retries=$((retries + 1))
+      if [ "$retries" -ge 60 ]; then
+        echo "ERROR: Harbor not ready after 10 minutes"
+        exit 1
+      fi
+      echo "  Not ready, retrying in 10s... ($retries/60)"
+      sleep 10
+    done
+    echo "Harbor API is ready."
+
+    REG_ID=""
+
+    create_registry() {
+      name=$1; type=$2; url=$3
+      echo "Creating registry endpoint: $name ($url)..."
+
+      status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+        -X POST "$HARBOR_URL/api/v2.0/registries" \
+        -u "$HARBOR_USER:$HARBOR_PASS" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"$name\",\"type\":\"$type\",\"url\":\"$url\",\"insecure\":false}")
+
+      case "$status" in
+        201) echo "  Created: $name" ;;
+        409) echo "  Already exists: $name" ;;
+        *)   echo "  ERROR: HTTP $status"; cat /tmp/response.json; return 1 ;;
+      esac
+
+      REG_ID=$(curl -s -u "$HARBOR_USER:$HARBOR_PASS" \
+        "$HARBOR_URL/api/v2.0/registries" | \
+        jq -r ".[] | select(.name==\"$name\") | .id")
+    }
+
+    create_project() {
+      name=$1; registry_id=$2
+      echo "Creating proxy cache project: $name (registry_id=$registry_id)..."
+
+      status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+        -X POST "$HARBOR_URL/api/v2.0/projects" \
+        -u "$HARBOR_USER:$HARBOR_PASS" \
+        -H "Content-Type: application/json" \
+        -d "{\"project_name\":\"$name\",\"registry_id\":$registry_id,\"metadata\":{\"public\":\"true\"}}")
+
+      case "$status" in
+        201) echo "  Created: $name" ;;
+        409) echo "  Already exists: $name" ;;
+        *)   echo "  ERROR: HTTP $status"; cat /tmp/response.json; return 1 ;;
+      esac
+    }
+
+    echo ""
+    echo "=== Configuring proxy caches ==="
+
+    # Docker Hub
+    create_registry "docker-hub" "docker-hub" "https://hub.docker.com"
+    create_project "docker-hub" "$REG_ID"
+
+    # GitHub Container Registry
+    create_registry "ghcr" "docker-registry" "https://ghcr.io"
+    create_project "ghcr" "$REG_ID"
+
+    # Quay.io
+    create_registry "quay" "docker-registry" "https://quay.io"
+    create_project "quay" "$REG_ID"
+
+    # Kubernetes Registry
+    create_registry "k8s-registry" "docker-registry" "https://registry.k8s.io"
+    create_project "k8s" "$REG_ID"
+
+    echo ""
+    echo "=== Proxy cache setup complete ==="
+    echo "Pull-through mirrors available at harbor.${domain}:"
+    echo "  docker.io       -> /docker-hub/<image>"
+    echo "  ghcr.io         -> /ghcr/<image>"
+    echo "  quay.io         -> /quay/<image>"
+    echo "  registry.k8s.io -> /k8s/<image>"

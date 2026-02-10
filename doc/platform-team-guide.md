@@ -100,7 +100,7 @@ gitops/cc/
 
 ### cc-config/
 
-Control Center services. Depends on cc/ (operators and namespaces must be ready). Each service deploys into its own namespace with its own HTTPRoute:
+Control Center services. Depends on cc/ (operators and namespaces must be ready). Each service deploys into its own namespace. HTTPRoutes are in `cc-routes/` (deployed after services are healthy):
 
 ```
 gitops/cc-config/
@@ -108,16 +108,18 @@ gitops/cc-config/
   vault/
     vault.yaml                 # Vault CR + RBAC (vault namespace)
     secretstore.yaml           # ClusterSecretStore pointing to vault.vault:8200
-    httproute.yaml             # HTTPRoute for vault.${domain} (vault namespace)
   harbor/
     helmrelease.yaml           # OCI registry (harbor namespace)
     externalsecret.yaml        # Harbor credentials from Vault
-    httproute.yaml             # HTTPRoute for harbor.${domain} (harbor namespace)
+    proxy-cache-externalsecret.yaml  # Admin password for proxy cache setup (harbor namespace)
+    proxy-cache-configmap.yaml       # Setup script: registers upstream registries + proxy cache projects
+    proxy-cache-job.yaml             # One-shot Job: configures Harbor as pull-through cache
   minio/
     helmrelease.yaml           # Object storage (minio namespace)
     externalsecret.yaml        # MinIO credentials from Vault
-    httproute.yaml             # HTTPRoute for minio.${domain} (minio namespace)
 ```
+
+**Harbor proxy cache:** A setup Job configures Harbor as a pull-through cache for upstream registries (docker.io, ghcr.io, quay.io, registry.k8s.io). App Environments pull all images through `harbor.${domain}/<project>/<image>` instead of hitting public registries directly. This enables air-gapped operation and reduces external bandwidth.
 
 ### env/
 
