@@ -14,6 +14,10 @@ data:
     HARBOR_USER="admin"
     HARBOR_PASS=$(cat /secrets/password)
 
+    # OCI registry credentials (for authenticated upstream registries like ghcr.io)
+    OCI_USER=$(cat /oci-secrets/username)
+    OCI_PASS=$(cat /oci-secrets/password)
+
     # Wait for Harbor API
     echo "Waiting for Harbor API..."
     retries=0
@@ -30,20 +34,43 @@ data:
 
     REG_ID=""
 
+    # create_registry <name> <type> <url> [<username> <password>]
     create_registry() {
-      name=$1; type=$2; url=$3
+      name=$1; type=$2; url=$3; cred_user=$4; cred_pass=$5
       echo "Creating registry endpoint: $name ($url)..."
+
+      cred_json=""
+      if [ -n "$cred_user" ] && [ -n "$cred_pass" ]; then
+        cred_json=",\"credential\":{\"type\":\"basic\",\"access_key\":\"$cred_user\",\"access_secret\":\"$cred_pass\"}"
+      fi
+
+      payload="{\"name\":\"$name\",\"type\":\"$type\",\"url\":\"$url\",\"insecure\":false$cred_json}"
 
       status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
         -X POST "$HARBOR_URL/api/v2.0/registries" \
         -u "$HARBOR_USER:$HARBOR_PASS" \
         -H "Content-Type: application/json" \
-        -d "{\"name\":\"$name\",\"type\":\"$type\",\"url\":\"$url\",\"insecure\":false}")
+        -d "$payload")
 
       case "$status" in
         201) echo "  Created: $name" ;;
-        409) echo "  Already exists: $name" ;;
-        *)   echo "  ERROR: HTTP $status"; cat /tmp/response.json; return 1 ;;
+        409)
+          echo "  Already exists: $name, updating..."
+          existing_id=$(curl -s -u "$HARBOR_USER:$HARBOR_PASS" \
+            "$HARBOR_URL/api/v2.0/registries" | \
+            jq -r ".[] | select(.name==\"$name\") | .id")
+          update_status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X PUT "$HARBOR_URL/api/v2.0/registries/$existing_id" \
+            -u "$HARBOR_USER:$HARBOR_PASS" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+          if [ "$update_status" = "200" ]; then
+            echo "  Updated: $name"
+          else
+            echo "  ERROR updating $name: HTTP $update_status"; cat /tmp/response.json; return 1
+          fi
+          ;;
+        *) echo "  ERROR: HTTP $status"; cat /tmp/response.json; return 1 ;;
       esac
 
       REG_ID=$(curl -s -u "$HARBOR_USER:$HARBOR_PASS" \
@@ -71,19 +98,19 @@ data:
     echo ""
     echo "=== Configuring proxy caches ==="
 
-    # Docker Hub
+    # Docker Hub (public — no credentials needed)
     create_registry "docker-hub" "docker-hub" "https://hub.docker.com"
     create_project "docker-hub" "$REG_ID"
 
-    # GitHub Container Registry
-    create_registry "ghcr" "docker-registry" "https://ghcr.io"
+    # GitHub Container Registry (authenticated — private packages require OCI credentials)
+    create_registry "ghcr" "docker-registry" "https://ghcr.io" "$OCI_USER" "$OCI_PASS"
     create_project "ghcr" "$REG_ID"
 
-    # Quay.io
+    # Quay.io (public)
     create_registry "quay" "docker-registry" "https://quay.io"
     create_project "quay" "$REG_ID"
 
-    # Kubernetes Registry
+    # Kubernetes Registry (public)
     create_registry "k8s-registry" "docker-registry" "https://registry.k8s.io"
     create_project "k8s" "$REG_ID"
 
