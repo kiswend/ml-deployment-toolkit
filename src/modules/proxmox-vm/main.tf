@@ -37,7 +37,6 @@ resource "proxmox_virtual_environment_vm" "instance" {
 
   name      = each.value.name
   node_name = local.nodes_map[each.value.name]
-  vm_id     = local.provider_config.vm_id.start + index(keys({ for inst in local.instances_with_specs : inst.name => inst }), each.key)
 
   cpu {
     type    = local.provider_config.vm_defaults.cpu_type
