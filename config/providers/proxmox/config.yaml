@@ -30,10 +30,6 @@ vm_defaults:
 storage:
   default_pool: "local-lvm"
 
-# VM ID Configuration
-vm_id:
-  start: 300
-
 # Provider-specific Talos patches
 talos-patches:
   config-patch-control-plane:
