@@ -2,8 +2,12 @@
 # Orchestrates infrastructure deployment using YAML configuration files
 
 locals {
+  # Per-environment config path (driven by env_name variable)
+  env_config_path = "../config/environments/${var.env_name}/config.yaml"
+  artifacts_path  = "../artifacts/${var.env_name}"
+
   # Read base config to determine provider and OCI repo active state
-  config_raw    = yamldecode(file("../config/config.yaml"))
+  config_raw    = yamldecode(file(local.env_config_path))
   provider_name = local.config_raw.infra.provider
   oci_active    = try(local.config_raw.oci.repo.active, false)
 
@@ -26,7 +30,7 @@ locals {
 module "config" {
   source = "./modules/config-loader"
 
-  config_path           = "../config/config.yaml"
+  config_path           = local.env_config_path
   workload_classes_path = "../config/definitions/workload-classes.yaml"
 }
 
@@ -44,7 +48,7 @@ module "proxmox" {
   label_taint_patches = module.config.label_taint_patches
 
   patches_path         = module.config.paths.patches
-  artifacts_path       = module.config.paths.artifacts
+  artifacts_path       = local.artifacts_path
   provider_config_path = "../config/providers/proxmox/config.yaml"
 
   oci_proxy_active   = try(local.config_raw.oci.proxy.active, false)
@@ -62,7 +66,7 @@ module "digitalocean" {
   kubernetes_version = module.config.kubernetes_version
   node_pools         = try(module.config.deployment_template.node_pools, [])
 
-  artifacts_path       = module.config.paths.artifacts
+  artifacts_path       = local.artifacts_path
   provider_config_path = "../config/providers/digitalocean/config.yaml"
 
   region             = try(local.config_raw.infra.digitalocean.region, "nyc1")
@@ -78,7 +82,7 @@ module "aws" {
   kubernetes_version = module.config.kubernetes_version
   node_groups        = try(module.config.deployment_template.node_groups, [])
 
-  artifacts_path       = module.config.paths.artifacts
+  artifacts_path       = local.artifacts_path
   provider_config_path = "../config/providers/aws/config.yaml"
 
   region = try(local.config_raw.infra.aws.region, "us-east-1")
@@ -121,8 +125,8 @@ module "flux_config" {
   oci_proxy_username = var.oci_proxy_username
   oci_proxy_password = var.oci_proxy_password
 
-  minio_root_user      = var.minio_root_user
-  minio_root_password  = var.minio_root_password
+  minio_root_user       = var.minio_root_user
+  minio_root_password   = var.minio_root_password
   harbor_admin_password = var.harbor_admin_password
 
   depends_on = [

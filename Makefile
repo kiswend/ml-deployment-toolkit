@@ -1,16 +1,25 @@
 # Makefile for Terraform Infrastructure as Code
 # Run terraform commands with environment variables from .env file
+#
+# Usage:
+#   make plan ENV=cc          # Plan for the cc environment (default)
+#   make apply ENV=env-prod   # Apply for the env-prod environment
+#   export ENV=cc && make plan  # Set ENV for a session
 
 # Variables
 SHELL := /bin/bash
-ENV_FILE := config/.env
-ARTIFACTS_DIR := artifacts/terraform
+ENV ?= cc
+ENV_DIR := config/environments/$(ENV)
+ENV_FILE := $(ENV_DIR)/.env
+ARTIFACTS_DIR := artifacts/$(ENV)/terraform
 PLAN_FILE := $(ARTIFACTS_DIR)/tfplan
 TF_DIR := src
+BACKEND_CONFIG := path=../artifacts/$(ENV)/terraform/terraform.tfstate
 
 # Load .env and map clean variable names to Terraform's TF_VAR_ convention
 LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
-	export TF_VAR_digitalocean_token=$${DIGITALOCEAN_TOKEN:-} \
+	export TF_VAR_env_name=$(ENV) \
+	       TF_VAR_digitalocean_token=$${DIGITALOCEAN_TOKEN:-} \
 	       TF_VAR_oci_repo_username=$${OCI_REPO_USERNAME:-} \
 	       TF_VAR_oci_repo_password=$${OCI_REPO_PASSWORD:-} \
 	       TF_VAR_oci_proxy_username=$${OCI_PROXY_USERNAME:-} \
@@ -24,7 +33,7 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 
 # GitOps artifact settings (override via env or command line)
 GITOPS_DIR := gitops
-OCI_REPO := $(shell grep -A4 'repo:' config/config.yaml | grep 'url:' | head -1 | sed 's/.*url: *"*oci:\/\///' | sed 's/"*$$//')
+OCI_REPO := $(shell grep -A4 'repo:' $(ENV_DIR)/config.yaml | grep 'url:' | head -1 | sed 's/.*url: *"*oci:\/\///' | sed 's/"*$$//')
 GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest")
 
 # Phony targets (not files)
@@ -34,8 +43,11 @@ GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest
 help:
 	@echo "Available targets:"
 	@echo ""
+	@echo "  ENV=<name>  Select environment (default: cc)"
+	@echo "              Reads config from config/environments/<name>/"
+	@echo "              Stores state in artifacts/<name>/"
+	@echo ""
 	@echo "Main Commands:"
-	@echo "  make init         - Initialize Terraform providers and modules"
 	@echo "  make plan         - Create Terraform execution plan (saved to artifacts)"
 	@echo "  make apply        - Apply Terraform changes using saved plan"
 	@echo "  make plan-apply   - Create plan and apply immediately (prevents stale plan)"
@@ -60,11 +72,18 @@ help:
 	@echo "  make show         - Display current Terraform state"
 	@echo "  make list         - List all Terraform resources"
 	@echo "  make clean        - Remove artifacts and temporary files"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make plan ENV=cc              # Plan Control Center"
+	@echo "  make plan-apply ENV=env-prod  # Plan + apply App Environment"
+	@echo "  export ENV=cc && make plan    # Set ENV for a session"
 
 # Initialize Terraform
 init:
-	@echo "Initializing Terraform..."
-	@cd $(TF_DIR) && $(LOAD_ENV) && terraform init -upgrade
+	@echo "Initializing Terraform (ENV=$(ENV))..."
+	@mkdir -p $(ARTIFACTS_DIR)
+	@cd $(TF_DIR) && $(LOAD_ENV) && terraform init -upgrade -reconfigure \
+		-backend-config="$(BACKEND_CONFIG)"
 
 # Validate Terraform configuration
 validate:
@@ -78,7 +97,7 @@ fmt:
 
 # Create Terraform plan and save to artifacts
 plan: init
-	@echo "Creating Terraform plan..."
+	@echo "Creating Terraform plan (ENV=$(ENV))..."
 	@mkdir -p $(ARTIFACTS_DIR)
 	@cd $(TF_DIR) && $(LOAD_ENV) && terraform plan -out=../$(PLAN_FILE)
 	@echo "Plan saved to $(PLAN_FILE)"
@@ -86,16 +105,16 @@ plan: init
 # Apply Terraform changes using saved plan
 apply:
 	@if [ ! -f "$(PLAN_FILE)" ]; then \
-		echo "Error: Plan file not found. Run 'make plan' first."; \
+		echo "Error: Plan file not found. Run 'make plan ENV=$(ENV)' first."; \
 		exit 1; \
 	fi
-	@echo "Applying Terraform changes from saved plan..."
-	@echo "Note: If you get 'stale plan' error, run 'make plan-apply' instead."
+	@echo "Applying Terraform changes from saved plan (ENV=$(ENV))..."
+	@echo "Note: If you get 'stale plan' error, run 'make plan-apply ENV=$(ENV)' instead."
 	@cd $(TF_DIR) && $(LOAD_ENV) && terraform apply ../$(PLAN_FILE)
 
 # Plan and apply in one step (prevents stale plan issues)
 plan-apply: init
-	@echo "Creating and applying Terraform plan..."
+	@echo "Creating and applying Terraform plan (ENV=$(ENV))..."
 	@mkdir -p $(ARTIFACTS_DIR)
 	@cd $(TF_DIR) && $(LOAD_ENV) && terraform plan -out=../$(PLAN_FILE)
 	@echo "Plan created. Applying changes..."
@@ -112,7 +131,7 @@ apply-force: plan-apply
 
 # Destroy infrastructure
 destroy:
-	@echo "WARNING: This will destroy all Terraform-managed infrastructure!"
+	@echo "WARNING: This will destroy all Terraform-managed infrastructure (ENV=$(ENV))!"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
 	@cd $(TF_DIR) && $(LOAD_ENV) && terraform destroy -auto-approve

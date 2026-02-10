@@ -209,7 +209,7 @@ Flux replaces `${dns_provider}` with the adopter's value from the ConfigMap at a
 
 ### Authentication
 
-The Makefile handles OCI registry login automatically using credentials from `config/.env`. Set your GHCR credentials once:
+The Makefile handles OCI registry login automatically using credentials from the environment's `.env` file. Set your GHCR credentials once:
 
 ```bash
 # Generate a GitHub PAT with packages scope
@@ -219,7 +219,7 @@ gh auth refresh -s read:packages,write:packages
 gh auth token
 ```
 
-Then add to `config/.env`:
+Then add to `config/environments/<env>/.env`:
 
 ```bash
 OCI_REPO_USERNAME="your-github-username"
@@ -234,28 +234,28 @@ For CI/CD, use `GITHUB_TOKEN` or a fine-grained PAT with `read:packages` + `writ
 
 ```bash
 # Push with auto-generated version (git SHA)
-make push-gitops
+make push-gitops ENV=cc
 
 # Push with explicit version
-make push-gitops GITOPS_VERSION=v0.1.0
+make push-gitops ENV=cc GITOPS_VERSION=v0.1.0
 
 # Tag an existing version
-make tag-gitops TAG=stable
+make tag-gitops ENV=cc TAG=stable
 
 # List all published versions
-make list-artifacts
+make list-artifacts ENV=cc
 ```
 
 What `make push-gitops` does:
 1. Packages the entire `gitops/` directory as an OCI artifact
-2. Authenticates with credentials from `config/.env` (`OCI_REPO_USERNAME` / `OCI_REPO_PASSWORD`)
-3. Pushes to the registry URL defined in `config/config.yaml` under `oci.repo.url`
+2. Authenticates with credentials from `config/environments/<env>/.env` (`OCI_REPO_USERNAME` / `OCI_REPO_PASSWORD`)
+3. Pushes to the registry URL defined in `config/environments/<env>/config.yaml` under `oci.repo.url`
 4. Tags with the git SHA (or explicit version)
 5. Also tags as `latest`
 
 ### OCI registry URL
 
-The artifact URL in `config/config.yaml` determines where artifacts are pushed and pulled:
+The artifact URL in `config/environments/<env>/config.yaml` determines where artifacts are pushed and pulled:
 
 ```yaml
 oci:
@@ -316,7 +316,7 @@ resources:
 ### Step 3: Publish
 
 ```bash
-make push-gitops GITOPS_VERSION=v1.1.0
+make push-gitops ENV=cc GITOPS_VERSION=v1.1.0
 ```
 
 Flux detects the new artifact version (polls every 10 minutes or on next reconciliation) and deploys the new service.
@@ -334,7 +334,7 @@ Flux detects the new artifact version (polls every 10 minutes or on next reconci
 
 ```bash
 # Tag a tested version as stable
-make tag-gitops TAG=stable
+make tag-gitops ENV=cc TAG=stable
 
 # Adopters can then pin to "stable" in their config.yaml:
 # oci.repo.version: "stable"

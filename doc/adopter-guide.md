@@ -2,9 +2,11 @@
 
 ## Overview
 
-This guide walks through deploying a Mojaloop cluster using ml-iac3. As an adopter, you configure two files (`config.yaml` and `.env`), run Terraform via Make, and get a Kubernetes cluster with FluxCD reconciling platform services customized to your environment.
+This guide walks through deploying a Mojaloop cluster using ml-iac3. As an adopter, you configure two files per environment (`config.yaml` and `.env`), run Terraform via Make, and get a Kubernetes cluster with FluxCD reconciling platform services customized to your environment.
 
 You never fork or edit the platform bundle — all personalization flows through your local configuration.
+
+A single clone can manage multiple deployments (CC, app environments) using the `ENV=` variable.
 
 ## Prerequisites
 
@@ -30,26 +32,69 @@ You never fork or edit the platform bundle — all personalization flows through
 # 1. Clone the repository
 git clone <repo-url> && cd ml-iac3
 
-# 2. Configure credentials
-cp config/.env.sample config/.env
-# Edit config/.env with your provider credentials
+# 2. Set up the CC environment
+mkdir -p config/environments/cc
+cp config/.env.sample config/environments/cc/.env
+# Edit config/environments/cc/.env with your provider credentials
+# Edit config/environments/cc/config.yaml — select provider, template, cluster settings
 
-# 3. Configure infrastructure
-# Edit config/config.yaml — select provider, template, cluster settings
-
-# 4. Deploy
-make plan          # Review what will be created
-make apply         # Provision infrastructure
+# 3. Deploy
+make plan ENV=cc       # Review what will be created
+make apply ENV=cc      # Provision infrastructure
 ```
 
 ## Configuration
 
-### config/.env — Credentials
+### Named Environments
+
+Each deployment (CC, app environment) lives in its own directory under `config/environments/`:
+
+```
+config/environments/
+  cc/
+    config.yaml    # Infrastructure config for this environment
+    .env           # Secrets for this environment (git-ignored)
+  env-prod/
+    config.yaml
+    .env
+```
+
+The `ENV=` variable tells Make which environment to use:
+
+```bash
+make plan ENV=cc              # Plan Control Center
+make plan-apply ENV=env-prod  # Plan + apply App Environment
+
+# Or export for a session
+export ENV=cc
+make plan
+make apply
+make push-gitops
+```
+
+If `ENV` is not specified, it defaults to `cc`.
+
+Each environment gets its own Terraform state and artifacts:
+
+```
+artifacts/
+  cc/
+    terraform/terraform.tfstate
+    terraform/tfplan
+    kubernetes/kubeconfig
+    talos-config/
+    talos-secrets/
+  env-prod/
+    terraform/...
+    kubernetes/...
+```
+
+### config/environments/\<env\>/.env — Credentials
 
 Copy the sample and fill in values for your provider:
 
 ```bash
-cp config/.env.sample config/.env
+cp config/.env.sample config/environments/cc/.env
 ```
 
 #### Proxmox
@@ -106,7 +151,7 @@ OCI_PROXY_USERNAME=""
 OCI_PROXY_PASSWORD=""
 ```
 
-### config/config.yaml — Infrastructure
+### config/environments/\<env\>/config.yaml — Infrastructure
 
 The config file has 6 sections. Edit the values for your environment:
 
@@ -234,12 +279,57 @@ oci:
 | App Env (air-gapped) | `true` (URL points through Harbor) | `true` |
 | Testing (empty cluster) | `false` | `false` |
 
+## Multiple Environments
+
+A single clone can manage multiple independent deployments:
+
+```bash
+# Set up CC environment
+mkdir -p config/environments/cc
+cp config/.env.sample config/environments/cc/.env
+# Edit config/environments/cc/config.yaml and .env
+
+# Deploy CC
+make plan ENV=cc
+make apply ENV=cc
+
+# Set up app environment
+mkdir -p config/environments/env-prod
+cp config/.env.sample config/environments/env-prod/.env
+# Edit config/environments/env-prod/config.yaml and .env
+
+# Deploy env-prod
+make plan ENV=env-prod
+make apply ENV=env-prod
+```
+
+Each environment is fully independent — different provider, template, cluster settings, credentials, and Terraform state.
+
+### Migration from single config
+
+If you have an existing deployment with `config/config.yaml` and `config/.env`:
+
+```bash
+# 1. Move config files
+mkdir -p config/environments/cc
+mv config/config.yaml config/environments/cc/config.yaml
+cp config/.env config/environments/cc/.env
+
+# 2. Move artifacts
+mv artifacts/ artifacts-old/
+mkdir -p artifacts/cc
+mv artifacts-old/* artifacts/cc/
+
+# 3. Re-init with new backend
+make init ENV=cc
+```
+
 ## Deployment
 
 ### Initialize
 
 ```bash
-make init
+make init ENV=cc
 ```
 
 Downloads Terraform providers and initializes modules. Run once, or after changing provider configuration.
@@ -247,14 +337,14 @@ Downloads Terraform providers and initializes modules. Run once, or after changi
 ### Plan and apply
 
 ```bash
-make plan         # Creates execution plan (saved to artifacts/terraform/tfplan)
-make apply        # Applies the saved plan
+make plan ENV=cc       # Creates execution plan (saved to artifacts/cc/terraform/tfplan)
+make apply ENV=cc      # Applies the saved plan
 ```
 
 Or combined:
 
 ```bash
-make plan-apply   # Plan + apply in one step (avoids stale plan errors)
+make plan-apply ENV=cc   # Plan + apply in one step (avoids stale plan errors)
 ```
 
 ### Verify
@@ -263,7 +353,7 @@ After `make apply` completes:
 
 ```bash
 # Set kubeconfig
-export KUBECONFIG=$(pwd)/artifacts/kubernetes/kubeconfig
+export KUBECONFIG=$(pwd)/artifacts/cc/kubernetes/kubeconfig
 
 # Check nodes
 kubectl get nodes
@@ -321,7 +411,7 @@ App Environments pull all images through Harbor instead of hitting public regist
 **Verify proxy cache setup:**
 
 ```bash
-export KUBECONFIG=$(pwd)/artifacts/kubernetes/kubeconfig
+export KUBECONFIG=$(pwd)/artifacts/cc/kubernetes/kubeconfig
 
 # Check the setup Job completed
 kubectl get job harbor-proxy-cache-setup -n harbor
@@ -381,10 +471,10 @@ The URL pattern is `harbor.$DOMAIN/v2/<project>/<image-path>/tags/list`, where `
 
 | Artifact | Path | Provider |
 |----------|------|----------|
-| Kubeconfig | `artifacts/kubernetes/kubeconfig` | All |
-| Talos client config | `artifacts/talos-config/talosconfig` | Proxmox only |
-| Per-instance Talos configs | `artifacts/talos-config/{instance}.yaml` | Proxmox only |
-| Talos secrets backup | `artifacts/talos-secrets/secrets.yaml` | Proxmox only |
+| Kubeconfig | `artifacts/<env>/kubernetes/kubeconfig` | All |
+| Talos client config | `artifacts/<env>/talos-config/talosconfig` | Proxmox only |
+| Per-instance Talos configs | `artifacts/<env>/talos-config/{instance}.yaml` | Proxmox only |
+| Talos secrets backup | `artifacts/<env>/talos-secrets/secrets.yaml` | Proxmox only |
 
 ## Upgrading
 
@@ -398,7 +488,7 @@ No action needed. Flux polls the OCI source every 10 minutes and applies changes
 
 **Option B — pinned version:**
 
-Update `config/config.yaml`:
+Update `config/environments/<env>/config.yaml`:
 
 ```yaml
 oci:
@@ -409,27 +499,27 @@ oci:
 Then re-apply:
 
 ```bash
-make plan-apply
+make plan-apply ENV=cc
 ```
 
 ### Upgrade infrastructure
 
 To change cluster topology, provider settings, or Flux version:
 
-1. Edit `config/config.yaml`
-2. Run `make plan` — review changes carefully
-3. Run `make apply`
+1. Edit `config/environments/<env>/config.yaml`
+2. Run `make plan ENV=<env>` — review changes carefully
+3. Run `make apply ENV=<env>`
 
 ## Destroy
 
 ```bash
-make destroy          # Destroys all infrastructure (5-second safety delay)
+make destroy ENV=cc          # Destroys all infrastructure (5-second safety delay)
 ```
 
 If resources are already manually deleted:
 
 ```bash
-make destroy-fast     # Skip refresh (3-second safety delay)
+make destroy-fast ENV=cc     # Skip refresh (3-second safety delay)
 ```
 
 ## Provider-Specific Notes
@@ -440,7 +530,7 @@ make destroy-fast     # Skip refresh (3-second safety delay)
 - **Placement**: Map logical placement groups to physical Proxmox nodes. The deployment template references placement groups; `config.yaml` resolves them to real nodes.
 - **Talos access**: Use `talosctl` with the generated config:
   ```bash
-  export TALOSCONFIG=$(pwd)/artifacts/talos-config/talosconfig
+  export TALOSCONFIG=$(pwd)/artifacts/cc/talos-config/talosconfig
   talosctl health --nodes 192.168.88.10
   ```
 
@@ -461,8 +551,8 @@ make destroy-fast     # Skip refresh (3-second safety delay)
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `make apply` — stale plan error | State changed between plan and apply | Use `make plan-apply` instead |
-| Flux pods not running | Flux bootstrap failed | Check `kubectl get pods -n flux-system`, re-run `make plan-apply` |
+| `make apply` — stale plan error | State changed between plan and apply | Use `make plan-apply ENV=<env>` instead |
+| Flux pods not running | Flux bootstrap failed | Check `kubectl get pods -n flux-system`, re-run `make plan-apply ENV=<env>` |
 | OCIRepository `not ready` | Wrong URL or missing credentials | Verify `oci.repo.url` in config.yaml, check `.env` has correct `OCI_REPO_USERNAME` / `OCI_REPO_PASSWORD` values |
 | Kustomization stuck on `dependency not ready` | Platform kustomization has errors | Run `kubectl get kustomizations -n flux-system` — fix platform errors first |
 | Proxmox VMs not getting IP | DHCP or network misconfiguration | Check Proxmox VM console, verify bridge network settings |
@@ -472,12 +562,12 @@ make destroy-fast     # Skip refresh (3-second safety delay)
 
 ```bash
 # Terraform state inspection
-make show             # Full state
-make list             # Resource list
+make show ENV=cc          # Full state
+make list ENV=cc          # Resource list
 
 # Clean slate
-make clean            # Remove local artifacts
-make destroy          # Tear down infrastructure
+make clean                # Remove local artifacts (all environments)
+make destroy ENV=cc       # Tear down infrastructure
 
 # Flux debugging
 kubectl get events -n flux-system --sort-by='.lastTimestamp'

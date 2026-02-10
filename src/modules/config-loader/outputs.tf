@@ -74,9 +74,8 @@ output "app" {
 }
 
 output "paths" {
-  description = "Standard paths for artifacts and patches"
+  description = "Standard paths for shared resources"
   value = {
-    artifacts = "../artifacts"
-    patches   = "../config/patches/talos"
+    patches = "../config/patches/talos"
   }
 }
