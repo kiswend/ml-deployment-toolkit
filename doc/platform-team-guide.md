@@ -10,20 +10,23 @@ The OCI artifact is a single package containing six directories. Each directory 
 
 ```
 gitops/
-  platform/          # Shared platform services (cert-manager, external-dns, ESO, metrics-server, GatewayClass)
+  platform/          # Shared platform services (cert-manager, external-dns, ESO, metrics-server)
   platform-config/   # Shared platform config (ClusterIssuers with DNS-01, DNS token Secret, Gateway with wildcard TLS)
-  onprem/            # On-prem only (Cilium HelmRelease, LB-IPAM, OpenEBS)
+  onprem/            # On-prem only (Cilium HelmRelease with gatewayAPI.enabled, LB-IPAM, OpenEBS)
   cc/                # Control Center operators (vault-operator) + namespace definitions (vault, harbor, minio)
-  cc-config/         # Control Center services (Vault + HTTPRoute in vault ns, Harbor + HTTPRoute in harbor ns, MinIO + HTTPRoute in minio ns)
+  cc-config/         # Control Center services (Vault CR in vault ns, Harbor + MinIO HelmReleases in their namespaces)
+  cc-routes/         # Control Center HTTPRoutes (vault, harbor, minio — deployed after cc-config services healthy)
   env/               # App Environment services (Mojaloop app + dependencies)
 ```
+
+Note: GatewayClass is not deployed by the artifact. Cilium auto-creates it when `gatewayAPI.enabled: true` (on-prem HelmRelease) or the cloud provider pre-creates it (DOKS, GKE).
 
 **Deployment matrix:**
 
 | Cluster role | Provider | Paths deployed | Order |
 |-------------|----------|----------------|-------|
-| `cc` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `cc/` → `cc-config/` | Full chain with on-prem services |
-| `cc` | DOKS/EKS | `platform/` → `platform-config/` → `cc/` → `cc-config/` | No onprem (cloud-native) |
+| `cc` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `cc/` → `cc-config/` → `cc-routes/` | Full chain; routes deploy after services healthy |
+| `cc` | DOKS/EKS | `platform/` → `platform-config/` → `cc/` → `cc-config/` → `cc-routes/` | No onprem; routes deploy after services healthy |
 | `env` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `env/` | Full chain with on-prem services |
 | `env` | DOKS/EKS | `platform/` → `platform-config/` → `env/` | No onprem (cloud-native) |
 
@@ -47,9 +50,9 @@ gitops/platform/
     helmrelease.yaml           # External Secrets Operator
   metrics-server/
     helmrelease.yaml           # Kubelet metrics aggregation
-  gateway/
-    gatewayclass.yaml          # Cilium GatewayClass (shared across all providers)
 ```
+
+Note: No GatewayClass here — it is auto-created by Cilium (on-prem HelmRelease or cloud-managed).
 
 ### platform-config/
 
@@ -81,7 +84,7 @@ gitops/onprem/
     helmrelease.yaml           # OpenEBS hostpath storage
 ```
 
-Note: GatewayClass (Cilium) has moved to `platform/gateway/gatewayclass.yaml` since it's shared across all providers.
+Note: GatewayClass is not deployed here — it is auto-created by Cilium when `gatewayAPI.enabled: true`.
 
 ### cc/
 
@@ -314,7 +317,7 @@ make tag-gitops TAG=stable
 
 ### Version coherence
 
-All six directories (platform/, platform-config/, onprem/, cc/, cc-config/, env/) ship in a single artifact. When you push `v1.2.0`, the adopter gets a coherent snapshot of all three paths. There is no risk of version drift between platform and role-specific paths.
+All seven directories (platform/, platform-config/, onprem/, cc/, cc-config/, cc-routes/, env/) ship in a single artifact. When you push `v1.2.0`, the adopter gets a coherent snapshot of all three paths. There is no risk of version drift between platform and role-specific paths.
 
 ## CI/CD Integration
 

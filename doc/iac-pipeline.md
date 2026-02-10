@@ -217,17 +217,20 @@ OCIRepository (ml-gitops)
     │       ↓
     ├── Kustomization: cc              path: ./cc              (if cluster.role == cc — operators)
     │       ↓
-    ├── Kustomization: cc-config       path: ./cc-config       (if cluster.role == cc — services, Gateway, routes)
+    ├── Kustomization: cc-config       path: ./cc-config       (if cluster.role == cc — services)
+    │       ↓
+    ├── Kustomization: cc-routes       path: ./cc-routes       (if cluster.role == cc — HTTPRoutes, after services healthy)
     │
     └── Kustomization: env             path: ./env             (if cluster.role == env)
 ```
 
 Dependency chain ensures ordering:
-- `platform` deploys first (cert-manager, external-dns, Gateway API CRDs, ESO, metrics-server, GatewayClass)
+- `platform` deploys first (cert-manager, external-dns, ESO, metrics-server)
 - `platform-config` waits for platform (needs cert-manager running), deploys ClusterIssuers (DNS-01), DNS token Secret, Gateway (wildcard TLS)
-- `onprem` waits for platform-config, deploys Cilium HelmRelease, LB-IPAM, OpenEBS
+- `onprem` waits for platform-config, deploys Cilium HelmRelease (with `gatewayAPI.enabled` → auto-creates GatewayClass), LB-IPAM, OpenEBS
 - `cc` waits for onprem (if present) or platform-config (if cloud) — deploys operators (vault-operator), creates namespaces (vault, harbor, minio)
-- `cc-config` waits for cc — deploys Vault + HTTPRoute (vault ns), MinIO + HTTPRoute (minio ns), Harbor + HTTPRoute (harbor ns)
+- `cc-config` waits for cc — deploys Vault CR (vault ns), MinIO HelmRelease (minio ns), Harbor HelmRelease (harbor ns); health checks confirm services running
+- `cc-routes` waits for cc-config — deploys HTTPRoutes for vault, harbor, minio (backends guaranteed to exist)
 - `env` waits for onprem (if present) or platform-config (if cloud) — deploys Mojaloop app
 
 On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, load balancers, storage, and S3 are used instead.
