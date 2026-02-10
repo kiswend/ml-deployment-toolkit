@@ -26,9 +26,11 @@ spec:
   targetNamespace: harbor
   install:
     createNamespace: false
+    timeout: 15m
     remediation:
       retries: 3
   upgrade:
+    timeout: 15m
     remediation:
       retries: 3
   dependsOn:

@@ -296,6 +296,7 @@ resource "kubectl_manifest" "kustomization_cc_config" {
     }
     spec = {
       interval = "10m"
+      timeout  = "20m"
       path     = "./cc-config"
       prune    = true
       dependsOn = [
