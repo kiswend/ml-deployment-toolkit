@@ -111,6 +111,7 @@ gitops/cc-config/
   harbor/
     helmrelease.yaml           # OCI registry (harbor namespace)
     externalsecret.yaml        # Harbor credentials from Vault
+    proxy-cache-oci-secret.yaml      # OCI credentials for authenticated upstream registries (Flux-substituted)
     proxy-cache-externalsecret.yaml  # Admin password for proxy cache setup (harbor namespace)
     proxy-cache-configmap.yaml       # Setup script: registers upstream registries + proxy cache projects
     proxy-cache-job.yaml             # One-shot Job: configures Harbor as pull-through cache
@@ -119,7 +120,27 @@ gitops/cc-config/
     externalsecret.yaml        # MinIO credentials from Vault
 ```
 
-**Harbor proxy cache:** A setup Job configures Harbor as a pull-through cache for upstream registries (docker.io, ghcr.io, quay.io, registry.k8s.io). App Environments pull all images through `harbor.${domain}/<project>/<image>` instead of hitting public registries directly. This enables air-gapped operation and reduces external bandwidth.
+**Harbor proxy cache:** A setup Job configures Harbor as a pull-through cache for upstream registries. App Environments pull all images through `harbor.${domain}/<project>/<image>` instead of hitting public registries directly. This enables air-gapped operation and reduces external bandwidth.
+
+The proxy cache setup files:
+
+- `proxy-cache-oci-secret.yaml` — Kubernetes Secret with OCI credentials via Flux `${oci_username}` / `${oci_password}` substitution. Mounted by the Job for authenticated upstream access.
+- `proxy-cache-externalsecret.yaml` — ExternalSecret pulling Harbor admin password from Vault (via ClusterSecretStore) into the `harbor` namespace.
+- `proxy-cache-configmap.yaml` — Idempotent shell script that creates registry endpoints and proxy cache projects via Harbor's REST API. Handles create-or-update logic and type mismatch recovery (registry type is immutable — the script deletes and recreates if the type changes).
+- `proxy-cache-job.yaml` — One-shot Job (alpine:3, backoffLimit: 5) that waits for Harbor readiness then runs the setup script.
+
+**Registry adapter types:** Harbor has specialized adapters for different registries. Using the correct adapter is critical for authentication:
+
+| Upstream | Harbor adapter type | Credential | Notes |
+|----------|-------------------|------------|-------|
+| docker.io | `docker-hub` | None (public) | Harbor's native Docker Hub adapter |
+| ghcr.io | `github-ghcr` | `basic` (username + PAT) | Required for private packages; handles GitHub token exchange |
+| quay.io | `docker-registry` | None (public) | Generic Docker Registry v2 adapter |
+| registry.k8s.io | `docker-registry` | None (public) | Generic Docker Registry v2 adapter |
+
+The `github-ghcr` adapter is required for ghcr.io because it handles GitHub's token exchange protocol. Using the generic `docker-registry` adapter with ghcr.io fails for private repositories. The credential type must be `basic` (not `secret`) — ghcr.io requires both username and token for the auth handshake.
+
+**Adding more proxy caches:** To add a new upstream registry, edit `proxy-cache-configmap.yaml` and add a `create_registry` + `create_project` call. Choose the adapter type from Harbor's supported adapters (`docker-hub`, `docker-registry`, `github-ghcr`, `aws-ecr`, `google-gcr`, `ali-acr`, `tencent-tcr`, `volcengine-cr`). Delete the existing Job to trigger re-creation on next Flux reconciliation.
 
 ### env/
 
