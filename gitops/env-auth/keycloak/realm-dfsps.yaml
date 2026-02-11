@@ -1,0 +1,60 @@
+# Keycloak Realm: dfsps (MCM — DFSP onboarding)
+# NOTE: All Keycloak-internal ${...} expressions are escaped as $${...}
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: dfsps-realm
+  namespace: keycloak
+spec:
+  keycloakCRName: keycloak
+  realm:
+    realm: dfsps
+    enabled: true
+    displayName: DFSPs
+    sslRequired: external
+    registrationAllowed: false
+    loginWithEmailAllowed: true
+    duplicateEmailsAllowed: false
+    resetPasswordAllowed: true
+    editUsernameAllowed: false
+    bruteForceProtected: true
+
+    roles:
+      realm:
+        - name: admin
+          description: "DFSP admin"
+        - name: operator
+          description: "DFSP operator"
+
+    clients:
+      - clientId: mcm-portal
+        name: MCM Portal
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: true
+        serviceAccountsEnabled: false
+        protocol: openid-connect
+        rootUrl: "https://mcm.${domain}"
+        baseUrl: /
+        redirectUris:
+          - "https://mcm.${domain}/*"
+        webOrigins:
+          - "https://mcm.${domain}"
+        secret: "${mcm_oidc_client_secret}"
+        defaultClientScopes:
+          - web-origins
+          - profile
+          - roles
+          - email
+        protocolMappers:
+          - name: realm-roles
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-realm-role-mapper
+            config:
+              claim.name: roles
+              jsonType.label: String
+              multivalued: "true"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"

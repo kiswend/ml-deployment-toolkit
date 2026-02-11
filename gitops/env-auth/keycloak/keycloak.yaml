@@ -1,0 +1,83 @@
+# Keycloak admin credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-admin-secret
+  namespace: keycloak
+type: Opaque
+stringData:
+  username: admin
+  password: "${keycloak_admin_password}"
+---
+# Database credentials for Keycloak
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-db-secret
+  namespace: keycloak
+type: Opaque
+stringData:
+  username: keycloak
+  password: "${keycloak_db_password}"
+---
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  instances: 1
+  image: quay.io/keycloak/keycloak:22.0.2
+  db:
+    vendor: mysql
+    host: auth-db-haproxy.mojaloop.svc.cluster.local
+    port: 3306
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-secret
+      key: username
+    passwordSecret:
+      name: keycloak-db-secret
+      key: password
+  http:
+    httpEnabled: true
+  transaction:
+    xaEnabled: false
+  hostname:
+    hostname: "keycloak.${domain}"
+    strict: false
+    strictBackchannel: false
+  additionalOptions:
+    - name: http-relative-path
+      value: /
+    - name: proxy
+      value: edge
+  unsupported:
+    podTemplate:
+      spec:
+        initContainers:
+          - name: build-keycloak
+            image: quay.io/keycloak/keycloak:22.0.2
+            command:
+              - /bin/bash
+              - -c
+              - |
+                /opt/keycloak/bin/kc.sh build --db=mysql --transaction-xa-enabled=false --health-enabled=true
+                cp -r /opt/keycloak/lib/quarkus/* /quarkus-build/
+            resources:
+              requests:
+                memory: 512Mi
+                cpu: 250m
+              limits:
+                memory: 768Mi
+            volumeMounts:
+              - name: quarkus-build
+                mountPath: /quarkus-build
+        containers:
+          - name: keycloak
+            volumeMounts:
+              - name: quarkus-build
+                mountPath: /opt/keycloak/lib/quarkus
+        volumes:
+          - name: quarkus-build
+            emptyDir: {}

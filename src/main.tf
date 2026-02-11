@@ -136,6 +136,15 @@ module "flux_config" {
   mongodb_root_password         = var.mongodb_root_password
   mongodb_app_password          = var.mongodb_app_password
 
+  keycloak_db_password    = var.keycloak_db_password
+  kratos_db_password      = var.kratos_db_password
+  keto_db_password        = var.keto_db_password
+  mcm_db_password         = var.mcm_db_password
+  keycloak_admin_password = var.keycloak_admin_password
+  hubop_oidc_secret       = var.hubop_oidc_secret
+  mcm_oidc_client_secret  = var.mcm_oidc_client_secret
+  role_assign_svc_secret  = var.role_assign_svc_secret
+
   depends_on = [
     module.flux_bootstrap
   ]

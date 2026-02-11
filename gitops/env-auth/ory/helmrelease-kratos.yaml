@@ -1,0 +1,107 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: ory
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://k8s.ory.sh/helm/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kratos
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: kratos
+      version: "0.39.0"
+      sourceRef:
+        kind: HelmRepository
+        name: ory
+      interval: 12h
+  targetNamespace: ory
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    kratos:
+      automigration:
+        enabled: true
+      config:
+        dsn: "mysql://kratos:${kratos_db_password}@tcp(auth-db-haproxy.mojaloop.svc.cluster.local:3306)/kratos?max_conns=20&max_idle_conns=4"
+
+        courier:
+          smtp:
+            connection_uri: "smtp://localhost:25/?disable_starttls=true"
+            from_address: "noreply@${domain}"
+            from_name: "Mojaloop Hub"
+
+        serve:
+          public:
+            base_url: "https://auth.${domain}/"
+            cors:
+              enabled: true
+              allowed_origins:
+                - "https://finance-portal.${domain}"
+                - "https://auth.${domain}"
+          admin:
+            base_url: "http://kratos-admin.ory.svc.cluster.local:80/"
+
+        selfservice:
+          default_browser_return_url: "https://auth.${domain}/"
+          flows:
+            login:
+              ui_url: "https://auth.${domain}/login"
+              after:
+                default_browser_return_url: "https://finance-portal.${domain}/"
+            registration:
+              enabled: false
+            settings:
+              ui_url: "https://auth.${domain}/settings"
+            verification:
+              enabled: false
+            recovery:
+              enabled: true
+              ui_url: "https://auth.${domain}/recovery"
+            logout:
+              after:
+                default_browser_return_url: "https://auth.${domain}/login"
+
+          methods:
+            oidc:
+              enabled: true
+              config:
+                providers:
+                  - id: keycloak
+                    provider: generic
+                    client_id: finance-portal
+                    client_secret: "${hubop_oidc_secret}"
+                    issuer_url: "https://keycloak.${domain}/realms/hub-operators"
+                    mapper_url: "base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CnsKICBpZGVudGl0eTogewogICAgdHJhaXRzOiB7CiAgICAgIGVtYWlsOiBjbGFpbXMuZW1haWwsCiAgICAgIG5hbWU6IHsKICAgICAgICBmaXJzdDogY2xhaW1zLmdpdmVuX25hbWUsCiAgICAgICAgbGFzdDogY2xhaW1zLmZhbWlseV9uYW1lLAogICAgICB9LAogICAgfSwKICB9LAp9"
+                    scope:
+                      - openid
+                      - profile
+                      - email
+            password:
+              enabled: false
+
+        identity:
+          default_schema_id: default
+          schemas:
+            - id: default
+              url: base64://ewogICIkaWQiOiAiaHR0cHM6Ly9zY2hlbWFzLm9yeS5zaC9wcmVzZXRzL2tyYXRvcy9pZGVudGl0eS5lbWFpbC5zY2hlbWEuanNvbiIsCiAgIiRzY2hlbWEiOiAiaHR0cDovL2pzb24tc2NoZW1hLm9yZy9kcmFmdC0wNy9zY2hlbWEjIiwKICAidGl0bGUiOiAiUGVyc29uIiwKICAidHlwZSI6ICJvYmplY3QiLAogICJwcm9wZXJ0aWVzIjogewogICAgInRyYWl0cyI6IHsKICAgICAgInR5cGUiOiAib2JqZWN0IiwKICAgICAgInByb3BlcnRpZXMiOiB7CiAgICAgICAgImVtYWlsIjogewogICAgICAgICAgInR5cGUiOiAic3RyaW5nIiwKICAgICAgICAgICJmb3JtYXQiOiAiZW1haWwiLAogICAgICAgICAgInRpdGxlIjogIkUtTWFpbCIsCiAgICAgICAgICAib3J5LnNoL2tyYXRvcyI6IHsKICAgICAgICAgICAgImNyZWRlbnRpYWxzIjogewogICAgICAgICAgICAgICJwYXNzd29yZCI6IHsKICAgICAgICAgICAgICAgICJpZGVudGlmaWVyIjogdHJ1ZQogICAgICAgICAgICAgIH0KICAgICAgICAgICAgfSwKICAgICAgICAgICAgInJlY292ZXJ5IjogewogICAgICAgICAgICAgICJ2aWEiOiAiZW1haWwiCiAgICAgICAgICAgIH0sCiAgICAgICAgICAgICJ2ZXJpZmljYXRpb24iOiB7CiAgICAgICAgICAgICAgInZpYSI6ICJlbWFpbCIKICAgICAgICAgICAgfQogICAgICAgICAgfQogICAgICAgIH0sCiAgICAgICAgIm5hbWUiOiB7CiAgICAgICAgICAidHlwZSI6ICJvYmplY3QiLAogICAgICAgICAgInByb3BlcnRpZXMiOiB7CiAgICAgICAgICAgICJmaXJzdCI6IHsKICAgICAgICAgICAgICAidHlwZSI6ICJzdHJpbmciLAogICAgICAgICAgICAgICJ0aXRsZSI6ICJGaXJzdCBOYW1lIgogICAgICAgICAgICB9LAogICAgICAgICAgICAibGFzdCI6IHsKICAgICAgICAgICAgICAidHlwZSI6ICJzdHJpbmciLAogICAgICAgICAgICAgICJ0aXRsZSI6ICJMYXN0IE5hbWUiCiAgICAgICAgICAgIH0KICAgICAgICAgIH0KICAgICAgICB9CiAgICAgIH0sCiAgICAgICJyZXF1aXJlZCI6IFsiZW1haWwiXQogICAgfQogIH0KfQ==
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi

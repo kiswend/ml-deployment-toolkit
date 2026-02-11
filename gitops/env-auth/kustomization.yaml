@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - vault/vault.yaml
+  - keycloak/operator.yaml
+  - keycloak/keycloak.yaml
+  - keycloak/realm-hub-operators.yaml
+  - keycloak/realm-dfsps.yaml
+  - ory/helmrelease-kratos.yaml
+  - ory/helmrelease-oathkeeper.yaml
+  - ory/helmrelease-keto.yaml
+  - ory/helmrelease-selfservice-ui.yaml
+  - ory/helmrelease-bof.yaml
+  - ory/access-rules.yaml
+  - routes/auth-httproute.yaml
+  - routes/keycloak-httproute.yaml
+  - routes/vault-httproute.yaml
+  - routes/mcm-httproute.yaml
+  - routes/finance-portal-httproute.yaml
+  - routes/referenceGrants.yaml

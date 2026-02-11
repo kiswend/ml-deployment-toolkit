@@ -217,3 +217,69 @@ variable "redis_port" {
   type        = string
   default     = ""
 }
+
+# --- App Environment Auth Layer ---
+
+variable "keycloak_db_password" {
+  description = "Keycloak MySQL user password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "kratos_db_password" {
+  description = "Kratos MySQL user password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "keto_db_password" {
+  description = "Keto MySQL user password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mcm_db_password" {
+  description = "MCM MySQL user password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "keycloak_admin_password" {
+  description = "Keycloak admin console password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "hubop_oidc_secret" {
+  description = "Finance Portal OIDC client secret (hub-operators realm)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mcm_oidc_client_secret" {
+  description = "MCM OIDC client secret (dfsps realm)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "role_assign_svc_secret" {
+  description = "Role assignment service account secret"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# --- App Environment Auth Endpoints (cloud override) ---
+
+variable "auth_db_host" {
+  description = "MySQL host for auth database (cloud: RDS endpoint)"
+  type        = string
+  default     = ""
+}

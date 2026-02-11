@@ -1,0 +1,95 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: pm4ml
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://pm4ml.github.io/helm
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: mcm
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: connection-manager
+      version: "1.2.x"
+      sourceRef:
+        kind: HelmRepository
+        name: pm4ml
+      interval: 12h
+  releaseName: mcm
+  targetNamespace: mcm
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    db:
+      user: mcm
+      passwordSecret: mcm-db-secret
+      passwordSecretKey: mysql-password
+      host: "auth-db-haproxy.mojaloop.svc.cluster.local"
+      port: 3306
+      schema: mcm
+
+    api:
+      url: "https://mcm.${domain}"
+      switchFQDN: "${domain}"
+      switchId: "hub-${domain}"
+
+      keycloak:
+        enabled: true
+        baseUrl: "https://keycloak.${domain}"
+        discoveryUrl: "https://keycloak.${domain}/realms/dfsps/.well-known/openid-configuration"
+        adminClientId: mcm-portal
+        adminClientSecretName: mcm-oidc-client-secret
+        adminClientSecretKey: secret
+        dfspsRealm: dfsps
+        autoCreateAccounts: true
+
+      vault:
+        auth:
+          k8s:
+            enabled: true
+            token: /var/run/secrets/kubernetes.io/serviceaccount/token
+            role: mcm
+            mountPoint: kubernetes
+        endpoint: "http://vault.vault.svc.cluster.local:8200"
+        mounts:
+          pki: pki
+          kv: secret/mcm
+          dfspClientCertBundle: secret/onboarding_pm4mls
+          dfspInternalIPWhitelistBundle: secret/whitelist_pm4mls
+          dfspExternalIPWhitelistBundle: secret/whitelist_fsps
+        pkiServerRole: server-cert-role
+        pkiClientRole: client-cert-role
+        signExpiryHours: 43800
+
+      serviceAccount:
+        externallyManaged: false
+
+    ui:
+      checkSessionUrl: "https://mcm.${domain}/kratos/sessions/whoami"
+      loginUrl: "https://auth.${domain}/kratos/self-service/login/browser"
+      loginProvider: keycloak
+      logoutUrl: "/kratos/self-service/logout/browser"
+      oauth:
+        enabled: true
+        hubOidcProviderUrl: "https://keycloak.${domain}/realms/dfsps/protocol/openid-connect"
+        clientId: mcm-portal
+        clientSecretName: mcm-oidc-client-secret
+        clientSecretKey: secret
+
+    migrations:
+      enabled: false
+
+    ingress:
+      enabled: false
