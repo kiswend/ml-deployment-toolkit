@@ -63,3 +63,47 @@ variable "harbor_admin_password" {
   default     = ""
   sensitive   = true
 }
+
+# --- App Environment Data Layer Credentials ---
+
+variable "mysql_root_password" {
+  description = "MySQL root password for Percona XtraDB clusters"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mysql_central_ledger_password" {
+  description = "MySQL password for central_ledger user"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mysql_account_lookup_password" {
+  description = "MySQL password for account_lookup user"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mysql_oracle_msisdn_password" {
+  description = "MySQL password for oracle_msisdn user"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mongodb_root_password" {
+  description = "MongoDB admin password for Percona Server MongoDB"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mongodb_app_password" {
+  description = "MongoDB mojaloop application user password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

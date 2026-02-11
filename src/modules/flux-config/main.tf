@@ -1,10 +1,11 @@
 # Flux Config Module
 # Creates Kubernetes resources for Flux OCI-based GitOps
-# Deploys: 1 OCIRepository + 3-6 Kustomizations (platform → platform-config → [onprem] → role-specific → [cc-config] → [cc-routes])
+# Deploys: 1 OCIRepository + 3-8 Kustomizations (platform → platform-config → [onprem] → role-specific → [env-data] → [env-app] | [cc-config] → [cc-routes])
 
 locals {
   has_oci_credentials = var.oci_repo_username != "" && var.oci_repo_password != ""
   is_onprem           = var.infra_provider == "proxmox"
+  is_env              = var.cluster_role == "env"
 
   # Extract registry host from artifact URL (e.g. "oci://ghcr.io/kiswend/ml-iac3" → "ghcr.io")
   oci_registry = local.has_oci_credentials ? split("/", replace(var.artifact_url, "oci://", ""))[0] : ""
@@ -19,6 +20,17 @@ locals {
       }
     }
   }) : ""
+
+  # Data layer endpoints — on-prem uses in-cluster service names, cloud uses managed service endpoints
+  mysql_central_ledger_host = local.is_onprem ? "central-ledger-db-haproxy" : var.mysql_central_ledger_host
+  mysql_account_lookup_host = local.is_onprem ? "account-lookup-db-haproxy" : var.mysql_account_lookup_host
+  mysql_port                = local.is_onprem ? "3306" : var.mysql_port
+  kafka_host                = local.is_onprem ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
+  kafka_port                = local.is_onprem ? "9092" : var.kafka_port
+  mongodb_host              = local.is_onprem ? "bulk-mongodb-rs0" : var.mongodb_host
+  mongodb_port              = local.is_onprem ? "27017" : var.mongodb_port
+  redis_host                = local.is_onprem ? "ttk-redis" : var.redis_host
+  redis_port                = local.is_onprem ? "6379" : var.redis_port
 }
 
 # ConfigMap with cluster configuration for postBuild substitution
@@ -28,16 +40,29 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     namespace = var.flux_namespace
   }
 
-  data = {
-    cluster_name  = var.cluster_name
-    cluster_vip   = var.cluster_vip
-    domain        = var.domain
-    dns_provider  = var.dns_provider
-    alert_email   = var.alert_email
-    lb_ipam_range = var.lb_ipam_range
-    lb_ipam_start = split("-", var.lb_ipam_range)[0]
-    lb_ipam_stop  = split("-", var.lb_ipam_range)[1]
-  }
+  data = merge(
+    {
+      cluster_name  = var.cluster_name
+      cluster_vip   = var.cluster_vip
+      domain        = var.domain
+      dns_provider  = var.dns_provider
+      alert_email   = var.alert_email
+      lb_ipam_range = var.lb_ipam_range
+      lb_ipam_start = split("-", var.lb_ipam_range)[0]
+      lb_ipam_stop  = split("-", var.lb_ipam_range)[1]
+    },
+    local.is_env ? {
+      mysql_central_ledger_host = local.mysql_central_ledger_host
+      mysql_account_lookup_host = local.mysql_account_lookup_host
+      mysql_port                = local.mysql_port
+      kafka_host                = local.kafka_host
+      kafka_port                = local.kafka_port
+      mongodb_host              = local.mongodb_host
+      mongodb_port              = local.mongodb_port
+      redis_host                = local.redis_host
+      redis_port                = local.redis_port
+    } : {}
+  )
 }
 
 # Secret with sensitive credentials for postBuild substitution
@@ -47,16 +72,26 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
     namespace = var.flux_namespace
   }
 
-  data = {
-    digitalocean_token    = var.digitalocean_token
-    oci_repo_username     = var.oci_repo_username
-    oci_repo_password     = var.oci_repo_password
-    oci_proxy_username    = var.oci_proxy_username
-    oci_proxy_password    = var.oci_proxy_password
-    minio_root_user       = var.minio_root_user
-    minio_root_password   = var.minio_root_password
-    harbor_admin_password = var.harbor_admin_password
-  }
+  data = merge(
+    {
+      digitalocean_token    = var.digitalocean_token
+      oci_repo_username     = var.oci_repo_username
+      oci_repo_password     = var.oci_repo_password
+      oci_proxy_username    = var.oci_proxy_username
+      oci_proxy_password    = var.oci_proxy_password
+      minio_root_user       = var.minio_root_user
+      minio_root_password   = var.minio_root_password
+      harbor_admin_password = var.harbor_admin_password
+    },
+    local.is_env ? {
+      mysql_root_password           = var.mysql_root_password
+      mysql_central_ledger_password = var.mysql_central_ledger_password
+      mysql_account_lookup_password = var.mysql_account_lookup_password
+      mysql_oracle_msisdn_password  = var.mysql_oracle_msisdn_password
+      mongodb_root_password         = var.mongodb_root_password
+      mongodb_app_password          = var.mongodb_app_password
+    } : {}
+  )
 
   type = "Opaque"
 }
@@ -379,5 +414,108 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
 
   depends_on = [
     kubectl_manifest.kustomization_cc_config
+  ]
+}
+
+# Kustomization: env-data (on-prem data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
+resource "kubectl_manifest" "kustomization_env_data" {
+  count = local.is_onprem && local.is_env ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "env-data"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "20m"
+      path     = "./env-data"
+      prune    = true
+      dependsOn = [
+        { name = "env" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      healthChecks = [
+        {
+          apiVersion = "pxc.percona.com/v1"
+          kind       = "PerconaXtraDBCluster"
+          name       = "central-ledger-db"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "kafka.strimzi.io/v1beta2"
+          kind       = "Kafka"
+          name       = "mojaloop-kafka"
+          namespace  = "mojaloop"
+        }
+      ]
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_role
+  ]
+}
+
+# Kustomization: env-app (Mojaloop core application — always deployed for env clusters)
+resource "kubectl_manifest" "kustomization_env_app" {
+  count = local.is_env ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "env-app"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "30m"
+      path     = "./env-app"
+      prune    = true
+      dependsOn = local.is_onprem ? [
+        { name = "env-data" }
+        ] : [
+        { name = "env" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_role,
+    kubectl_manifest.kustomization_env_data
   ]
 }

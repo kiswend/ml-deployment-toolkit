@@ -26,7 +26,13 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_oci_proxy_password=$${OCI_PROXY_PASSWORD:-} \
 	       TF_VAR_minio_root_user=$${MINIO_ROOT_USER:-} \
 	       TF_VAR_minio_root_password=$${MINIO_ROOT_PASSWORD:-} \
-	       TF_VAR_harbor_admin_password=$${HARBOR_ADMIN_PASSWORD:-}
+	       TF_VAR_harbor_admin_password=$${HARBOR_ADMIN_PASSWORD:-} \
+	       TF_VAR_mysql_root_password=$${MYSQL_ROOT_PASSWORD:-} \
+	       TF_VAR_mysql_central_ledger_password=$${MYSQL_CENTRAL_LEDGER_PASSWORD:-} \
+	       TF_VAR_mysql_account_lookup_password=$${MYSQL_ACCOUNT_LOOKUP_PASSWORD:-} \
+	       TF_VAR_mysql_oracle_msisdn_password=$${MYSQL_ORACLE_MSISDN_PASSWORD:-} \
+	       TF_VAR_mongodb_root_password=$${MONGODB_ROOT_PASSWORD:-} \
+	       TF_VAR_mongodb_app_password=$${MONGODB_APP_PASSWORD:-}
 
 # Default target
 .DEFAULT_GOAL := help

@@ -129,6 +129,13 @@ module "flux_config" {
   minio_root_password   = var.minio_root_password
   harbor_admin_password = var.harbor_admin_password
 
+  mysql_root_password           = var.mysql_root_password
+  mysql_central_ledger_password = var.mysql_central_ledger_password
+  mysql_account_lookup_password = var.mysql_account_lookup_password
+  mysql_oracle_msisdn_password  = var.mysql_oracle_msisdn_password
+  mongodb_root_password         = var.mongodb_root_password
+  mongodb_app_password          = var.mongodb_app_password
+
   depends_on = [
     module.flux_bootstrap
   ]

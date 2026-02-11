@@ -1,0 +1,254 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: mojaloop
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://mojaloop.github.io/helm/repo
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: mojaloop
+  namespace: flux-system
+spec:
+  interval: 30m
+  timeout: 30m
+  chart:
+    spec:
+      chart: mojaloop
+      version: "17.x"
+      sourceRef:
+        kind: HelmRepository
+        name: mojaloop
+      interval: 12h
+  releaseName: moja
+  targetNamespace: mojaloop
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    global:
+      kafka:
+        host: "${kafka_host}"
+        port: ${kafka_port}
+
+    # --- Central Ledger ---
+    centralledger:
+      centralledger-service:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+        init:
+          enabled: true
+      centralledger-handler-transfer-prepare:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralledger-handler-transfer-position:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralledger-handler-transfer-position-batch:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralledger-handler-transfer-get:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralledger-handler-transfer-fulfil:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralledger-handler-timeout:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralledger-handler-admin-transfer:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+
+    # --- Quoting Service (shares central_ledger DB) ---
+    quoting-service:
+      quoting-service:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+          simple_routing_mode_enabled: false
+      quoting-service-handler:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+
+    # --- Central Settlement (shares central_ledger DB) ---
+    centralsettlement:
+      centralsettlement-service:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralsettlement-handler-deferredsettlement:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+      centralsettlement-handler-grosssettlement:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+        replicaCount: 0
+      centralsettlement-handler-rules:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+          db_host: "${mysql_central_ledger_host}"
+          db_port: ${mysql_port}
+          db_user: central_ledger
+          db_password: "${mysql_central_ledger_password}"
+          db_database: central_ledger
+
+    # --- Account Lookup Service ---
+    account-lookup-service:
+      account-lookup-service:
+        config:
+          db_host: "${mysql_account_lookup_host}"
+          db_port: ${mysql_port}
+          db_user: account_lookup
+          db_password: "${mysql_account_lookup_password}"
+          db_database: account_lookup
+          db_secret:
+            name: mysqldb
+            key: mysql-als-password
+        init:
+          enabled: true
+      account-lookup-service-admin:
+        config:
+          db_host: "${mysql_account_lookup_host}"
+          db_port: ${mysql_port}
+          db_user: account_lookup
+          db_password: "${mysql_account_lookup_password}"
+          db_database: account_lookup
+          db_secret:
+            name: mysqldb
+            key: mysql-als-password
+
+    # --- ALS MSISDN Oracle ---
+    als-msisdn-oracle:
+      config:
+        db_host: "${mysql_account_lookup_host}"
+        db_port: ${mysql_port}
+        db_user: oracle_msisdn
+        db_password: "${mysql_oracle_msisdn_password}"
+        db_database: oracle_msisdn
+        db_secret:
+          name: mysqldb
+          key: mysql-oracle-password
+
+    # --- ML API Adapter ---
+    ml-api-adapter:
+      ml-api-adapter-service:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+      ml-api-adapter-handler-notification:
+        config:
+          kafka_host: "${kafka_host}"
+          kafka_port: ${kafka_port}
+
+    # --- Bulk (MongoDB) ---
+    mojaloop-bulk:
+      config:
+        mongo_host: "${mongodb_host}"
+        mongo_port: ${mongodb_port}
+        mongo_database: mlos
+        mongo_user: mojaloop
+        mongo_password: "${mongodb_app_password}"
+
+    # --- TTK (Testing Toolkit) ---
+    ml-testing-toolkit:
+      enabled: false
+
+    ml-testing-toolkit-cli:
+      enabled: false
+
+    # --- Third Party (deferred) ---
+    thirdparty:
+      enabled: false
+
+    # --- Simulator ---
+    mojaloop-simulator:
+      enabled: false
+
+    # --- Feature Flags ---
+    forensicloggingsidecar:
+      enabled: false
