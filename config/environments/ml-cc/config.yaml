@@ -18,7 +18,6 @@ infra:
     placement:
       placement-group-1: "node0"
       placement-group-2: "node1"
-      placement-group-3: "node0"
 
   # # --- AWS ---
   # aws:
@@ -37,17 +36,17 @@ infra:
 # ------------------------------------------------------------------
 # 2. DEPLOYMENT TOPOLOGY
 # ------------------------------------------------------------------
-template: "h2c1w3"  # h1m1 | h2c1w3 | h2c3w3 | h3c3w3
+template: "h1m1"  # h1m1 | h2c3w3 | h3c3w3
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
 # ------------------------------------------------------------------
 cluster:
-  name: "test"
-  role: "env"                        # cc | env — determines which gitops paths are deployed
+  name: "ml-cc"
+  role: "cc"                        # cc | env — determines which gitops paths are deployed
 
   # Kubernetes API endpoint
-  vip: "192.168.88.11"              # Proxmox: floating IP
+  vip: "192.168.88.10"              # Proxmox: floating IP
 
   # Flux configuration
   flux:
@@ -58,7 +57,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "test.ml.delma.me"
+  domain: "ml-cc.ml.delma.me"
 
   # For Cloudflare:
   # cloudflare:
@@ -73,7 +72,7 @@ dns:
 # ------------------------------------------------------------------
 app:
   lb_ipam:
-    range: "192.168.88.111-192.168.88.120"
+    range: "192.168.88.11-192.168.88.12"
   alert_email: "nathan@delma.me"
 
 # ------------------------------------------------------------------
@@ -90,4 +89,4 @@ oci:
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
     active: false                   # Enable container image proxy through Harbor
-    url: "harbor.cc.ml.delma.me"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    url: "harbor.ml-cc.ml.delma.me"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
