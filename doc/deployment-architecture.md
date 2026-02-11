@@ -131,7 +131,6 @@ The shared Gateway in `platform-config/` references `gatewayClassName: cilium` w
 | Vault | Secrets management, internal CA, partner keys | All |
 | MinIO | Infrastructure state and backup storage | On-prem only |
 | FluxCD | GitOps reconciliation (OCI-based, not Git) | All |
-| tf-controller | Terraform automation for downstream environments | All |
 
 On cloud, MinIO is replaced by managed object storage (S3, DigitalOcean Spaces).
 
@@ -165,10 +164,12 @@ This enables air-gapped operation — once an image is cached, the App Environme
 ### Stage 4: Adopter App Environment
 
 **Creation flow:**
-1. Push environment config to CC Harbor
-2. CC FluxCD detects change
-3. tf-controller provisions the App Environment
-4. App Environment pulls artifacts from CC Harbor
+1. Configure `config/environments/<env>/config.yaml` with infrastructure settings
+2. Configure `config/environments/<env>/.env` with provider credentials
+3. Run `make plan-apply ENV=<env>` to provision the App Environment
+4. FluxCD reconciles and pulls artifacts from CC Harbor
+
+Each environment is provisioned independently from the operator's workstation using the same Terraform codebase and Makefile. There is no in-cluster automation (tf-controller) — all environments are managed via `make plan-apply ENV=<env>`.
 
 **Customization:** Provider differences are handled by conditional Kustomization paths:
 - On-prem: `onprem/` kustomization deploys Cilium LB-IPAM, OpenEBS storage, MinIO

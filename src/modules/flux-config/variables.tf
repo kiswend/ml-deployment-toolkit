@@ -117,3 +117,103 @@ variable "harbor_admin_password" {
   default     = ""
   sensitive   = true
 }
+
+# --- App Environment Data Layer ---
+
+variable "mysql_root_password" {
+  description = "MySQL root password for Percona XtraDB clusters"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mysql_central_ledger_password" {
+  description = "MySQL password for central_ledger user"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mysql_account_lookup_password" {
+  description = "MySQL password for account_lookup user"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mysql_oracle_msisdn_password" {
+  description = "MySQL password for oracle_msisdn user"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mongodb_root_password" {
+  description = "MongoDB admin password for Percona Server MongoDB"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "mongodb_app_password" {
+  description = "MongoDB mojaloop application user password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# --- App Environment Data Endpoints (cloud override) ---
+
+variable "mysql_central_ledger_host" {
+  description = "MySQL host for central-ledger database (cloud: RDS endpoint)"
+  type        = string
+  default     = ""
+}
+
+variable "mysql_account_lookup_host" {
+  description = "MySQL host for account-lookup database (cloud: RDS endpoint)"
+  type        = string
+  default     = ""
+}
+
+variable "mysql_port" {
+  description = "MySQL port"
+  type        = string
+  default     = ""
+}
+
+variable "kafka_host" {
+  description = "Kafka bootstrap server host (cloud: MSK endpoint)"
+  type        = string
+  default     = ""
+}
+
+variable "kafka_port" {
+  description = "Kafka bootstrap server port"
+  type        = string
+  default     = ""
+}
+
+variable "mongodb_host" {
+  description = "MongoDB host (cloud: DocumentDB endpoint)"
+  type        = string
+  default     = ""
+}
+
+variable "mongodb_port" {
+  description = "MongoDB port"
+  type        = string
+  default     = ""
+}
+
+variable "redis_host" {
+  description = "Redis host (cloud: ElastiCache endpoint)"
+  type        = string
+  default     = ""
+}
+
+variable "redis_port" {
+  description = "Redis port"
+  type        = string
+  default     = ""
+}

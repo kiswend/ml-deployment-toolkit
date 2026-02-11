@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - mysql/secrets.yaml
+  - mysql/central-ledger-db.yaml
+  - mysql/account-lookup-db.yaml
+  - mysql/init-jobs.yaml
+  - kafka/kafka.yaml
+  - mongodb/secrets.yaml
+  - mongodb/bulk-mongodb.yaml
+  - mongodb/init-jobs.yaml
+  - redis/redis.yaml
