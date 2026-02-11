@@ -102,6 +102,7 @@ resource "proxmox_virtual_environment_vm" "instance" {
   lifecycle {
     ignore_changes = [
       disk,
+      initialization,
     ]
   }
 

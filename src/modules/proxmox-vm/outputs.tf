@@ -64,3 +64,19 @@ output "worker_ips" {
     if startswith(inst.workload_class, "worker")
   ]
 }
+
+output "instance_ips" {
+  description = "Map of instance name to eth0 IP address"
+  value = {
+    for inst in local.instances_with_specs :
+    inst.name => element(
+      proxmox_virtual_environment_vm.instance[inst.name].ipv4_addresses[
+        index(
+          proxmox_virtual_environment_vm.instance[inst.name].network_interface_names,
+          "eth0"
+        )
+      ],
+      0
+    )
+  }
+}
