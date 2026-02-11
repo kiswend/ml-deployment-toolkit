@@ -26,7 +26,7 @@ h2c1w3:
   instances:
     # Host 1 — one control plane + one worker
     - name: c-0
-      placement_group: placement-group-1
+      placement_group: placement-group-2
       cores: 4
       memory: 7000
       workload_class: control-plane
@@ -41,7 +41,7 @@ h2c1w3:
     - name: w-0
       placement_group: placement-group-1
       cores: 4
-      memory: 8000
+      memory: 7000
       workload_class: worker-general
       storage:
         - storage_pool: local-lvm

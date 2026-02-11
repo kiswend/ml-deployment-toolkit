@@ -18,7 +18,6 @@ infra:
     placement:
       placement-group-1: "node0"
       placement-group-2: "node1"
-      placement-group-3: "node0"
 
   # # --- AWS ---
   # aws:
@@ -43,7 +42,7 @@ template: "h1m1"  # h1m1 | h2c3w3 | h3c3w3
 # 3. CLUSTER PARAMETERS
 # ------------------------------------------------------------------
 cluster:
-  name: "cc"
+  name: "ml-cc"
   role: "cc"                        # cc | env — determines which gitops paths are deployed
 
   # Kubernetes API endpoint
@@ -58,7 +57,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "cc.ml.example.com"
+  domain: "ml-cc.ml.example.com"
 
   # For Cloudflare:
   # cloudflare:
@@ -73,7 +72,7 @@ dns:
 # ------------------------------------------------------------------
 app:
   lb_ipam:
-    range: "192.168.88.100-192.168.88.110"
+    range: "192.168.88.11-192.168.88.12"
   alert_email: "nathan@example.com"
 
 # ------------------------------------------------------------------
@@ -90,4 +89,4 @@ oci:
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
     active: false                   # Enable container image proxy through Harbor
-    url: "harbor.cc.ml.example.com"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    url: "harbor.ml-cc.ml.example.com"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)

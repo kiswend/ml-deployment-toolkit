@@ -43,11 +43,11 @@ template: "h2c1w3"  # h1m1 | h2c1w3 | h2c3w3 | h3c3w3
 # 3. CLUSTER PARAMETERS
 # ------------------------------------------------------------------
 cluster:
-  name: "test"
+  name: "ml-test"
   role: "env"                        # cc | env — determines which gitops paths are deployed
 
   # Kubernetes API endpoint
-  vip: "192.168.88.11"              # Proxmox: floating IP
+  vip: "192.168.88.14"              # Proxmox: floating IP
 
   # Flux configuration
   flux:
@@ -58,7 +58,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "test.ml.example.com"
+  domain: "ml-test.ml.example.com"
 
   # For Cloudflare:
   # cloudflare:
@@ -73,7 +73,7 @@ dns:
 # ------------------------------------------------------------------
 app:
   lb_ipam:
-    range: "192.168.88.111-192.168.88.120"
+    range: "192.168.88.15-192.168.88.16"
   alert_email: "nathan@example.com"
 
 # ------------------------------------------------------------------
@@ -89,5 +89,5 @@ oci:
   # OCI-PROXY: Harbor as transparent pull-through cache for container images
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
-    active: false                   # Enable container image proxy through Harbor
-    url: "harbor.cc.ml.example.com"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    active: true                   # Enable container image proxy through Harbor
+    url: "harbor.ml-cc.ml.example.com"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
