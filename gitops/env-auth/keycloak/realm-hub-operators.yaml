@@ -1,0 +1,128 @@
+# Keycloak Realm: hub-operators (Finance Portal)
+# NOTE: All Keycloak-internal ${...} expressions are escaped as $${...}
+#       to prevent Flux postBuild substitution. Our own variables (e.g. ${domain})
+#       use single $ and are resolved by Flux normally.
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: hub-operators-realm
+  namespace: keycloak
+spec:
+  keycloakCRName: keycloak
+  realm:
+    realm: hub-operators
+    enabled: true
+    displayName: Hub Operators
+    sslRequired: external
+    registrationAllowed: false
+    loginWithEmailAllowed: true
+    duplicateEmailsAllowed: false
+    resetPasswordAllowed: true
+    editUsernameAllowed: false
+    bruteForceProtected: true
+
+    roles:
+      realm:
+        - name: manager
+          description: "Hub manager — full access"
+        - name: operator
+          description: "Hub operator — standard operations"
+        - name: clerk
+          description: "Hub clerk — limited operations"
+        - name: financeManager
+          description: "Finance manager — settlement and position management"
+        - name: audit
+          description: "Audit — read-only access"
+        - name: "$${role_default-roles-hub-operators}"
+          description: "Composite default role"
+          composite: true
+          composites:
+            realm:
+              - operator
+
+    clients:
+      - clientId: finance-portal
+        name: Finance Portal
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: true
+        serviceAccountsEnabled: false
+        protocol: openid-connect
+        rootUrl: "https://finance-portal.${domain}"
+        baseUrl: /
+        redirectUris:
+          - "https://finance-portal.${domain}/*"
+        webOrigins:
+          - "https://finance-portal.${domain}"
+        secret: "${hubop_oidc_secret}"
+        defaultClientScopes:
+          - web-origins
+          - profile
+          - roles
+          - email
+        optionalClientScopes:
+          - address
+          - phone
+          - offline_access
+        protocolMappers:
+          - name: realm-roles
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-realm-role-mapper
+            config:
+              claim.name: roles
+              jsonType.label: String
+              multivalued: "true"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+
+      - clientId: role-assign-svc
+        name: Role Assignment Service
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: true
+        protocol: openid-connect
+        secret: "${role_assign_svc_secret}"
+
+    clientScopes:
+      - name: roles
+        protocol: openid-connect
+        attributes:
+          include.in.token.scope: "true"
+        protocolMappers:
+          - name: realm-roles
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-realm-role-mapper
+            config:
+              claim.name: roles
+              jsonType.label: String
+              multivalued: "true"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+
+    users:
+      - username: admin
+        enabled: true
+        emailVerified: true
+        email: "admin@${domain}"
+        credentials:
+          - type: password
+            value: "${keycloak_admin_password}"
+            temporary: true
+        realmRoles:
+          - manager
+      - username: role-assign-svc
+        enabled: true
+        email: "role-assign-svc@none.com"
+        firstName: Role
+        lastName: Assign
+        credentials:
+          - type: password
+            value: "${role_assign_svc_secret}"
+        clientRoles:
+          realm-management:
+            - view-users

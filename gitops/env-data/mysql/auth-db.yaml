@@ -1,0 +1,42 @@
+apiVersion: pxc.percona.com/v1
+kind: PerconaXtraDBCluster
+metadata:
+  name: auth-db
+  namespace: mojaloop
+spec:
+  crVersion: "1.19.0"
+  allowUnsafeConfigurations: true
+  secretsName: auth-db-secrets
+  pxc:
+    size: 1
+    image: percona/percona-xtradb-cluster:8.0.44-35.1
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+    volumeSpec:
+      persistentVolumeClaim:
+        resources:
+          requests:
+            storage: 8Gi
+    configuration: |
+      [mysqld]
+      pxc_strict_mode=PERMISSIVE
+      default_authentication_plugin=mysql_native_password
+      max_connections=2000
+      character_set_server=utf8
+    autoRecovery: true
+  haproxy:
+    enabled: true
+    size: 1
+    image: percona/haproxy:2.8.17
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 256Mi
+        cpu: 200m

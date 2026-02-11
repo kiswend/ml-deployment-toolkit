@@ -1,0 +1,128 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: finance-portal
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: finance-portal
+      version: "4.2.x"
+      sourceRef:
+        kind: HelmRepository
+        name: mojaloop-charts
+      interval: 12h
+  releaseName: fin-portal
+  targetNamespace: mojaloop
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    global:
+      adminApiSvc:
+        host: moja-centralledger-service
+        port: 80
+      settlementSvc:
+        host: moja-centralsettlement-service
+        port: 80
+      keto:
+        readURL: "http://keto-read.ory.svc.cluster.local:80"
+        writeURL: "http://keto-write.ory.svc.cluster.local:80"
+      reportingDB:
+        host: "${mysql_central_ledger_host}"
+        port: 3306
+        user: central_ledger
+        database: central_ledger
+        secret:
+          name: mysqldb
+          key: mysql-password
+      reportingEventsDB:
+        host: "${mongodb_host}"
+        port: ${mongodb_port}
+        user: reporting
+        database: reporting_events
+        secret:
+          name: reporting-events-db-secret
+          key: mongodb-password
+      keycloak:
+        url: "https://keycloak.${domain}"
+        user: "role-assign-svc"
+        secret:
+          name: role-assign-svc-secret
+          key: secret
+        realm: "hub-operators"
+      rolePermOperator:
+        apiSvc:
+          host: ory-bof-security-role-perm-operator-svc.ory.svc.cluster.local
+          port: 80
+
+    reporting-hub-bop-api-svc:
+      enabled: true
+      containerSecurityContext:
+        enabled: false
+
+    reporting-hub-bop-experience-api-svc:
+      enabled: true
+
+    reporting-hub-bop-shell:
+      enabled: true
+      config:
+        env:
+          AUTH_MOCK_API: false
+          LOGIN_URL: "https://auth.${domain}/kratos/self-service/login/browser"
+          LOGOUT_URL: "/kratos/self-service/logout/browser"
+          LOGIN_PROVIDER: keycloak
+          AUTH_TOKEN_URL: "/kratos/sessions/whoami"
+          AUTH_ENABLED: true
+
+    reporting-hub-bop-role-ui:
+      enabled: true
+
+    reporting-hub-bop-positions-ui:
+      enabled: true
+
+    reporting-hub-bop-settlements-ui:
+      enabled: true
+
+    reporting-hub-bop-trx-ui:
+      enabled: true
+
+    reporting-events-processor-svc:
+      enabled: true
+      kafka:
+        host: "${kafka_host}"
+        port: ${kafka_port}
+        topicEvent: topic-event-audit
+        consumerGroup: reporting_events_processor_consumer_group
+        clientId: reporting_events_processor_consumer
+
+    reporting-legacy-api:
+      enabled: true
+      containerSecurityContext:
+        enabled: false
+      install-templates: false
+      auth: true
+
+    role-assignment-service:
+      enabled: true
+      ingress:
+        enabled: false
+      configFiles:
+        default.json: {
+            "ROLES_LIST": [
+              "manager",
+              "operator",
+              "clerk",
+              "financeManager",
+              "dfspReconciliationReports",
+              "audit"
+            ],
+            "AUTO_GRANT_PORTAL_ADMIN_ROLES": [
+              "manager"
+            ]
+          }

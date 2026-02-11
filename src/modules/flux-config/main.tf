@@ -1,6 +1,6 @@
 # Flux Config Module
 # Creates Kubernetes resources for Flux OCI-based GitOps
-# Deploys: 1 OCIRepository + 3-8 Kustomizations (platform → platform-config → [onprem] → role-specific → [env-data] → [env-app] | [cc-config] → [cc-routes])
+# Deploys: 1 OCIRepository + 3-9 Kustomizations (platform → platform-config → [onprem] → role-specific → [env-data] → [env-auth] → [env-app] | [cc-config] → [cc-routes])
 
 locals {
   has_oci_credentials = var.oci_repo_username != "" && var.oci_repo_password != ""
@@ -31,6 +31,7 @@ locals {
   mongodb_port              = local.is_onprem ? "27017" : var.mongodb_port
   redis_host                = local.is_onprem ? "ttk-redis" : var.redis_host
   redis_port                = local.is_onprem ? "6379" : var.redis_port
+  auth_db_host              = local.is_onprem ? "auth-db-haproxy" : var.auth_db_host
 }
 
 # ConfigMap with cluster configuration for postBuild substitution
@@ -61,6 +62,7 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       mongodb_port              = local.mongodb_port
       redis_host                = local.redis_host
       redis_port                = local.redis_port
+      auth_db_host              = local.auth_db_host
     } : {}
   )
 }
@@ -90,6 +92,14 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       mysql_oracle_msisdn_password  = var.mysql_oracle_msisdn_password
       mongodb_root_password         = var.mongodb_root_password
       mongodb_app_password          = var.mongodb_app_password
+      keycloak_db_password          = var.keycloak_db_password
+      kratos_db_password            = var.kratos_db_password
+      keto_db_password              = var.keto_db_password
+      mcm_db_password               = var.mcm_db_password
+      keycloak_admin_password       = var.keycloak_admin_password
+      hubop_oidc_secret             = var.hubop_oidc_secret
+      mcm_oidc_client_secret        = var.mcm_oidc_client_secret
+      role_assign_svc_secret        = var.role_assign_svc_secret
     } : {}
   )
 
@@ -474,7 +484,67 @@ resource "kubectl_manifest" "kustomization_env_data" {
   ]
 }
 
-# Kustomization: env-app (Mojaloop core application — always deployed for env clusters)
+# Kustomization: env-auth (auth layer — Vault, Keycloak, Ory stack, HTTPRoutes)
+resource "kubectl_manifest" "kustomization_env_auth" {
+  count = local.is_env ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "env-auth"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "20m"
+      path     = "./env-auth"
+      prune    = true
+      dependsOn = local.is_onprem ? [
+        { name = "env-data" }
+        ] : [
+        { name = "env" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      healthChecks = [
+        {
+          apiVersion = "vault.banzaicloud.com/v1alpha1"
+          kind       = "Vault"
+          name       = "vault"
+          namespace  = "vault"
+        },
+        {
+          apiVersion = "apps/v1"
+          kind       = "Deployment"
+          name       = "keycloak-operator"
+          namespace  = "keycloak"
+        }
+      ]
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_role,
+    kubectl_manifest.kustomization_env_data
+  ]
+}
+
+# Kustomization: env-app (Mojaloop core + MCM + Finance Portal — always deployed for env clusters)
 resource "kubectl_manifest" "kustomization_env_app" {
   count = local.is_env ? 1 : 0
 
@@ -491,9 +561,9 @@ resource "kubectl_manifest" "kustomization_env_app" {
       path     = "./env-app"
       prune    = true
       dependsOn = local.is_onprem ? [
-        { name = "env-data" }
+        { name = "env-auth" }
         ] : [
-        { name = "env" }
+        { name = "env-auth" }
       ]
       sourceRef = {
         kind = "OCIRepository"
@@ -516,6 +586,7 @@ resource "kubectl_manifest" "kustomization_env_app" {
 
   depends_on = [
     kubectl_manifest.kustomization_role,
-    kubectl_manifest.kustomization_env_data
+    kubectl_manifest.kustomization_env_data,
+    kubectl_manifest.kustomization_env_auth
   ]
 }

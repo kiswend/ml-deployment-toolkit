@@ -6,3 +6,4 @@ resources:
   - percona-xtradb/helmrelease.yaml
   - percona-mongodb/helmrelease.yaml
   - redis-operator/helmrelease.yaml
+  - vault-operator/helmrelease.yaml

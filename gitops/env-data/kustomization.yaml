@@ -4,6 +4,7 @@ resources:
   - mysql/secrets.yaml
   - mysql/central-ledger-db.yaml
   - mysql/account-lookup-db.yaml
+  - mysql/auth-db.yaml
   - mysql/init-jobs.yaml
   - kafka/kafka.yaml
   - mongodb/secrets.yaml

@@ -32,7 +32,15 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_mysql_account_lookup_password=$${MYSQL_ACCOUNT_LOOKUP_PASSWORD:-} \
 	       TF_VAR_mysql_oracle_msisdn_password=$${MYSQL_ORACLE_MSISDN_PASSWORD:-} \
 	       TF_VAR_mongodb_root_password=$${MONGODB_ROOT_PASSWORD:-} \
-	       TF_VAR_mongodb_app_password=$${MONGODB_APP_PASSWORD:-}
+	       TF_VAR_mongodb_app_password=$${MONGODB_APP_PASSWORD:-} \
+	       TF_VAR_keycloak_db_password=$${KEYCLOAK_DB_PASSWORD:-} \
+	       TF_VAR_kratos_db_password=$${KRATOS_DB_PASSWORD:-} \
+	       TF_VAR_keto_db_password=$${KETO_DB_PASSWORD:-} \
+	       TF_VAR_mcm_db_password=$${MCM_DB_PASSWORD:-} \
+	       TF_VAR_keycloak_admin_password=$${KEYCLOAK_ADMIN_PASSWORD:-} \
+	       TF_VAR_hubop_oidc_secret=$${HUBOP_OIDC_SECRET:-} \
+	       TF_VAR_mcm_oidc_client_secret=$${MCM_OIDC_CLIENT_SECRET:-} \
+	       TF_VAR_role_assign_svc_secret=$${ROLE_ASSIGN_SVC_SECRET:-}
 
 # Default target
 .DEFAULT_GOAL := help

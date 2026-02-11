@@ -1,0 +1,232 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: oathkeeper
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: oathkeeper
+      version: "0.39.0"
+      sourceRef:
+        kind: HelmRepository
+        name: ory
+      interval: 12h
+  targetNamespace: ory
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    oathkeeper:
+      config:
+        log:
+          level: info
+          format: json
+        access_rules:
+          matching_strategy: regexp
+
+        authenticators:
+          jwt:
+            enabled: true
+            config:
+              jwks_urls:
+                - "https://keycloak.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+                - "https://keycloak.${domain}/realms/dfsps/protocol/openid-connect/certs"
+              required_scope: []
+          cookie_session:
+            enabled: true
+            config:
+              check_session_url: "http://ory-kratos-public.ory.svc.cluster.local:80/sessions/whoami"
+              preserve_path: true
+              extra_from: "@this"
+              subject_from: "identity.traits.subject"
+              only:
+                - ory_kratos_session
+          anonymous:
+            enabled: true
+            config:
+              subject: guest
+          noop:
+            enabled: true
+
+        authorizers:
+          remote_json:
+            enabled: true
+            config:
+              remote: "http://ory-keto-read.ory.svc.cluster.local:80/relation-tuples/check"
+              payload: |
+                {
+                  "subject": "{{ print .Subject }}",
+                  "resource": "{{ printIndex .MatchContext.RegexpCaptureGroups 0 }}"
+                }
+          allow:
+            enabled: true
+
+        mutators:
+          id_token:
+            enabled: true
+            config:
+              issuer_url: "http://ory-oathkeeper-api.ory.svc.cluster.local:4456/"
+              jwks_url: "file:///etc/secrets/oathkeeper/id_token.jwks.json"
+          header:
+            enabled: true
+            config:
+              headers:
+                X-User: "{{ print .Subject }}"
+                X-Extra: "{{ print .Extra }}"
+                X-Email: "{{ print (((.Extra.identity).traits).email) }}"
+                X-Roles: "{{ toJson (((.Extra.identity).traits).roles) }}"
+          noop:
+            enabled: true
+
+        errors:
+          fallback:
+            - json
+          handlers:
+            json:
+              enabled: true
+              config:
+                verbose: true
+            redirect:
+              enabled: false
+
+      # Inline access rules with upstream URLs (proxy mode)
+      accessRules: |
+        - id: finance-portal-central-admin
+          upstream:
+            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
+          match:
+            url: "<http|https>://finance-portal.${domain}/central-admin/<.*>"
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+          authenticators:
+            - handler: jwt
+            - handler: cookie_session
+          authorizer:
+            handler: remote_json
+            config:
+              remote: "http://ory-keto-read.ory.svc.cluster.local:80/relation-tuples/check"
+              payload: |
+                {
+                  "namespace": "permission",
+                  "object": "participantView",
+                  "relation": "granted",
+                  "subject_id": "{{ print .Subject }}"
+                }
+          mutators:
+            - handler: header
+
+        - id: finance-portal-settlements
+          upstream:
+            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
+          match:
+            url: "<http|https>://finance-portal.${domain}/settlement<.*>"
+            methods: ["GET", "POST", "PUT", "DELETE"]
+          authenticators:
+            - handler: jwt
+            - handler: cookie_session
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: header
+
+        - id: finance-portal-api
+          upstream:
+            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
+          match:
+            url: "<http|https>://finance-portal.${domain}/api/<.*>"
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+          authenticators:
+            - handler: jwt
+            - handler: cookie_session
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: header
+
+        - id: finance-portal-iam
+          upstream:
+            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
+          match:
+            url: "<http|https>://finance-portal.${domain}/<(users|participants|roles)(/.*)?>"
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+          authenticators:
+            - handler: jwt
+            - handler: cookie_session
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: header
+
+        - id: finance-portal-ui
+          upstream:
+            url: "http://fin-portal-reporting-hub-bop-shell.mojaloop.svc.cluster.local:80"
+          match:
+            url: "<http|https>://finance-portal.${domain}/<.*>"
+            methods: ["GET"]
+          authenticators:
+            - handler: anonymous
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: noop
+
+        - id: mcm-api
+          upstream:
+            url: "http://mcm-connection-manager-api.mcm.svc.cluster.local:3001"
+          match:
+            url: "<http|https>://mcm.${domain}/api/<.*>"
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+          authenticators:
+            - handler: jwt
+            - handler: cookie_session
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: header
+
+        - id: mcm-ui
+          upstream:
+            url: "http://mcm-connection-manager-ui.mcm.svc.cluster.local:8080"
+          match:
+            url: "<http|https>://mcm.${domain}/<.*>"
+            methods: ["GET"]
+          authenticators:
+            - handler: anonymous
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: noop
+
+    secret:
+      enabled: true
+      filename: id_token.jwks.json
+
+    maester:
+      enabled: true
+
+    oathkeeper-maester:
+      deployment:
+        envs:
+          - name: authorizersAvailable
+            value: allow,deny,noop,remote_json,keto_engine_acp_ory
+
+    service:
+      proxy:
+        enabled: true
+        port: 4455
+      api:
+        enabled: true
+        port: 4456
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
