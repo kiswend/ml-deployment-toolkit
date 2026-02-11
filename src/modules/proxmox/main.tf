@@ -106,6 +106,20 @@ module "infrastructure" {
   depends_on = [module.talos_config]
 }
 
+# Apply Talos configuration to running nodes via Talos API
+# First apply: no-op (config already delivered via cloud-init)
+# Subsequent applies: pushes config changes without VM rebuild
+resource "talos_machine_configuration_apply" "instance" {
+  for_each = module.talos_config.instance_config_paths
+
+  client_configuration        = module.talos_config.client_configuration
+  machine_configuration_input = module.talos_config.instance_configs[each.key]
+  node                        = module.infrastructure.instance_ips[each.key]
+  endpoint                    = module.infrastructure.instance_ips[each.key]
+
+  depends_on = [module.infrastructure]
+}
+
 # Bootstrap Talos Kubernetes cluster
 module "bootstrap" {
   source = "../talos-bootstrap"
@@ -117,5 +131,5 @@ module "bootstrap" {
   cluster_name     = var.cluster.name
   artifacts_folder = var.artifacts_path
 
-  depends_on = [module.infrastructure]
+  depends_on = [talos_machine_configuration_apply.instance]
 }
