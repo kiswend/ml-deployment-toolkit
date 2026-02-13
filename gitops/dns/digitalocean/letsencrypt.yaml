@@ -12,7 +12,7 @@ spec:
       - dns01:
           digitalocean:
             tokenSecretRef:
-              name: digitalocean-dns
+              name: dns-provider-credentials
               key: access-token
 ---
 apiVersion: cert-manager.io/v1
@@ -29,5 +29,5 @@ spec:
       - dns01:
           digitalocean:
             tokenSecretRef:
-              name: digitalocean-dns
+              name: dns-provider-credentials
               key: access-token

@@ -1,10 +1,15 @@
 # Flux Config Module
 # Creates Kubernetes resources for Flux OCI-based GitOps
-# Deploys: 1 OCIRepository + 3-9 Kustomizations (platform → platform-config → [onprem] → role-specific → [env-data] → [env-auth] → [env-app] | [cc-config] → [cc-routes])
+# Deploys: 1 OCIRepository + Kustomizations (platform → dns/{provider} → platform-config → [vendor] → role-specific → ...)
+#
+# Two independent provider dimensions:
+#   - infra_provider (proxmox, aws, gcp, openstack, digitalocean) → selects vendor kustomization
+#   - dns_provider (digitalocean, cloudflare, route53, clouddns, rfc2136, designate) → selects dns kustomization
 
 locals {
   has_oci_credentials = var.oci_repo_username != "" && var.oci_repo_password != ""
-  is_onprem           = var.infra_provider == "proxmox"
+  is_selfhosted       = contains(["proxmox", "openstack"], var.infra_provider)
+  has_vendor          = contains(["proxmox", "openstack", "aws", "gcp"], var.infra_provider)
   is_env              = var.cluster_role == "env"
 
   # Extract registry host from artifact URL (e.g. "oci://ghcr.io/kiswend/ml-iac3" → "ghcr.io")
@@ -21,17 +26,17 @@ locals {
     }
   }) : ""
 
-  # Data layer endpoints — on-prem uses in-cluster service names, cloud uses managed service endpoints
-  mysql_central_ledger_host = local.is_onprem ? "central-ledger-db-haproxy" : var.mysql_central_ledger_host
-  mysql_account_lookup_host = local.is_onprem ? "account-lookup-db-haproxy" : var.mysql_account_lookup_host
-  mysql_port                = local.is_onprem ? "3306" : var.mysql_port
-  kafka_host                = local.is_onprem ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
-  kafka_port                = local.is_onprem ? "9092" : var.kafka_port
-  mongodb_host              = local.is_onprem ? "bulk-mongodb-rs0" : var.mongodb_host
-  mongodb_port              = local.is_onprem ? "27017" : var.mongodb_port
-  redis_host                = local.is_onprem ? "ttk-redis" : var.redis_host
-  redis_port                = local.is_onprem ? "6379" : var.redis_port
-  auth_db_host              = local.is_onprem ? "auth-db-haproxy" : var.auth_db_host
+  # Data layer endpoints — self-hosted uses in-cluster service names, managed uses cloud service endpoints
+  mysql_central_ledger_host = local.is_selfhosted ? "central-ledger-db-haproxy" : var.mysql_central_ledger_host
+  mysql_account_lookup_host = local.is_selfhosted ? "account-lookup-db-haproxy" : var.mysql_account_lookup_host
+  mysql_port                = local.is_selfhosted ? "3306" : var.mysql_port
+  kafka_host                = local.is_selfhosted ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
+  kafka_port                = local.is_selfhosted ? "9092" : var.kafka_port
+  mongodb_host              = local.is_selfhosted ? "bulk-mongodb-rs0" : var.mongodb_host
+  mongodb_port              = local.is_selfhosted ? "27017" : var.mongodb_port
+  redis_host                = local.is_selfhosted ? "ttk-redis" : var.redis_host
+  redis_port                = local.is_selfhosted ? "6379" : var.redis_port
+  auth_db_host              = local.is_selfhosted ? "auth-db-haproxy" : var.auth_db_host
 }
 
 # ConfigMap with cluster configuration for postBuild substitution
@@ -43,14 +48,15 @@ resource "kubernetes_config_map_v1" "cluster_config" {
 
   data = merge(
     {
-      cluster_name  = var.cluster_name
-      cluster_vip   = var.cluster_vip
-      domain        = var.domain
-      dns_provider  = var.dns_provider
-      alert_email   = var.alert_email
-      lb_ipam_range = var.lb_ipam_range
-      lb_ipam_start = split("-", var.lb_ipam_range)[0]
-      lb_ipam_stop  = split("-", var.lb_ipam_range)[1]
+      cluster_name       = var.cluster_name
+      cluster_vip        = var.cluster_vip
+      domain             = var.domain
+      dns_provider       = var.dns_provider
+      gateway_class_name = var.gateway_class_name
+      alert_email        = var.alert_email
+      lb_ipam_range      = var.lb_ipam_range
+      lb_ipam_start      = split("-", var.lb_ipam_range)[0]
+      lb_ipam_stop       = split("-", var.lb_ipam_range)[1]
     },
     local.is_env ? {
       mysql_central_ledger_host = local.mysql_central_ledger_host
@@ -75,8 +81,8 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
   }
 
   data = merge(
+    var.dns_credentials,
     {
-      digitalocean_token    = var.digitalocean_token
       oci_repo_username     = var.oci_repo_username
       oci_repo_password     = var.oci_repo_password
       oci_proxy_username    = var.oci_proxy_username
@@ -203,18 +209,18 @@ resource "kubectl_manifest" "kustomization_platform" {
   ]
 }
 
-# Kustomization: platform-config (CRD instances that depend on platform HelmReleases — e.g. ClusterIssuers)
-resource "kubectl_manifest" "kustomization_platform_config" {
+# Kustomization: dns/{provider} (DNS-provider-specific: ClusterIssuers, DNS Secret, external-dns values patch)
+resource "kubectl_manifest" "kustomization_dns" {
   yaml_body = yamlencode({
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
     kind       = "Kustomization"
     metadata = {
-      name      = "platform-config"
+      name      = "dns"
       namespace = var.flux_namespace
     }
     spec = {
       interval = "10m"
-      path     = "./platform-config"
+      path     = "./dns/${var.dns_provider}"
       prune    = true
       dependsOn = [
         { name = "platform" }
@@ -243,20 +249,60 @@ resource "kubectl_manifest" "kustomization_platform_config" {
   ]
 }
 
-# Kustomization: onprem (on-prem gap fillers — only when provider is proxmox)
-resource "kubectl_manifest" "kustomization_onprem" {
-  count = local.is_onprem ? 1 : 0
+# Kustomization: platform-config (Gateway, wildcard TLS — depends on dns for ClusterIssuers)
+resource "kubectl_manifest" "kustomization_platform_config" {
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "platform-config"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      path     = "./platform-config"
+      prune    = true
+      dependsOn = [
+        { name = "dns" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_dns
+  ]
+}
+
+# Kustomization: vendor (infra-provider-specific gap fillers — Cilium, LB, storage, registry)
+resource "kubectl_manifest" "kustomization_vendor" {
+  count = local.has_vendor ? 1 : 0
 
   yaml_body = yamlencode({
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
     kind       = "Kustomization"
     metadata = {
-      name      = "onprem"
+      name      = var.infra_provider == "proxmox" ? "onprem" : var.infra_provider
       namespace = var.flux_namespace
     }
     spec = {
       interval = "10m"
-      path     = "./onprem"
+      path     = "./${var.infra_provider == "proxmox" ? "onprem" : var.infra_provider}"
       prune    = true
       dependsOn = [
         { name = "platform-config" }
@@ -285,8 +331,8 @@ resource "kubectl_manifest" "kustomization_onprem" {
   ]
 }
 
-# Kustomization: role-specific (cc or env — deployed after onprem if on-prem, otherwise after platform)
-# Skipped for "base" role which only needs platform + platform-config + onprem
+# Kustomization: role-specific (cc or env — deployed after vendor kustomization)
+# Skipped for "base" role which only needs platform + dns + platform-config + vendor
 resource "kubectl_manifest" "kustomization_role" {
   count = var.cluster_role != "base" ? 1 : 0
 
@@ -301,8 +347,8 @@ resource "kubectl_manifest" "kustomization_role" {
       interval = "10m"
       path     = "./${var.cluster_role}"
       prune    = true
-      dependsOn = local.is_onprem ? [
-        { name = "onprem" }
+      dependsOn = local.has_vendor ? [
+        { name = var.infra_provider == "proxmox" ? "onprem" : var.infra_provider }
         ] : [
         { name = "platform-config" }
       ]
@@ -327,7 +373,7 @@ resource "kubectl_manifest" "kustomization_role" {
 
   depends_on = [
     kubectl_manifest.kustomization_platform_config,
-    kubectl_manifest.kustomization_onprem
+    kubectl_manifest.kustomization_vendor
   ]
 }
 
@@ -430,9 +476,9 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
   ]
 }
 
-# Kustomization: env-data (on-prem data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
+# Kustomization: env-data (self-hosted data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
 resource "kubectl_manifest" "kustomization_env_data" {
-  count = local.is_onprem && local.is_env ? 1 : 0
+  count = local.is_selfhosted && local.is_env ? 1 : 0
 
   yaml_body = yamlencode({
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
@@ -503,7 +549,7 @@ resource "kubectl_manifest" "kustomization_env_auth" {
       timeout  = "20m"
       path     = "./env-auth"
       prune    = true
-      dependsOn = local.is_onprem ? [
+      dependsOn = local.is_selfhosted ? [
         { name = "env-data" }
         ] : [
         { name = "env" }
@@ -543,7 +589,8 @@ resource "kubectl_manifest" "kustomization_env_auth" {
 
   depends_on = [
     kubectl_manifest.kustomization_role,
-    kubectl_manifest.kustomization_env_data
+    kubectl_manifest.kustomization_env_data,
+    kubectl_manifest.kustomization_vendor
   ]
 }
 
@@ -563,9 +610,7 @@ resource "kubectl_manifest" "kustomization_env_app" {
       timeout  = "30m"
       path     = "./env-app"
       prune    = true
-      dependsOn = local.is_onprem ? [
-        { name = "env-auth" }
-        ] : [
+      dependsOn = [
         { name = "env-auth" }
       ]
       sourceRef = {
@@ -590,6 +635,7 @@ resource "kubectl_manifest" "kustomization_env_app" {
   depends_on = [
     kubectl_manifest.kustomization_role,
     kubectl_manifest.kustomization_env_data,
-    kubectl_manifest.kustomization_env_auth
+    kubectl_manifest.kustomization_env_auth,
+    kubectl_manifest.kustomization_vendor
   ]
 }

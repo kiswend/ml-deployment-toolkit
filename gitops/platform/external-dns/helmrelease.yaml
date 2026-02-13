@@ -42,4 +42,10 @@ spec:
     policy: sync
     env:
       - name: DO_TOKEN
-        value: ${digitalocean_token}
+        value: "${digitalocean_token}"
+      - name: CF_API_TOKEN
+        value: "${cloudflare_api_token}"
+      - name: EXTERNAL_DNS_PDNS_SERVER
+        value: "${powerdns_api_url}"
+      - name: EXTERNAL_DNS_PDNS_API_KEY
+        value: "${powerdns_api_key}"

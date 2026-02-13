@@ -35,8 +35,3 @@ variable "region" {
   type        = string
 }
 
-variable "digitalocean_token" {
-  description = "DigitalOcean API token"
-  type        = string
-  sensitive   = true
-}

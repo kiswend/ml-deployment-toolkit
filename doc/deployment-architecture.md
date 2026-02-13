@@ -49,8 +49,8 @@ Each provider gets a vendor kustomization that fills the gaps between what the p
 | Storage provisioner | YES — OpenEBS hostpath | NO — EBS CSI is EKS add-on | NO — PD CSI auto-installed | NO — Cinder CSI pre-installed |
 | Object storage (MinIO) | YES — standalone MinIO | NO — uses S3 bucket from IaC | NO — uses GCS bucket from IaC | DEPENDS — Swift available? If yes, skip. If no, deploy MinIO |
 | OCI registry (Harbor) | YES — Harbor + proxy cache | NO — uses ECR from IaC | NO — uses Artifact Registry from IaC | YES — Harbor (no managed alternative) |
-| ClusterIssuers (DNS-01) | YES — provider-specific solver | YES — Route53 solver | YES — Cloud DNS solver | YES — Designate or RFC-2136 solver |
-| DNS credential Secret | YES — provider-specific | YES — provider-specific | YES — provider-specific | YES — provider-specific |
+
+DNS configuration (ClusterIssuers, DNS credential Secrets, external-dns provider config) is an **independent dimension** from infrastructure provider — a Proxmox cluster may use Cloudflare, Route53, or any other DNS provider. DNS resources are therefore placed in separate `dns/{dns_provider}` kustomizations, not in the vendor kustomizations above. See DNS Configuration Strategy below.
 
 Two provider profiles emerge from this mapping:
 
@@ -98,11 +98,78 @@ In-tree DNS-01 solvers supported by cert-manager:
 
 Out-of-tree providers (deployed as webhook): OpenStack Designate, OVH, Hetzner, Infoblox, NS1, and many more via the `dns01.webhook` extension point.
 
-#### IaC/GitOps separation
+#### DNS kustomization paths (`dns/{provider}`)
 
-1. **Configuration source:** DNS provider and credentials defined in `config/environments/<env>/config.yaml` and `.env`
-2. **IaC responsibility:** Terraform injects provider name, credentials, and extra args into a Kubernetes ConfigMap/Secret via the `flux-config` module
-3. **GitOps consumption:** The vendor kustomization (`onprem/`, `aws/`, etc.) contains the ClusterIssuer with the correct `dns01` solver block. The `platform/` HelmRelease for external-dns uses `postBuild.substituteFrom` for provider selection and credentials
+DNS resources are structurally different per provider (not just different values), so each DNS provider gets its own kustomization path in the OCI artifact:
+
+```
+gitops/
+  dns/
+    digitalocean/           # ClusterIssuers (digitalocean solver), DNS Secret (DO token), external-dns values patch
+    cloudflare/             # ClusterIssuers (cloudflare solver), DNS Secret (CF token), external-dns values patch
+    route53/                # ClusterIssuers (route53 solver), DNS Secret (AWS keys or IRSA), external-dns values patch
+    clouddns/               # ClusterIssuers (cloudDNS solver), DNS Secret (GCP SA or WI), external-dns values patch
+    rfc2136/                # ClusterIssuers (rfc2136 solver), DNS Secret (TSIG key), external-dns values patch
+    designate/              # ClusterIssuers (webhook solver), DNS Secret (OS_* vars), external-dns values patch
+```
+
+Each path contains 3-4 files:
+1. **`letsencrypt.yaml`** — ClusterIssuers (prod + staging) with the provider-specific `dns01` solver block
+2. **`dns-secret.yaml`** — K8s Secret with DNS credentials, using `${substitution}` variables from `cluster-secrets`
+3. **`external-dns-values.yaml`** — HelmRelease values patch that adds the provider-specific env vars to external-dns
+4. **`kustomization.yaml`** — references the above resources
+
+The Flux `kustomization_dns` resource (created by the `flux-config` Terraform module) points to `./dns/${dns_provider}` based on the environment's `config.yaml`. This is independent of the infrastructure provider — any combination of infra and DNS providers works.
+
+#### Credential flow
+
+DNS providers have different credential shapes (single token, key pair, IAM role, service account JSON). Credentials are stored as flat key-value pairs in `.env` using provider-specific variable names:
+
+```bash
+# DigitalOcean DNS: 1 token
+DIGITALOCEAN_TOKEN=dop_v1_xxx
+
+# Cloudflare DNS: 1 token
+CLOUDFLARE_API_TOKEN=xxx
+
+# Route53 DNS: key pair (or IRSA — no credentials needed)
+AWS_DNS_ACCESS_KEY_ID=xxx
+AWS_DNS_SECRET_ACCESS_KEY=xxx
+
+# PowerDNS (rfc2136): URL + key
+POWERDNS_API_URL=https://pdns.example.com/api/v1
+POWERDNS_API_KEY=xxx
+
+# OpenStack Designate: OpenRC-style vars
+OS_AUTH_URL=https://identity.cloud.example.com/v3
+OS_USERNAME=dns-admin
+OS_PASSWORD=xxx
+OS_PROJECT_NAME=mojaloop
+OS_REGION_NAME=RegionOne
+```
+
+The Makefile maps all DNS-related `.env` variables into a single Terraform map variable (`dns_credentials`). Terraform injects every key into the `cluster-secrets` K8s Secret. Each `dns/{provider}/` kustomization references only the keys it needs via `${substitution}` — empty values for unused providers are harmless.
+
+```
+.env (flat k/v)  →  Makefile (TF_VAR_dns_credentials map)  →  flux-config module
+                                                                      │
+                                                    ┌─────────────────┴─────────────────┐
+                                                    ▼                                   ▼
+                                            cluster-secrets (K8s Secret)      kustomization_dns
+                                            all DNS vars as keys              path: ./dns/${dns_provider}
+                                                    │                                   │
+                                                    └──────────── postBuild ────────────┘
+                                                                     │
+                                                    ┌────────────────┼────────────────┐
+                                                    ▼                ▼                ▼
+                                            dns-secret.yaml   letsencrypt.yaml   external-dns-values.yaml
+                                            ${do_token}        ${do_token}        ${do_token}
+```
+
+This design means adding a new DNS provider requires:
+1. Create `gitops/dns/{new_provider}/` with 3-4 files — **zero Terraform changes**
+2. Add the new credential variable names to the Makefile's `dns_credentials` map — **one line**
+3. Set `dns.provider: new_provider` in the environment's `config.yaml`
 
 **Distribution:** Publish validated OCI artifact to registry (GHCR, Harbor, ECR)
 
@@ -115,53 +182,66 @@ gitops/
   platform/           # Always — shared services (metrics-server, external-dns, cert-manager, ESO)
   platform-config/    # Always — shared config (Gateway with ${gateway_class_name}, wildcard TLS)
 
-  # Vendor-specific kustomizations — exactly one deployed per cluster
-  onprem/             # Proxmox: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers, DNS secret
-  openstack/          # OpenStack: Cilium, LB-IPAM or Octavia config, Harbor, ClusterIssuers, DNS secret
-  aws/                # AWS: Cilium (BYOCNI), ClusterIssuers (Route53), DNS secret
-  gcp/                # GCP: ClusterIssuers (Cloud DNS), DNS secret (no Cilium — managed by GKE)
+  # DNS-provider kustomizations — exactly one deployed per cluster (independent of infra provider)
+  dns/
+    digitalocean/     # ClusterIssuers (DO solver), DNS Secret, external-dns values patch
+    cloudflare/       # ClusterIssuers (CF solver), DNS Secret, external-dns values patch
+    route53/          # ClusterIssuers (Route53 solver), DNS Secret, external-dns values patch
+    clouddns/         # ClusterIssuers (Cloud DNS solver), DNS Secret, external-dns values patch
+    rfc2136/          # ClusterIssuers (rfc2136 solver), DNS Secret, external-dns values patch
+    designate/        # ClusterIssuers (Designate webhook solver), DNS Secret, external-dns values patch
+
+  # Vendor-specific kustomizations — exactly one deployed per cluster (infra gap-fillers)
+  onprem/             # Proxmox: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor
+  openstack/          # OpenStack: Cilium, LB-IPAM or Octavia config, Harbor
+  aws/                # AWS: Cilium (BYOCNI)
+  gcp/                # GCP: (minimal — GKE manages Cilium, storage, LB)
 
   # Role-specific (unchanged)
   cc/                 # CC operators (vault-operator) + namespace definitions
   cc-config/          # CC services (Vault CR, SecretStore) — provider-agnostic only
   cc-routes/          # CC HTTPRoutes (vault, and conditionally harbor, minio)
   env/                # Env operators (Strimzi, Percona, Redis, Vault)
-  env-data/           # On-prem/OpenStack env only: data layer CRs (MySQL, Kafka, MongoDB, Redis)
+  env-data/           # Self-hosted env only: data layer CRs (MySQL, Kafka, MongoDB, Redis)
   env-auth/           # Auth layer (Keycloak, Ory stack)
   env-app/            # Mojaloop core app (MCM, Finance Portal)
 ```
 
-The vendor kustomization is no longer "on-prem only" — every provider gets one. It holds: (1) Cilium if self-managed, (2) ClusterIssuers + DNS secret (always provider-specific), (3) storage/registry gap-fillers if self-hosted, (4) LB config (LB-IPAM pools or cloud LB annotations). This normalizes provider differences so everything above it (cc, env, app) remains truly generic.
+Two independent provider dimensions determine which kustomizations are deployed:
+- **Infrastructure provider** (`infra.provider`) selects the vendor kustomization — holds Cilium (if self-managed), LB config, storage/registry gap-fillers
+- **DNS provider** (`dns.provider`) selects the DNS kustomization — holds ClusterIssuers, DNS credential Secret, external-dns values patch
+
+This separation means any combination works (e.g. Proxmox + Cloudflare, AWS + DigitalOcean DNS). Adding a new DNS provider requires only a new `dns/{provider}/` directory — zero Terraform changes. Adding a new infra provider requires a new vendor kustomization + Terraform module.
 
 GatewayClass is not in the artifact. It is auto-created by Cilium — either by the self-managed HelmRelease (`gatewayAPI.enabled: true`) or by the cloud-managed Cilium installation. On GCP, GKE provides its own GatewayClasses backed by Google Cloud Load Balancers.
 
 **Deployment matrix:**
 
-| Cluster | Provider | Kustomizations | Notes |
-|---------|----------|---------------|-------|
-| CC | Proxmox | platform → platform-config → onprem → cc → cc-config → cc-routes | onprem deploys Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers |
-| CC | OpenStack | platform → platform-config → openstack → cc → cc-config → cc-routes | openstack deploys Cilium, Harbor, ClusterIssuers; uses Cinder + Swift |
-| CC | AWS | platform → platform-config → aws → cc → cc-config → cc-routes | aws deploys Cilium (BYOCNI), ClusterIssuers; uses EBS + S3 + ECR |
-| CC | GCP | platform → platform-config → gcp → cc → cc-config → cc-routes | gcp deploys ClusterIssuers only; GKE manages Cilium + storage |
-| Env | Proxmox | platform → platform-config → onprem → env → env-data → env-auth → env-app | env-data deploys in-cluster MySQL, Kafka, MongoDB, Redis |
-| Env | OpenStack | platform → platform-config → openstack → env → env-data → env-auth → env-app | env-data deploys in-cluster data layer (same as Proxmox) |
-| Env | AWS | platform → platform-config → aws → env → env-auth → env-app | No env-data — uses RDS, MSK, DocumentDB, ElastiCache |
-| Env | GCP | platform → platform-config → gcp → env → env-auth → env-app | No env-data — uses Cloud SQL, Managed Kafka, Memorystore |
+| Cluster | Infra | DNS | Kustomizations | Notes |
+|---------|-------|-----|---------------|-------|
+| CC | Proxmox | digitalocean | platform → dns/digitalocean → platform-config → onprem → cc → cc-config → cc-routes | onprem: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor |
+| CC | Proxmox | cloudflare | platform → dns/cloudflare → platform-config → onprem → cc → cc-config → cc-routes | Same infra, different DNS — works seamlessly |
+| CC | AWS | route53 | platform → dns/route53 → platform-config → aws → cc → cc-config → cc-routes | aws: Cilium (BYOCNI); uses EBS + S3 + ECR |
+| CC | GCP | clouddns | platform → dns/clouddns → platform-config → gcp → cc → cc-config → cc-routes | gcp: minimal; GKE manages Cilium + storage |
+| Env | Proxmox | digitalocean | platform → dns/digitalocean → platform-config → onprem → env → env-data → env-auth → env-app | env-data: in-cluster MySQL, Kafka, MongoDB, Redis |
+| Env | AWS | route53 | platform → dns/route53 → platform-config → aws → env → env-auth → env-app | No env-data — uses RDS, MSK, DocumentDB, ElastiCache |
 
 **Dependency chain:**
 
 ```
-platform → platform-config → vendor (onprem|aws|gcp|openstack)
-                                ↓
-                    ┌───────────┴───────────┐
-                    cc                      env
-                    ↓                       ↓
-                cc-config              env-data (self-hosted profile only)
-                    ↓                       ↓
-                cc-routes              env-auth
-                                            ↓
-                                        env-app
+platform → dns/{dns_provider} → platform-config → vendor (onprem|aws|gcp|openstack)
+                                                       ↓
+                                           ┌───────────┴───────────┐
+                                           cc                      env
+                                           ↓                       ↓
+                                       cc-config              env-data (self-hosted only)
+                                           ↓                       ↓
+                                       cc-routes              env-auth
+                                                                   ↓
+                                                               env-app
 ```
+
+The `dns/{provider}` kustomization depends on `platform` (needs cert-manager + external-dns operators to be installed). `platform-config` depends on `dns/{provider}` (the Gateway needs ClusterIssuers to exist for cert annotation).
 
 Version coherence is guaranteed — all directories ship in one artifact. A single OCI tag (e.g. `v1.0.0` or `latest`) covers the entire stack.
 
@@ -236,7 +316,7 @@ CC services are exposed via a shared Gateway in `platform-system` namespace with
 
 HTTPRoutes reference the Gateway cross-namespace via `parentRefs.namespace: platform-system`. Backend services are in the same namespace as the HTTPRoute — no ReferenceGrant needed.
 
-A single wildcard TLS certificate (`*.${domain}`) is auto-provisioned by cert-manager using DNS-01 challenges. DNS-01 is always used (all providers) because on-prem LB IPs are private and unreachable by Let's Encrypt for HTTP-01. The ClusterIssuer's DNS-01 solver block is provider-specific and lives in the vendor kustomization (see DNS Configuration Strategy). external-dns watches `gateway-httproute` sources and creates DNS A records pointing each hostname to the Gateway's LB IP.
+A single wildcard TLS certificate (`*.${domain}`) is auto-provisioned by cert-manager using DNS-01 challenges. DNS-01 is always used (all providers) because on-prem LB IPs are private and unreachable by Let's Encrypt for HTTP-01. The ClusterIssuer's DNS-01 solver block is provider-specific and lives in the `dns/{dns_provider}` kustomization (see DNS Configuration Strategy). external-dns watches `gateway-httproute` sources and creates DNS A records pointing each hostname to the Gateway's LB IP.
 
 **Namespace isolation (self-hosted CC):** On self-hosted providers, Vault, Harbor, and MinIO each run in their own namespace (`vault`, `harbor`, `minio`) for least-privilege security. The vault-operator remains in `cc-system`. This prevents a compromised Harbor pod from accessing Vault's ServiceAccount tokens and Secrets. On managed providers, only the `vault` namespace is created — Harbor and MinIO are not deployed.
 
@@ -317,8 +397,8 @@ Each provider gets exactly one vendor kustomization deployed. It normalizes prov
 | **Storage provisioner** | OpenEBS hostpath HelmRelease | Not deployed — EBS CSI is EKS add-on (IaC) | Not deployed — PD CSI auto-installed by GKE | Not deployed — Cinder CSI pre-installed |
 | **MinIO** | Standalone MinIO HelmRelease | Not deployed — S3 bucket created by IaC | Not deployed — GCS bucket created by IaC | MinIO if no Swift; skip if Swift available |
 | **Harbor** | Harbor HelmRelease + proxy cache setup Job | Not deployed — ECR created by IaC | Not deployed — Artifact Registry created by IaC | Harbor HelmRelease (no managed alternative) |
-| **ClusterIssuers** | DNS-01 solver (DigitalOcean, Cloudflare, or RFC-2136) | DNS-01 solver (Route53: `route53` with IRSA or static keys) | DNS-01 solver (Cloud DNS: `cloudDNS` with Workload Identity) | DNS-01 solver (Designate webhook or RFC-2136) |
-| **DNS credential Secret** | API token Secret (e.g. DigitalOcean, Cloudflare) | Route53 credentials Secret (or IRSA — no secret needed) | Cloud DNS credentials (Workload Identity — no secret needed) | Designate credentials Secret (OpenStack `openrc` vars) |
+| **ClusterIssuers** | `dns/{provider}` kustomization (independent of infra) | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization |
+| **DNS credential Secret** | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization |
 
 ### GitOps Layer — Generic (All Providers)
 
@@ -326,7 +406,8 @@ These kustomizations are provider-agnostic and consume substitution variables fr
 
 | Kustomization | Contents | Parameterization |
 |--------------|----------|------------------|
-| `platform/` | metrics-server, external-dns, cert-manager, ESO | `${dns_provider}`, DNS credential env vars via substitution |
+| `platform/` | metrics-server, external-dns (base, no provider config), cert-manager, ESO | `${dns_provider}` (provider name only) |
+| `dns/{provider}` | ClusterIssuers (prod + staging), DNS credential Secret, external-dns values patch | DNS credentials from `cluster-secrets` (provider-specific keys) |
 | `platform-config/` | Gateway with wildcard TLS | `${gateway_class_name}`, `${domain}` |
 | `cc/` | vault-operator, namespace definitions | None |
 | `cc-config/` | Vault CR, ESO SecretStore | `${domain}` |
