@@ -10,12 +10,12 @@ variable "cluster_name" {
 }
 
 variable "cluster_role" {
-  description = "Cluster role — determines which gitops path is deployed (cc or env)"
+  description = "Cluster role — determines which gitops paths are deployed (base, cc, or env)"
   type        = string
 
   validation {
-    condition     = contains(["cc", "env"], var.cluster_role)
-    error_message = "cluster_role must be 'cc' or 'env'."
+    condition     = contains(["base", "cc", "env"], var.cluster_role)
+    error_message = "cluster_role must be 'base', 'cc', or 'env'."
   }
 }
 

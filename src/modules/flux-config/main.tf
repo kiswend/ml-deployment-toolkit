@@ -286,7 +286,10 @@ resource "kubectl_manifest" "kustomization_onprem" {
 }
 
 # Kustomization: role-specific (cc or env — deployed after onprem if on-prem, otherwise after platform)
+# Skipped for "base" role which only needs platform + platform-config + onprem
 resource "kubectl_manifest" "kustomization_role" {
+  count = var.cluster_role != "base" ? 1 : 0
+
   yaml_body = yamlencode({
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
     kind       = "Kustomization"

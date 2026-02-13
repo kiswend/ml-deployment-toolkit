@@ -96,7 +96,22 @@ spec:
               enabled: false
 
       # Inline access rules with upstream URLs (proxy mode)
+      # Rules are evaluated in order; more specific rules must come first.
       accessRules: |
+        - id: finance-portal-kratos
+          upstream:
+            url: "http://ory-kratos-public.ory.svc.cluster.local:80"
+            strip_path: "/kratos"
+          match:
+            url: "<http|https>://finance-portal.${domain}/kratos/<.*>"
+            methods: ["GET", "POST", "PUT", "DELETE"]
+          authenticators:
+            - handler: noop
+          authorizer:
+            handler: allow
+          mutators:
+            - handler: noop
+
         - id: finance-portal-central-admin
           upstream:
             url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
@@ -166,7 +181,7 @@ spec:
           upstream:
             url: "http://fin-portal-reporting-hub-bop-shell.mojaloop.svc.cluster.local:80"
           match:
-            url: "<http|https>://finance-portal.${domain}/<.*>"
+            url: "<http|https>://finance-portal.${domain}/<(?!kratos/|central-admin/|settlement|api/|users/|participants/|roles/).*>"
             methods: ["GET"]
           authenticators:
             - handler: anonymous
@@ -193,7 +208,7 @@ spec:
           upstream:
             url: "http://mcm-connection-manager-ui.mcm.svc.cluster.local:8080"
           match:
-            url: "<http|https>://mcm.${domain}/<.*>"
+            url: "<http|https>://mcm.${domain}/<(?!api/).*>"
             methods: ["GET"]
           authenticators:
             - handler: anonymous
