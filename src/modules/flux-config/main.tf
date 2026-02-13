@@ -8,7 +8,7 @@
 
 locals {
   has_oci_credentials = var.oci_repo_username != "" && var.oci_repo_password != ""
-  is_selfhosted       = contains(["proxmox", "openstack"], var.infra_provider)
+  is_talos            = contains(["proxmox", "openstack"], var.infra_provider)
   has_vendor          = contains(["proxmox", "openstack", "aws", "gcp"], var.infra_provider)
   is_env              = var.cluster_role == "env"
 
@@ -27,16 +27,16 @@ locals {
   }) : ""
 
   # Data layer endpoints — self-hosted uses in-cluster service names, managed uses cloud service endpoints
-  mysql_central_ledger_host = local.is_selfhosted ? "central-ledger-db-haproxy" : var.mysql_central_ledger_host
-  mysql_account_lookup_host = local.is_selfhosted ? "account-lookup-db-haproxy" : var.mysql_account_lookup_host
-  mysql_port                = local.is_selfhosted ? "3306" : var.mysql_port
-  kafka_host                = local.is_selfhosted ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
-  kafka_port                = local.is_selfhosted ? "9092" : var.kafka_port
-  mongodb_host              = local.is_selfhosted ? "bulk-mongodb-rs0" : var.mongodb_host
-  mongodb_port              = local.is_selfhosted ? "27017" : var.mongodb_port
-  redis_host                = local.is_selfhosted ? "ttk-redis" : var.redis_host
-  redis_port                = local.is_selfhosted ? "6379" : var.redis_port
-  auth_db_host              = local.is_selfhosted ? "auth-db-haproxy" : var.auth_db_host
+  mysql_central_ledger_host = local.is_talos ? "central-ledger-db-haproxy" : var.mysql_central_ledger_host
+  mysql_account_lookup_host = local.is_talos ? "account-lookup-db-haproxy" : var.mysql_account_lookup_host
+  mysql_port                = local.is_talos ? "3306" : var.mysql_port
+  kafka_host                = local.is_talos ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
+  kafka_port                = local.is_talos ? "9092" : var.kafka_port
+  mongodb_host              = local.is_talos ? "bulk-mongodb-rs0" : var.mongodb_host
+  mongodb_port              = local.is_talos ? "27017" : var.mongodb_port
+  redis_host                = local.is_talos ? "ttk-redis" : var.redis_host
+  redis_port                = local.is_talos ? "6379" : var.redis_port
+  auth_db_host              = local.is_talos ? "auth-db-haproxy" : var.auth_db_host
 }
 
 # ConfigMap with cluster configuration for postBuild substitution
@@ -297,12 +297,12 @@ resource "kubectl_manifest" "kustomization_vendor" {
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
     kind       = "Kustomization"
     metadata = {
-      name      = var.infra_provider == "proxmox" ? "onprem" : var.infra_provider
+      name      = local.is_talos ? "talos" : var.infra_provider
       namespace = var.flux_namespace
     }
     spec = {
       interval = "10m"
-      path     = "./${var.infra_provider == "proxmox" ? "onprem" : var.infra_provider}"
+      path     = "./${local.is_talos ? "talos" : var.infra_provider}"
       prune    = true
       dependsOn = [
         { name = "platform-config" }
@@ -348,7 +348,7 @@ resource "kubectl_manifest" "kustomization_role" {
       path     = "./${var.cluster_role}"
       prune    = true
       dependsOn = local.has_vendor ? [
-        { name = var.infra_provider == "proxmox" ? "onprem" : var.infra_provider }
+        { name = local.is_talos ? "talos" : var.infra_provider }
         ] : [
         { name = "platform-config" }
       ]
@@ -478,7 +478,7 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
 
 # Kustomization: env-data (self-hosted data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
 resource "kubectl_manifest" "kustomization_env_data" {
-  count = local.is_selfhosted && local.is_env ? 1 : 0
+  count = local.is_talos && local.is_env ? 1 : 0
 
   yaml_body = yamlencode({
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"
@@ -549,7 +549,7 @@ resource "kubectl_manifest" "kustomization_env_auth" {
       timeout  = "20m"
       path     = "./env-auth"
       prune    = true
-      dependsOn = local.is_selfhosted ? [
+      dependsOn = local.is_talos ? [
         { name = "env-data" }
         ] : [
         { name = "env" }

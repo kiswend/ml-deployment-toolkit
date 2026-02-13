@@ -98,7 +98,7 @@ variable "oci_proxy_password" {
 }
 
 variable "infra_provider" {
-  description = "Infrastructure provider name — used to conditionally deploy vendor kustomization (onprem, aws, gcp, openstack)"
+  description = "Infrastructure provider name — used to conditionally deploy vendor kustomization (talos, aws, gcp)"
   type        = string
   default     = ""
 }

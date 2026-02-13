@@ -8,7 +8,7 @@ output "cluster_name" {
 output "cluster_endpoint" {
   description = "The API endpoint of the cluster"
   value = (
-    local.provider_name == "proxmox" ? try(local.config.cluster.vip, null)
+    local.is_talos ? try(local.config.cluster.vip, null)
     : local.active_provider != null ? try(local.active_provider.cluster_endpoint, null)
     : null
   )
@@ -22,12 +22,13 @@ output "kubeconfig_path" {
 }
 
 output "talosconfig_path" {
-  description = "Path to the generated talosconfig file (on-prem only)"
+  description = "Path to the generated talosconfig file (Talos providers only)"
   value = (
-    local.provider_name == "proxmox" && length(module.proxmox) > 0
-    ? module.proxmox[0].talosconfig_path
+    local.is_talos && local.active_provider != null
+    ? try(local.active_provider.talosconfig_path, null)
     : null
   )
+  sensitive = true
 }
 
 output "flux_installed" {

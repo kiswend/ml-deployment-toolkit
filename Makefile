@@ -23,12 +23,12 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	export TF_VAR_env_name=$(ENV) \
 	       TF_VAR_dns_credentials='{"digitalocean_token":"'$${DIGITALOCEAN_TOKEN:-}'",'`\
 	       `'"cloudflare_api_token":"'$${CLOUDFLARE_API_TOKEN:-}'",'`\
-	       `'"aws_dns_access_key_id":"'$${AWS_DNS_ACCESS_KEY_ID:-}'",'`\
-	       `'"aws_dns_secret_access_key":"'$${AWS_DNS_SECRET_ACCESS_KEY:-}'",'`\
-	       `'"aws_dns_region":"'$${AWS_DNS_REGION:-}'",'`\
+	       `'"aws_access_key_id":"'$${AWS_ACCESS_KEY_ID:-}'",'`\
+	       `'"aws_secret_access_key":"'$${AWS_SECRET_ACCESS_KEY:-}'",'`\
+	       `'"aws_region":"'$${AWS_REGION:-}'",'`\
 	       `'"powerdns_api_url":"'$${POWERDNS_API_URL:-}'",'`\
 	       `'"powerdns_api_key":"'$${POWERDNS_API_KEY:-}'",'`\
-	       `'"dns_provider_credentials":"'$${DIGITALOCEAN_TOKEN:-}$${CLOUDFLARE_API_TOKEN:-}$${AWS_DNS_ACCESS_KEY_ID:-}$${POWERDNS_API_KEY:-}'"}' \
+	       `'"dns_provider_credentials":"'$${DIGITALOCEAN_TOKEN:-}$${CLOUDFLARE_API_TOKEN:-}$${AWS_ACCESS_KEY_ID:-}$${POWERDNS_API_KEY:-}'"}' \
 	       TF_VAR_oci_repo_username=$${OCI_REPO_USERNAME:-} \
 	       TF_VAR_oci_repo_password=$${OCI_REPO_PASSWORD:-} \
 	       TF_VAR_oci_proxy_username=$${OCI_PROXY_USERNAME:-} \

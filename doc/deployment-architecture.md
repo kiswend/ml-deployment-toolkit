@@ -42,11 +42,11 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 
 Each provider gets a vendor kustomization that fills the gaps between what the provider manages natively and what the generic platform layer expects. This ensures consistency (Cilium CNI everywhere, DNS-01 TLS everywhere) while using cloud-native services where available.
 
-| Function | Proxmox (`onprem/`) | AWS (`aws/`) | GCP (`gcp/`) | OpenStack (`openstack/`) |
-|----------|---------------------|-------------|-------------|------------------------|
-| Cilium HelmRelease | YES — full install with `gatewayAPI.enabled`, `lbIPAM.enabled`, `l2announcements` | YES — BYOCNI install with `gatewayAPI.enabled`, replaces VPC-CNI | NO — managed by GKE (Dataplane V2) | YES — identical to Proxmox |
-| LB-IPAM pools | YES — `CiliumLoadBalancerIPPool` + L2 announcement | NO — AWS Cloud LB | NO — GKE Cloud LB | DEPENDS — Octavia LB or Cilium LB-IPAM |
-| Storage provisioner | YES — OpenEBS hostpath | NO — EBS CSI is EKS add-on | NO — PD CSI auto-installed | NO — Cinder CSI pre-installed |
+| Function | Talos — Proxmox, OpenStack (`talos/`) | AWS (`aws/`) | GCP (`gcp/`) |
+|----------|----------------------------------------|-------------|-------------|
+| Cilium HelmRelease | YES — full install with `gatewayAPI.enabled`, `lbIPAM.enabled`, `l2announcements` | YES — BYOCNI install with `gatewayAPI.enabled`, replaces VPC-CNI | NO — managed by GKE (Dataplane V2) |
+| LB-IPAM pools | YES — `CiliumLoadBalancerIPPool` + L2 announcement | NO — AWS Cloud LB | NO — GKE Cloud LB |
+| Storage provisioner | YES — OpenEBS hostpath | NO — EBS CSI is EKS add-on | NO — PD CSI auto-installed |
 | Object storage (MinIO) | YES — standalone MinIO | NO — uses S3 bucket from IaC | NO — uses GCS bucket from IaC | DEPENDS — Swift available? If yes, skip. If no, deploy MinIO |
 | OCI registry (Harbor) | YES — Harbor + proxy cache | NO — uses ECR from IaC | NO — uses Artifact Registry from IaC | YES — Harbor (no managed alternative) |
 
@@ -81,7 +81,7 @@ Supported DNS providers and their credential requirements:
 
 #### cert-manager (DNS-01 ClusterIssuers)
 
-cert-manager's ClusterIssuer is inherently provider-specific in its `dns01` solver block — different providers have structurally different YAML (not just different values). ClusterIssuers and their DNS credential Secrets are therefore placed in the **vendor-specific kustomizations** (`onprem/`, `aws/`, `gcp/`, `openstack/`), not in the shared `platform-config/`.
+cert-manager's ClusterIssuer is inherently provider-specific in its `dns01` solver block — different providers have structurally different YAML (not just different values). ClusterIssuers and their DNS credential Secrets are therefore placed in the **dns-specific kustomizations** (`dns/digitalocean/`, `dns/cloudflare/`, `dns/route53/`, etc.), not in the shared `platform-config/`.
 
 In-tree DNS-01 solvers supported by cert-manager:
 
@@ -132,9 +132,9 @@ DIGITALOCEAN_TOKEN=dop_v1_xxx
 # Cloudflare DNS: 1 token
 CLOUDFLARE_API_TOKEN=xxx
 
-# Route53 DNS: key pair (or IRSA — no credentials needed)
-AWS_DNS_ACCESS_KEY_ID=xxx
-AWS_DNS_SECRET_ACCESS_KEY=xxx
+# Route53 DNS: standard AWS env vars (same as AWS infra provider, or IRSA — no credentials needed)
+AWS_ACCESS_KEY_ID=xxx
+AWS_SECRET_ACCESS_KEY=xxx
 
 # PowerDNS (rfc2136): URL + key
 POWERDNS_API_URL=https://pdns.example.com/api/v1
@@ -192,8 +192,7 @@ gitops/
     designate/        # ClusterIssuers (Designate webhook solver), DNS Secret, external-dns values patch
 
   # Vendor-specific kustomizations — exactly one deployed per cluster (infra gap-fillers)
-  onprem/             # Proxmox: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor
-  openstack/          # OpenStack: Cilium, LB-IPAM or Octavia config, Harbor
+  talos/              # Talos (Proxmox, OpenStack): Cilium, LB-IPAM, OpenEBS, MinIO, Harbor
   aws/                # AWS: Cilium (BYOCNI)
   gcp/                # GCP: (minimal — GKE manages Cilium, storage, LB)
 
@@ -219,17 +218,17 @@ GatewayClass is not in the artifact. It is auto-created by Cilium — either by 
 
 | Cluster | Infra | DNS | Kustomizations | Notes |
 |---------|-------|-----|---------------|-------|
-| CC | Proxmox | digitalocean | platform → dns/digitalocean → platform-config → onprem → cc → cc-config → cc-routes | onprem: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor |
-| CC | Proxmox | cloudflare | platform → dns/cloudflare → platform-config → onprem → cc → cc-config → cc-routes | Same infra, different DNS — works seamlessly |
+| CC | Proxmox | digitalocean | platform → dns/digitalocean → platform-config → talos → cc → cc-config → cc-routes | talos: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor |
+| CC | Proxmox | cloudflare | platform → dns/cloudflare → platform-config → talos → cc → cc-config → cc-routes | Same infra, different DNS — works seamlessly |
 | CC | AWS | route53 | platform → dns/route53 → platform-config → aws → cc → cc-config → cc-routes | aws: Cilium (BYOCNI); uses EBS + S3 + ECR |
 | CC | GCP | clouddns | platform → dns/clouddns → platform-config → gcp → cc → cc-config → cc-routes | gcp: minimal; GKE manages Cilium + storage |
-| Env | Proxmox | digitalocean | platform → dns/digitalocean → platform-config → onprem → env → env-data → env-auth → env-app | env-data: in-cluster MySQL, Kafka, MongoDB, Redis |
+| Env | Proxmox | digitalocean | platform → dns/digitalocean → platform-config → talos → env → env-data → env-auth → env-app | env-data: in-cluster MySQL, Kafka, MongoDB, Redis |
 | Env | AWS | route53 | platform → dns/route53 → platform-config → aws → env → env-auth → env-app | No env-data — uses RDS, MSK, DocumentDB, ElastiCache |
 
 **Dependency chain:**
 
 ```
-platform → dns/{dns_provider} → platform-config → vendor (onprem|aws|gcp|openstack)
+platform → dns/{dns_provider} → platform-config → vendor (talos|aws|gcp)
                                                        ↓
                                            ┌───────────┴───────────┐
                                            cc                      env
@@ -257,7 +256,7 @@ Cilium must be running before any pods can schedule (including Flux), but Cilium
 A pre-rendered Cilium manifest is hosted on private storage and referenced in the Talos machine config patch (`patch-cilium-install.yaml`). Talos downloads and applies it as a static manifest during node boot, ensuring CNI is available before the kubelet starts scheduling pods.
 
 **Phase 2 — Flux HelmRelease (steady-state):**
-Once the cluster is running and Flux is reconciling, a Cilium HelmRelease in the vendor kustomization (`onprem/` or `openstack/`) takes over management. Flux adopts the existing Cilium installation, enabling version upgrades, configuration changes, and Helm values management through GitOps.
+Once the cluster is running and Flux is reconciling, a Cilium HelmRelease in the vendor kustomization (`talos/`) takes over management. Flux adopts the existing Cilium installation, enabling version upgrades, configuration changes, and Helm values management through GitOps.
 
 The HelmRelease includes `gatewayAPI.enabled: true`, which auto-creates the GatewayClass (`cilium`). The vendor kustomization also deploys Cilium configuration CRDs (L2AnnouncementPolicy, CiliumLoadBalancerIPPool) for LB-IPAM where applicable.
 
@@ -277,8 +276,8 @@ DOKS provides Cilium as the default managed CNI. GatewayClass is pre-created by 
 
 | Provider | Cilium installation | GatewayClass name | GatewayClass creation | Gateway API CRDs |
 |----------|--------------------|--------------------|----------------------|-----------------|
-| Proxmox | Self-managed: Talos extraManifests → Flux HelmRelease (`onprem/`) | `cilium` | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed via Talos extraManifests |
-| OpenStack | Self-managed: Talos extraManifests → Flux HelmRelease (`openstack/`) | `cilium` | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed via Talos extraManifests |
+| Proxmox | Self-managed: Talos extraManifests → Flux HelmRelease (`talos/`) | `cilium` | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed via Talos extraManifests |
+| OpenStack | Self-managed: Talos extraManifests → Flux HelmRelease (`talos/`) | `cilium` | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed via Talos extraManifests |
 | AWS EKS | Self-installed: Flux HelmRelease (`aws/`) replaces VPC-CNI | `cilium` | Auto-created by Cilium Helm (`gatewayAPI.enabled`) | Installed before Cilium (EKS add-on or manifest) |
 | GCP GKE | Managed (Dataplane V2, `ADVANCED_DATAPATH`) | `gke-l7-regional-external-managed` | Pre-created by GKE | Auto-installed via `gateway_api_config.channel` |
 | DigitalOcean DOKS | Managed (default CNI) | Provider-created | Pre-created by DigitalOcean | Pre-installed |
@@ -298,8 +297,8 @@ The shared Gateway in `platform-config/` references `gatewayClassName: ${gateway
 | Service | Purpose | Self-hosted profile (Proxmox, OpenStack) | Managed profile (AWS, GCP) |
 |---------|---------|----------------------------------------|---------------------------|
 | Vault | Secrets management, internal CA, partner keys | `cc-config/` (all providers) | `cc-config/` (all providers) |
-| Harbor | Local OCI registry + pull-through cache | Vendor kustomization (`onprem/`, `openstack/`) | Not deployed — uses ECR (AWS) or Artifact Registry (GCP) |
-| MinIO | S3-compatible object storage | Vendor kustomization (`onprem/`, `openstack/` if no Swift) | Not deployed — uses S3 (AWS) or GCS (GCP) |
+| Harbor | Local OCI registry + pull-through cache | Vendor kustomization (`talos/`) | Not deployed — uses ECR (AWS) or Artifact Registry (GCP) |
+| MinIO | S3-compatible object storage | Vendor kustomization (`talos/`) | Not deployed — uses S3 (AWS) or GCS (GCP) |
 | FluxCD | GitOps reconciliation (OCI-based, not Git) | All providers | All providers |
 
 On self-hosted providers, Harbor stores OCI artifacts in MinIO (S3-compatible). On managed providers (AWS, GCP), neither Harbor nor MinIO is deployed — Terraform creates the managed equivalents (S3/GCS bucket, ECR/Artifact Registry repository) and passes their endpoints as substitution variables. FluxCD pulls directly from the managed OCI registry; no in-cluster registry is needed on cloud.
@@ -344,8 +343,8 @@ This enables air-gapped operation — once an image is cached, the App Environme
 Each environment is provisioned independently from the operator's workstation using the same Terraform codebase and Makefile. There is no in-cluster automation (tf-controller) — all environments are managed via `make plan-apply ENV=<env>`.
 
 **Customization:** Provider differences are handled by vendor-specific kustomization paths:
-- Proxmox (`onprem/`): Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers
-- OpenStack (`openstack/`): Cilium HelmRelease, Harbor, ClusterIssuers; uses Cinder (storage) and Swift (S3)
+- Proxmox (`talos/`): Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers
+- OpenStack (`talos/`): same as Proxmox — Cilium, LB-IPAM, OpenEBS, Harbor; all Talos providers share one kustomization
 - AWS (`aws/`): Cilium BYOCNI, ClusterIssuers (Route53); uses EBS, S3, ECR from Terraform
 - GCP (`gcp/`): ClusterIssuers (Cloud DNS) only; GKE manages Cilium, storage, and LB natively
 
@@ -390,15 +389,15 @@ Terraform is responsible for provisioning infrastructure and creating managed se
 
 Each provider gets exactly one vendor kustomization deployed. It normalizes provider differences so all layers above it (cc, env, app) are generic.
 
-| Function | Proxmox (`onprem/`) | AWS (`aws/`) | GCP (`gcp/`) | OpenStack (`openstack/`) |
-|----------|---------------------|-------------|-------------|------------------------|
-| **Cilium HelmRelease** | Full install: `gatewayAPI.enabled`, `lbIPAM.enabled`, `l2announcements` | BYOCNI install: `gatewayAPI.enabled`, replaces VPC-CNI | Not deployed — managed by GKE Dataplane V2 | Full install: identical to Proxmox |
-| **LB-IPAM pools** | `CiliumLoadBalancerIPPool` + L2 announcement policy | Not deployed — AWS Cloud LB | Not deployed — GKE Cloud LB | Octavia LB or Cilium LB-IPAM (depends on network) |
-| **Storage provisioner** | OpenEBS hostpath HelmRelease | Not deployed — EBS CSI is EKS add-on (IaC) | Not deployed — PD CSI auto-installed by GKE | Not deployed — Cinder CSI pre-installed |
-| **MinIO** | Standalone MinIO HelmRelease | Not deployed — S3 bucket created by IaC | Not deployed — GCS bucket created by IaC | MinIO if no Swift; skip if Swift available |
-| **Harbor** | Harbor HelmRelease + proxy cache setup Job | Not deployed — ECR created by IaC | Not deployed — Artifact Registry created by IaC | Harbor HelmRelease (no managed alternative) |
-| **ClusterIssuers** | `dns/{provider}` kustomization (independent of infra) | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization |
-| **DNS credential Secret** | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization |
+| Function | Talos — Proxmox, OpenStack (`talos/`) | AWS (`aws/`) | GCP (`gcp/`) |
+|----------|----------------------------------------|-------------|-------------|
+| **Cilium HelmRelease** | Full install: `gatewayAPI.enabled`, `lbIPAM.enabled`, `l2announcements` | BYOCNI install: `gatewayAPI.enabled`, replaces VPC-CNI | Not deployed — managed by GKE Dataplane V2 |
+| **LB-IPAM pools** | `CiliumLoadBalancerIPPool` + L2 announcement policy | Not deployed — AWS Cloud LB | Not deployed — GKE Cloud LB |
+| **Storage provisioner** | OpenEBS hostpath HelmRelease | Not deployed — EBS CSI is EKS add-on (IaC) | Not deployed — PD CSI auto-installed by GKE |
+| **MinIO** | Standalone MinIO HelmRelease | Not deployed — S3 bucket created by IaC | Not deployed — GCS bucket created by IaC |
+| **Harbor** | Harbor HelmRelease + proxy cache setup Job | Not deployed — ECR created by IaC | Not deployed — Artifact Registry created by IaC |
+| **ClusterIssuers** | `dns/{provider}` kustomization (independent of infra) | `dns/{provider}` kustomization | `dns/{provider}` kustomization |
+| **DNS credential Secret** | `dns/{provider}` kustomization | `dns/{provider}` kustomization | `dns/{provider}` kustomization |
 
 ### GitOps Layer — Generic (All Providers)
 

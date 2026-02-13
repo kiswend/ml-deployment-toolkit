@@ -14,8 +14,7 @@ gitops/
   platform-config/    # Shared platform config (Gateway with ${gateway_class_name}, wildcard TLS)
 
   # Vendor-specific kustomizations — exactly one deployed per cluster
-  onprem/             # Proxmox: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers, DNS secret
-  openstack/          # OpenStack: Cilium, Harbor, ClusterIssuers, DNS secret
+  talos/              # Talos (Proxmox, OpenStack): Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers, DNS secret
   aws/                # AWS: Cilium (BYOCNI), ClusterIssuers (Route53), DNS secret
   gcp/                # GCP: ClusterIssuers (Cloud DNS), DNS secret
 
@@ -35,10 +34,10 @@ Note: GatewayClass is not deployed by the artifact. It is auto-created by Cilium
 
 | Cluster role | Provider | Paths deployed | Order |
 |-------------|----------|----------------|-------|
-| `cc` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `cc/` → `cc-config/` → `cc-routes/` | onprem deploys Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers |
+| `cc` | Proxmox | `platform/` → `platform-config/` → `talos/` → `cc/` → `cc-config/` → `cc-routes/` | talos deploys Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers |
 | `cc` | AWS | `platform/` → `platform-config/` → `aws/` → `cc/` → `cc-config/` → `cc-routes/` | aws deploys Cilium (BYOCNI), ClusterIssuers; uses S3 + ECR from IaC |
 | `cc` | GCP | `platform/` → `platform-config/` → `gcp/` → `cc/` → `cc-config/` → `cc-routes/` | gcp deploys ClusterIssuers only; GKE manages Cilium + storage |
-| `env` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `env/` → `env-data/` → `env-auth/` → `env-app/` | env-data deploys in-cluster MySQL, Kafka, MongoDB, Redis |
+| `env` | Proxmox | `platform/` → `platform-config/` → `talos/` → `env/` → `env-data/` → `env-auth/` → `env-app/` | env-data deploys in-cluster MySQL, Kafka, MongoDB, Redis |
 | `env` | AWS | `platform/` → `platform-config/` → `aws/` → `env/` → `env-auth/` → `env-app/` | No env-data — uses RDS, MSK, DocumentDB, ElastiCache |
 | `env` | GCP | `platform/` → `platform-config/` → `gcp/` → `env/` → `env-auth/` → `env-app/` | No env-data — uses Cloud SQL, Managed Kafka, Memorystore |
 
@@ -77,14 +76,14 @@ gitops/platform-config/
     gateway.yaml               # Shared Gateway — wildcard TLS (*.${domain}), gatewayClassName: ${gateway_class_name}
 ```
 
-Note: ClusterIssuers and DNS credential Secrets have moved to the vendor-specific kustomizations (`onprem/`, `aws/`, `gcp/`, `openstack/`) because the `dns01` solver block is structurally different per DNS provider and cannot be parameterized with simple variable substitution.
+Note: ClusterIssuers and DNS credential Secrets have moved to the vendor-specific kustomizations (`talos/`, `aws/`, `gcp/`) because the `dns01` solver block is structurally different per DNS provider and cannot be parameterized with simple variable substitution.
 
-### Vendor-specific kustomizations (onprem/, aws/, gcp/, openstack/)
+### Vendor-specific kustomizations (talos/, aws/, gcp/)
 
 Each provider gets exactly one vendor kustomization that fills the gaps between what the provider manages natively and what the generic platform layer expects. This is the "generalization layer" that normalizes provider differences.
 
 ```
-gitops/onprem/                         # Proxmox
+gitops/talos/                          # Talos (Proxmox, OpenStack)
   kustomization.yaml
   namespace.yaml
   cilium/
@@ -148,7 +147,7 @@ gitops/cc-config/
     secretstore.yaml           # ClusterSecretStore pointing to vault.vault:8200
 ```
 
-Note: Harbor and MinIO are deployed by the vendor kustomization (`onprem/`, `openstack/`) on self-hosted providers. On managed providers (AWS, GCP), Terraform creates the equivalents (S3/GCS bucket, ECR/Artifact Registry) and passes endpoints as substitution variables.
+Note: Harbor and MinIO are deployed by the vendor kustomization (`talos/`) on Talos providers. On managed providers (AWS, GCP), Terraform creates the equivalents (S3/GCS bucket, ECR/Artifact Registry) and passes endpoints as substitution variables.
 
 **Harbor proxy cache (self-hosted CC only):** On self-hosted providers (Proxmox, OpenStack), Harbor is deployed by the vendor kustomization and a setup Job configures it as a pull-through cache for upstream registries. App Environments pull all images through `harbor.${domain}/<project>/<image>` instead of hitting public registries directly. This enables air-gapped operation and reduces external bandwidth. On managed providers (AWS, GCP), Harbor is not deployed — Terraform creates a managed OCI registry (ECR, Artifact Registry) and container images are pulled directly from public registries or via the cloud provider's native caching.
 

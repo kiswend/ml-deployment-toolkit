@@ -10,6 +10,7 @@ locals {
   config_raw    = yamldecode(file(local.env_config_path))
   provider_name = local.config_raw.infra.provider
   oci_active    = try(local.config_raw.oci.repo.active, false)
+  is_talos      = contains(["proxmox", "openstack"], local.provider_name)
 
   # Config-loader outputs
   config = module.config.config
