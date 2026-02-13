@@ -115,10 +115,10 @@ spec:
           data:
             adminPassword: "${harbor_admin_password}"
       - type: kv
-        path: secret/data/digitalocean
+        path: secret/data/dns-provider
         data:
           data:
-            apiToken: "${digitalocean_token}"
+            credentials: "${dns_provider_credentials}"
 
   # Persistent storage for Vault data
   volumeMounts:

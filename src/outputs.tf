@@ -9,15 +9,16 @@ output "cluster_endpoint" {
   description = "The API endpoint of the cluster"
   value = (
     local.provider_name == "proxmox" ? try(local.config.cluster.vip, null)
-    : local.provider_name == "digitalocean" && length(module.digitalocean) > 0 ? module.digitalocean[0].cluster_endpoint
-    : local.provider_name == "aws" && length(module.aws) > 0 ? module.aws[0].cluster_endpoint
+    : local.active_provider != null ? try(local.active_provider.cluster_endpoint, null)
     : null
   )
+  sensitive = true
 }
 
 output "kubeconfig_path" {
   description = "Path to the generated kubeconfig file"
   value       = local.kubeconfig_path
+  sensitive   = true
 }
 
 output "talosconfig_path" {

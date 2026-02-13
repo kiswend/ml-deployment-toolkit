@@ -14,15 +14,24 @@ locals {
   # Config-loader outputs
   config = module.config.config
 
-  # Kubeconfig path from provider module (for K8s/Helm/Kubectl providers)
+  # Provider output map — avoids ternary chains; adding a new provider requires one new entry
+  provider_outputs = {
+    proxmox      = length(module.proxmox) > 0 ? module.proxmox[0] : null
+    digitalocean = length(module.digitalocean) > 0 ? module.digitalocean[0] : null
+    aws          = length(module.aws) > 0 ? module.aws[0] : null
+  }
+  active_provider = try(local.provider_outputs[local.provider_name], null)
+
+  # Kubeconfig path — two strategies depending on deployment phase:
+  # 1. File exists (subsequent runs): use static path to avoid cascading "known after apply"
+  #    from module output chain, which would break Helm/Kubernetes providers at plan time.
+  # 2. File missing (first deploy): fall back to module output, which is "unknown" at plan
+  #    time and triggers Terraform's deferred provider configuration — providers get
+  #    configured during apply, after the bootstrap module writes the kubeconfig.
   kubeconfig_path = (
-    local.provider_name == "proxmox" && length(module.proxmox) > 0
-    ? module.proxmox[0].kubeconfig_path
-    : local.provider_name == "digitalocean" && length(module.digitalocean) > 0
-    ? module.digitalocean[0].kubeconfig_path
-    : local.provider_name == "aws" && length(module.aws) > 0
-    ? module.aws[0].kubeconfig_path
-    : null
+    fileexists("${local.artifacts_path}/kubernetes/kubeconfig")
+    ? "${local.artifacts_path}/kubernetes/kubeconfig"
+    : local.active_provider != null ? local.active_provider.kubeconfig_path : null
   )
 }
 
@@ -69,8 +78,7 @@ module "digitalocean" {
   artifacts_path       = local.artifacts_path
   provider_config_path = "../config/providers/digitalocean/config.yaml"
 
-  region             = try(local.config_raw.infra.digitalocean.region, "nyc1")
-  digitalocean_token = var.digitalocean_token
+  region = try(local.config_raw.infra.digitalocean.region, "nyc1")
 }
 
 # AWS Cluster (EKS Managed Kubernetes)
@@ -107,19 +115,20 @@ module "flux_config" {
   count  = local.oci_active ? 1 : 0
   source = "./modules/flux-config"
 
-  cluster_name     = local.config.cluster.name
-  cluster_role     = local.config.cluster.role
-  cluster_vip      = try(local.config.cluster.vip, "")
-  domain           = local.config.dns.domain
-  dns_provider     = local.config.dns.provider
-  alert_email      = local.config.app.alert_email
-  lb_ipam_range    = local.config.app.lb_ipam.range
-  artifact_url     = local.config_raw.oci.repo.url
-  artifact_version = try(local.config_raw.oci.repo.version, "latest")
+  cluster_name       = local.config.cluster.name
+  cluster_role       = local.config.cluster.role
+  cluster_vip        = try(local.config.cluster.vip, "")
+  domain             = local.config.dns.domain
+  dns_provider       = local.config.dns.provider
+  gateway_class_name = try(local.config_raw.cluster.gateway_class_name, "cilium")
+  alert_email        = local.config.app.alert_email
+  lb_ipam_range      = local.config.app.lb_ipam.range
+  artifact_url       = local.config_raw.oci.repo.url
+  artifact_version   = try(local.config_raw.oci.repo.version, "latest")
 
   infra_provider = local.provider_name
 
-  digitalocean_token = var.digitalocean_token
+  dns_credentials    = var.dns_credentials
   oci_repo_username  = var.oci_repo_username
   oci_repo_password  = var.oci_repo_password
   oci_proxy_username = var.oci_proxy_username

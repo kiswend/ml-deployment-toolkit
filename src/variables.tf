@@ -8,10 +8,10 @@ variable "env_name" {
 # Sensitive variables injected via TF_VAR_* environment variables
 # Used by flux-config module to create Kubernetes secrets
 
-variable "digitalocean_token" {
-  description = "DigitalOcean API token for external-dns"
-  type        = string
-  default     = ""
+variable "dns_credentials" {
+  description = "DNS provider credentials — provider-specific key-value pairs (e.g. digitalocean_token, cloudflare_api_token, aws_dns_access_key_id)"
+  type        = map(string)
+  default     = {}
   sensitive   = true
 }
 

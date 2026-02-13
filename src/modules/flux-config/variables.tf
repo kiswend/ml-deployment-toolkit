@@ -56,11 +56,17 @@ variable "artifact_version" {
   default     = "latest"
 }
 
-variable "digitalocean_token" {
-  description = "DigitalOcean API token"
-  type        = string
-  default     = ""
+variable "dns_credentials" {
+  description = "DNS provider credentials — provider-specific key-value pairs injected into cluster-secrets for Flux postBuild substitution"
+  type        = map(string)
+  default     = {}
   sensitive   = true
+}
+
+variable "gateway_class_name" {
+  description = "GatewayClass name for the shared Gateway (cilium on most providers, gke-specific on GCP)"
+  type        = string
+  default     = "cilium"
 }
 
 variable "oci_repo_username" {
@@ -92,7 +98,7 @@ variable "oci_proxy_password" {
 }
 
 variable "infra_provider" {
-  description = "Infrastructure provider name — used to conditionally deploy onprem kustomization"
+  description = "Infrastructure provider name — used to conditionally deploy vendor kustomization (onprem, aws, gcp, openstack)"
   type        = string
   default     = ""
 }

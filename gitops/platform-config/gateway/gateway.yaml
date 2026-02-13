@@ -6,7 +6,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  gatewayClassName: cilium
+  gatewayClassName: ${gateway_class_name}
   listeners:
     - name: https
       hostname: "*.${domain}"
