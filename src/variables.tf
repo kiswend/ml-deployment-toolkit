@@ -9,7 +9,7 @@ variable "env_name" {
 # Used by flux-config module to create Kubernetes secrets
 
 variable "dns_credentials" {
-  description = "DNS provider credentials — provider-specific key-value pairs (e.g. digitalocean_token, cloudflare_api_token, aws_dns_access_key_id)"
+  description = "DNS provider credentials — provider-specific key-value pairs (e.g. digitalocean_token, cloudflare_api_token, aws_access_key_id)"
   type        = map(string)
   default     = {}
   sensitive   = true

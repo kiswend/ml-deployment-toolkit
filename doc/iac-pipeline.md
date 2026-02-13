@@ -75,7 +75,7 @@ All configuration lives under `config/`. Two ownership levels:
 |------|---------|
 | `config/definitions/workload-classes.yaml` | Talos/K8s versions, node role definitions (control-plane, worker, mixed-plane) |
 | `config/patches/talos/` | Talos machine config patches — static `.yaml` (cilium-install, openebs, allow-scheduling-on-cp) and templates `.yaml.tpl` (vip) |
-| `config/providers/{proxmox,aws,gcp,digitalocean,openstack}/` | Provider-specific deployment templates, VM/instance defaults |
+| `config/providers/{proxmox,digitalocean,aws}/` | Provider-specific deployment templates, VM/instance defaults (gcp, openstack added when supported) |
 | `gitops/` | FluxCD Kustomize manifests — platform services, vendor-specific gap-fillers, CC/env apps |
 
 The adopter touches `config/environments/<env>/config.yaml` + `.env`. Everything else ships with the bundle.
@@ -308,7 +308,7 @@ OCIRepository (ml-gitops)
     │       ↓
     ├── Kustomization: platform-config path: ./platform-config (always — Gateway with wildcard TLS)
     │       ↓
-    ├── Kustomization: <vendor>        path: ./<vendor>        (exactly one: onprem|aws|gcp|openstack)
+    ├── Kustomization: <vendor>        path: ./<vendor>        (exactly one: talos|aws|gcp)
     │       ↓
     │   ┌───────────────────────────────────────────────────┐
     │   │  CC path:                    Env path:            │
@@ -321,10 +321,9 @@ Dependency chain ensures ordering:
 - `platform` deploys first (cert-manager, external-dns, ESO, metrics-server)
 - `platform-config` waits for platform (needs cert-manager running), deploys Gateway with `${gateway_class_name}` and wildcard TLS
 - `<vendor>` waits for platform-config — deploys provider-specific gap-fillers:
-  - `onprem/`: Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers + DNS secret
+  - `talos/`: Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers + DNS secret (Proxmox, OpenStack)
   - `aws/`: Cilium BYOCNI HelmRelease, ClusterIssuers (Route53) + DNS secret
   - `gcp/`: ClusterIssuers (Cloud DNS) + DNS secret (Cilium is GKE-managed)
-  - `openstack/`: Cilium HelmRelease, Harbor, ClusterIssuers (Designate/RFC-2136) + DNS secret
 - `cc` waits for vendor — deploys operators (vault-operator), creates namespaces
 - `cc-config` waits for cc — deploys Vault CR, SecretStore; health checks confirm services running
 - `cc-routes` waits for cc-config — deploys HTTPRoutes (backends guaranteed to exist)
@@ -350,7 +349,7 @@ Every provider gets a vendor kustomization — the concept is no longer "on-prem
 1. **`OCIRepository`** — points Flux source-controller at `oci.repo.url`. Attaches `secretRef` (type `kubernetes.io/dockerconfigjson`) if OCI repo credentials are configured.
 2. **`Kustomization` (platform)** — always deployed, shared services
 3. **`Kustomization` (platform-config)** — always deployed, Gateway with wildcard TLS
-4. **`Kustomization` (vendor)** — exactly one per provider (`onprem`, `aws`, `gcp`, `openstack`), deploys provider-specific gap-fillers including ClusterIssuers
+4. **`Kustomization` (vendor)** — exactly one per provider (`talos`, `aws`, `gcp`), deploys provider-specific gap-fillers including ClusterIssuers
 5. **`Kustomization` (role-specific)** — cc or env, depends on vendor kustomization
 6. **`Kustomization` (env-data)** — only on self-hosted profile (Proxmox, OpenStack) for in-cluster data layer
 7. **`Kustomization` (env-auth, env-app)** — always for env clusters
@@ -437,7 +436,7 @@ config/environments/<env>/   config/environments/<env>/   TF outputs
                  │                              ▼         ▼           ▼
                  │                        Kustomization paths:
                  │                        platform  <vendor>  cc|env→...
-                 │                        (exactly one: onprem|aws|gcp|openstack)
+                 │                        (exactly one: talos|aws|gcp)
                  │                              │         │           │
                  └──────────────────────────────┼─────────┼───────────┘
                                                 │
