@@ -75,8 +75,8 @@ All configuration lives under `config/`. Two ownership levels:
 |------|---------|
 | `config/definitions/workload-classes.yaml` | Talos/K8s versions, node role definitions (control-plane, worker, mixed-plane) |
 | `config/patches/talos/` | Talos machine config patches — static `.yaml` (cilium-install, openebs, allow-scheduling-on-cp) and templates `.yaml.tpl` (vip) |
-| `config/providers/{proxmox,aws,digitalocean}/` | Provider-specific deployment templates, VM/instance defaults |
-| `gitops/` | FluxCD Kustomize manifests — platform services, on-prem gap fillers, CC/env apps |
+| `config/providers/{proxmox,aws,gcp,digitalocean,openstack}/` | Provider-specific deployment templates, VM/instance defaults |
+| `gitops/` | FluxCD Kustomize manifests — platform services, vendor-specific gap-fillers, CC/env apps |
 
 The adopter touches `config/environments/<env>/config.yaml` + `.env`. Everything else ships with the bundle.
 
@@ -165,13 +165,76 @@ Outputs: `kubeconfig_path`, `bootstrap_complete`
 
 Artifacts: `artifacts/<env>/kubernetes/kubeconfig`
 
-#### 5.2.2 Managed: aws/gcp/digitalocean (target design)
+#### 5.2.2 Managed: aws
 
-Provisions a managed Kubernetes cluster (EKS/GKE/DOKS) directly.
+Provisions an EKS cluster with VPC, IAM, node groups, and managed service instances.
 
-- Configures node pools from deployment template (instance types, counts)
-- No Talos, no VM-level configuration, no machine patches
-- Provider handles control-plane HA, etcd, node lifecycle
+**Infrastructure:**
+- VPC with dynamic AZ discovery (up to 3 AZs), subnets, Internet Gateway, route tables
+- IAM roles for cluster (`AmazonEKSClusterPolicy`) and nodes (`AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`)
+- EKS cluster with version extracted from `kubernetes_version` (major.minor)
+- Node groups from deployment template (instance types, scaling config)
+- EKS add-on: `aws-ebs-csi-driver` for persistent volumes
+
+**Managed services (CC role):**
+- `aws_s3_bucket` — object storage (replaces MinIO)
+- `aws_ecr_repository` — OCI registry (replaces Harbor)
+
+**Managed services (Env role):**
+- `aws_rds_cluster` — Aurora MySQL (replaces Percona XtraDB)
+- `aws_msk_cluster` — Managed Streaming for Kafka (replaces Strimzi)
+- `aws_docdb_cluster` — DocumentDB (replaces Percona MongoDB)
+- `aws_elasticache_replication_group` — Redis (replaces in-cluster Redis)
+
+**Kubeconfig:** Uses `aws eks get-token` exec auth plugin (auto-refreshing tokens).
+
+Outputs: `kubeconfig_path`, `s3_bucket`, `ecr_url`, `rds_endpoint`, `msk_endpoint`, `docdb_endpoint`, `elasticache_endpoint`
+
+#### 5.2.3 Managed: gcp
+
+Provisions a GKE cluster with VPC, node pools, Dataplane V2 (Cilium), and managed service instances.
+
+**Infrastructure:**
+- VPC with subnet (`google_compute_network`, `google_compute_subnetwork`), VPC-native networking
+- GKE cluster with `datapath_provider = "ADVANCED_DATAPATH"` (Cilium), `gateway_api_config { channel = "CHANNEL_STANDARD" }`, Workload Identity enabled
+- Node pools from deployment template (machine types, node counts)
+- `remove_default_node_pool = true` — explicit pool management
+
+**Managed services (CC role):**
+- `google_storage_bucket` + HMAC keys — object storage with S3-compat API (replaces MinIO)
+- `google_artifact_registry_repository` — OCI registry (replaces Harbor)
+
+**Managed services (Env role):**
+- `google_sql_database_instance` — Cloud SQL for MySQL (replaces Percona XtraDB)
+- `google_managed_kafka_cluster` — Managed Kafka (replaces Strimzi)
+- `mongodbatlas_cluster` — MongoDB Atlas on GCP (replaces Percona MongoDB)
+- `google_redis_instance` — Memorystore for Redis (replaces in-cluster Redis)
+
+**Kubeconfig:** Uses `gcloud` exec auth or token-based authentication.
+
+Outputs: `kubeconfig_path`, `gcs_bucket`, `gar_url`, `cloudsql_endpoint`, `kafka_endpoint`, `atlas_endpoint`, `redis_endpoint`
+
+#### 5.2.4 Managed: digitalocean
+
+Provisions a DOKS cluster with VPC and node pools. Simpler than AWS/GCP — fewer managed services, Cilium is the default managed CNI.
+
+Outputs: `kubeconfig_path`, cluster provisioned
+
+#### 5.2.5 On-prem: openstack (target design)
+
+Provisions Talos Linux VMs on OpenStack, structurally identical to the Proxmox composite module.
+
+**Pipeline:** `talos-gen-config → openstack-vm → talos-bootstrap`
+
+**Infrastructure:**
+- Neutron network + subnet + router + floating IPs
+- Security groups (ports 6443, 50000 for Talos API)
+- `openstack_compute_instance_v2` VMs with Talos raw disk images (uploaded to Glance)
+- Talos machine configs applied via cloud-init
+
+**Terraform provider:** `terraform-provider-openstack/openstack ~> 3.0` + `siderolabs/talos ~> 0.9`
+
+OpenStack sits between on-prem and cloud: K8s is self-managed (Talos), but infrastructure services (Cinder for storage, Swift for S3, Octavia for LB, Designate for DNS) are managed by the OpenStack platform.
 
 Outputs: `kubeconfig_path`, cluster provisioned
 
@@ -206,19 +269,33 @@ This module bridges the gap between infrastructure provisioning and platform ser
 
 The adopter sets `oci.repo.url` to the OCI registry Flux should pull from. This differs by deployment type:
 
-**Control Center:**
+**Control Center (self-hosted: Proxmox, OpenStack):**
 - `oci.repo.url` = Platform Team's public OCI registry (e.g. `oci://ghcr.io/mojaloop/ml-gitops`)
 - Credentials optional (public repo)
-- Flux pulls the platform bundle → deploys platform services including Harbor
+- Flux pulls the platform bundle → deploys platform services, and the vendor kustomization deploys Harbor + MinIO
 - Once Harbor is running, it mirrors/caches the Platform Team's OCI content
 - `oci.proxy.active: false` — CC IS the proxy
+- App Environments pull from CC Harbor for air-gapped operation
 
-**App Environment:**
-- `oci.repo.url` = CC Harbor (e.g. `oci://harbor.cc.example.com/mojaloop/ml-gitops`) or direct GHCR
-- Credentials required (Harbor auth or GHCR PAT)
-- Flux pulls from the repo URL → deploys platform services
+**Control Center (managed: AWS, GCP):**
+- `oci.repo.url` = Platform Team's public OCI registry (e.g. `oci://ghcr.io/mojaloop/ml-gitops`) or managed registry (e.g. `oci://123456789.dkr.ecr.us-east-1.amazonaws.com/ml-gitops`)
+- Credentials optional (public repo) or managed IAM (ECR/GAR)
+- Flux pulls the platform bundle → deploys platform services. No Harbor or MinIO — Terraform has already created the managed OCI registry and S3/GCS bucket
+- `oci.proxy.active: false` — no in-cluster image proxy
+- App Environments pull from the same managed OCI registry or directly from the Platform Team's public registry
+
+**App Environment (self-hosted CC):**
+- `oci.repo.url` = CC Harbor (e.g. `oci://harbor.cc.example.com/mojaloop/ml-gitops`)
+- Credentials required (Harbor auth)
+- Flux pulls from CC Harbor → deploys platform services
 - `oci.proxy.active: true` — Talos registry mirrors route container pulls through Harbor
-- App Env can operate air-gapped when both repo and proxy point through Harbor
+- App Env can operate fully air-gapped when both repo and proxy point through Harbor
+
+**App Environment (managed CC):**
+- `oci.repo.url` = Managed OCI registry (e.g. ECR, GAR) or Platform Team's public registry (GHCR)
+- Credentials required (managed IAM or GHCR PAT)
+- Flux pulls from the configured registry → deploys platform services
+- `oci.proxy.active: false` — no in-cluster image proxy; container images pulled directly from public registries
 
 #### Kustomization paths
 
@@ -229,48 +306,63 @@ OCIRepository (ml-gitops)
     │
     ├── Kustomization: platform        path: ./platform        (always)
     │       ↓
-    ├── Kustomization: platform-config path: ./platform-config (always — ClusterIssuers, DNS-01 secret)
+    ├── Kustomization: platform-config path: ./platform-config (always — Gateway with wildcard TLS)
     │       ↓
-    ├── Kustomization: onprem          path: ./onprem          (if provider == proxmox)
+    ├── Kustomization: <vendor>        path: ./<vendor>        (exactly one: onprem|aws|gcp|openstack)
     │       ↓
-    ├── Kustomization: cc              path: ./cc              (if cluster.role == cc — operators)
-    │       ↓
-    ├── Kustomization: cc-config       path: ./cc-config       (if cluster.role == cc — services)
-    │       ↓
-    ├── Kustomization: cc-routes       path: ./cc-routes       (if cluster.role == cc — HTTPRoutes, after services healthy)
-    │
-    └── Kustomization: env             path: ./env             (if cluster.role == env)
+    │   ┌───────────────────────────────────────────────────┐
+    │   │  CC path:                    Env path:            │
+    │   │  cc → cc-config → cc-routes  env [→ env-data]     │
+    │   │                              → env-auth → env-app │
+    │   └───────────────────────────────────────────────────┘
 ```
 
 Dependency chain ensures ordering:
 - `platform` deploys first (cert-manager, external-dns, ESO, metrics-server)
-- `platform-config` waits for platform (needs cert-manager running), deploys ClusterIssuers (DNS-01), DNS token Secret, Gateway (wildcard TLS)
-- `onprem` waits for platform-config, deploys Cilium HelmRelease (with `gatewayAPI.enabled` → auto-creates GatewayClass), LB-IPAM, OpenEBS
-- `cc` waits for onprem (if present) or platform-config (if cloud) — deploys operators (vault-operator), creates namespaces (vault, harbor, minio)
-- `cc-config` waits for cc — deploys Vault CR (vault ns), MinIO HelmRelease (minio ns), Harbor HelmRelease (harbor ns); health checks confirm services running
-- `cc-routes` waits for cc-config — deploys HTTPRoutes for vault, harbor, minio (backends guaranteed to exist)
-- `env` waits for onprem (if present) or platform-config (if cloud) — deploys Mojaloop app
+- `platform-config` waits for platform (needs cert-manager running), deploys Gateway with `${gateway_class_name}` and wildcard TLS
+- `<vendor>` waits for platform-config — deploys provider-specific gap-fillers:
+  - `onprem/`: Cilium HelmRelease, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers + DNS secret
+  - `aws/`: Cilium BYOCNI HelmRelease, ClusterIssuers (Route53) + DNS secret
+  - `gcp/`: ClusterIssuers (Cloud DNS) + DNS secret (Cilium is GKE-managed)
+  - `openstack/`: Cilium HelmRelease, Harbor, ClusterIssuers (Designate/RFC-2136) + DNS secret
+- `cc` waits for vendor — deploys operators (vault-operator), creates namespaces
+- `cc-config` waits for cc — deploys Vault CR, SecretStore; health checks confirm services running
+- `cc-routes` waits for cc-config — deploys HTTPRoutes (backends guaranteed to exist)
+- `env` waits for vendor — deploys data/auth/app operators
+- `env-data` waits for env — deploys in-cluster data CRs (self-hosted profile only: Proxmox, OpenStack)
+- `env-auth` waits for env-data (if present) or env (if managed) — deploys Keycloak, Ory stack
+- `env-app` waits for env-auth — deploys Mojaloop core, MCM, Finance Portal
 
-On managed K8s (DOKS/EKS), `onprem` is skipped entirely — cloud-native CNI, load balancers, storage, and S3 are used instead.
+Every provider gets a vendor kustomization — the concept is no longer "on-prem only". The vendor layer normalizes provider differences so all layers above it (cc, env, app) are generic.
 
 #### Inputs
 
 | Source | Values |
 |--------|--------|
-| `config/environments/<env>/config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, `oci.repo.url`/`version` |
+| `config/environments/<env>/config.yaml` | domain, alert_email, lb_ipam range, DNS provider, cluster name/role, infra provider, gateway_class_name, `oci.repo.url`/`version` |
 | `config/environments/<env>/.env` | OCI credentials (if authenticated), DNS tokens, provider credentials needed at runtime |
-| Terraform outputs | cluster VIP |
+| Terraform outputs (all) | cluster VIP, gateway_class_name |
+| Terraform outputs (managed CC) | s3_bucket, s3_endpoint, s3_region, oci_registry_url |
+| Terraform outputs (managed env) | mysql_central_ledger_host, mysql_account_lookup_host, kafka_host, mongodb_host, redis_host (+ ports) |
 
 #### Kubernetes resources created
 
 1. **`OCIRepository`** — points Flux source-controller at `oci.repo.url`. Attaches `secretRef` (type `kubernetes.io/dockerconfigjson`) if OCI repo credentials are configured.
 2. **`Kustomization` (platform)** — always deployed, shared services
-3. **`Kustomization` (onprem)** — conditionally deployed when `infra.provider == "proxmox"`, on-prem gap fillers
-4. **`Kustomization` (cc or env)** — role-specific services, depends on upstream kustomizations
-5. **`ConfigMap` (`cluster-config`)** — adopter values for Flux variable substitution:
-   - `cluster_name`, `cluster_vip`, `domain`, `dns_provider`, `alert_email`, `lb_ipam_range`
-6. **`Secret` (`cluster-secrets`)** — sensitive adopter values:
+3. **`Kustomization` (platform-config)** — always deployed, Gateway with wildcard TLS
+4. **`Kustomization` (vendor)** — exactly one per provider (`onprem`, `aws`, `gcp`, `openstack`), deploys provider-specific gap-fillers including ClusterIssuers
+5. **`Kustomization` (role-specific)** — cc or env, depends on vendor kustomization
+6. **`Kustomization` (env-data)** — only on self-hosted profile (Proxmox, OpenStack) for in-cluster data layer
+7. **`Kustomization` (env-auth, env-app)** — always for env clusters
+8. **`ConfigMap` (`cluster-config`)** — adopter values for Flux variable substitution:
+   - `cluster_name`, `cluster_vip`, `domain`, `dns_provider`, `alert_email`, `lb_ipam_range`, `gateway_class_name`
+   - For env clusters: `mysql_central_ledger_host`, `kafka_host`, `mongodb_host`, `redis_host` (+ ports)
+   - For CC clusters (managed): `s3_bucket`, `s3_endpoint`, `s3_region`
+9. **`Secret` (`cluster-secrets`)** — sensitive adopter values:
    - `digitalocean_token`, `oci_repo_username`, `oci_repo_password`, `oci_proxy_username`, `oci_proxy_password`
+   - DNS provider credentials (provider-specific)
+   - For CC clusters (self-hosted only): `minio_root_user`, `minio_root_password`, `harbor_admin_password`
+   - For env clusters: database passwords, OIDC secrets
 
 #### How Flux consumes these
 
@@ -318,11 +410,11 @@ providers/proxmox/                     config/environments/<env>/config.yaml
 
 ```
 config/environments/<env>/   config/environments/<env>/   TF outputs
-  config.yaml                  .env                       cluster_vip
-  oci.repo.url=                OCI_REPO_USERNAME=xxx        = 192.168.88.10
-    oci://ghcr.io/...          OCI_REPO_PASSWORD=xxx
-  cluster.role=cc              DIGITALOCEAN_TOKEN=xxx
-  infra.provider=proxmox
+  config.yaml                  .env                       cluster_vip, gateway_class_name
+  oci.repo.url=                OCI_REPO_USERNAME=xxx      s3_bucket, ecr_url (CC managed)
+    oci://ghcr.io/...          OCI_REPO_PASSWORD=xxx      rds_endpoint, msk_endpoint (env managed)
+  cluster.role=cc              DNS_TOKEN=xxx              ...
+  infra.provider=aws
   domain, dns, app...
           │                      │                          │
           └──────────────────────┼──────────────────────────┘
@@ -335,17 +427,19 @@ config/environments/<env>/   config/environments/<env>/   TF outputs
         ▼                        ▼                          ▼
   ConfigMap                  Secret                   OCIRepository
   cluster-config             cluster-secrets          (ml-gitops)
-    domain=...                 do_token=xxx              │
-    lb_ipam=...                oci_repo_password=xxx     │
-    cluster_vip=...            ...                       │
-        │                        │              ┌────────┼────────┐
-        └────────┬───────────────┘              │        │        │
-                 │                              ▼        ▼        ▼
+    domain=...                 dns_token=xxx              │
+    gateway_class_name=...     oci_repo_password=xxx      │
+    dns_provider=...           db_passwords=xxx           │
+    s3_bucket=... (managed)    ...                        │
+    mysql_host=... (managed)                              │
+        │                        │              ┌─────────┼───────────┐
+        └────────┬───────────────┘              │         │           │
+                 │                              ▼         ▼           ▼
                  │                        Kustomization paths:
-                 │                        platform  onprem*  cc|env
-                 │                        (* if provider=proxmox)
-                 │                              │        │        │
-                 └──────────────────────────────┼────────┼────────┘
+                 │                        platform  <vendor>  cc|env→...
+                 │                        (exactly one: onprem|aws|gcp|openstack)
+                 │                              │         │           │
+                 └──────────────────────────────┼─────────┼───────────┘
                                                 │
                                                 ▼
                                      Flux postBuild.substituteFrom
@@ -353,9 +447,10 @@ config/environments/<env>/   config/environments/<env>/   TF outputs
                                                 │
                                                 ▼
                                      HelmReleases rendered with adopter values
-                                       external-dns → ${dns_provider} + ${digitalocean_token}
-                                       cert-manager → ${domain}
-                                       cilium       → ${lb_ipam_range} (on-prem only)
+                                       external-dns  → ${dns_provider} + DNS credentials
+                                       Gateway       → ${gateway_class_name}
+                                       ClusterIssuer → provider-specific DNS-01 solver (in vendor kustomization)
+                                       Mojaloop      → ${mysql_central_ledger_host}, ${kafka_host}, ...
 ```
 
 ## 7. Artifacts
@@ -375,32 +470,30 @@ What `make apply ENV=<env>` produces:
 ## 8. Module Dependency Chain
 
 ```
-On-prem (Proxmox):
+On-prem (Proxmox, OpenStack):
 
-  config-loader ──→ proxmox (composite)
-                           │
-                           ├── talos-gen-config
-                           │        │
-                           ├── proxmox-vm ←────────┘
-                           │        │
-                           └── talos-bootstrap ←───┘
-                                    │
-                                    ▼
-                              flux-bootstrap
-                                    │
-                                    ▼
-                              flux-config
-
-
-Managed (AWS/GCP/DO):
-
-  config-loader ──→ managed-k8s
+  config-loader ──→ provider (composite: talos-gen-config → vm-provisioning → talos-bootstrap)
                          │
                          ▼
                    flux-bootstrap
                          │
                          ▼
                    flux-config
+
+
+Managed (AWS, GCP, DigitalOcean):
+
+  config-loader ──→ provider (cluster + managed services)
+                         │
+                         ├── K8s cluster (EKS/GKE/DOKS)
+                         ├── CC services: S3 bucket, OCI registry (if role=cc)
+                         └── Env services: RDS, MSK, DocumentDB, ElastiCache (if role=env)
+                         │
+                         ▼
+                   flux-bootstrap
+                         │
+                         ▼
+                   flux-config (receives managed service endpoints as variables)
 ```
 
-Both paths produce: **kubeconfig + Flux running with adopter config applied**.
+Both paths produce: **kubeconfig + Flux running with adopter config applied + managed service endpoints injected into GitOps substitution variables**.

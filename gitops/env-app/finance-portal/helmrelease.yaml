@@ -31,8 +31,8 @@ spec:
         host: moja-centralsettlement-service
         port: 80
       keto:
-        readURL: "http://keto-read.ory.svc.cluster.local:80"
-        writeURL: "http://keto-write.ory.svc.cluster.local:80"
+        readURL: "http://ory-keto-read.ory.svc.cluster.local:80"
+        writeURL: "http://ory-keto-write.ory.svc.cluster.local:80"
       reportingDB:
         host: "${mysql_central_ledger_host}"
         port: 3306

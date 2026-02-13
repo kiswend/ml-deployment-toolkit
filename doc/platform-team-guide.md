@@ -6,31 +6,43 @@ This guide covers the platform team's responsibilities: building, publishing, an
 
 ## Artifact Structure
 
-The OCI artifact is a single package containing six directories. Each directory is a Kustomize root that Flux reconciles independently:
+The OCI artifact is a single package containing multiple directories. Each directory is a Kustomize root that Flux reconciles independently:
 
 ```
 gitops/
-  platform/          # Shared platform services (cert-manager, external-dns, ESO, metrics-server)
-  platform-config/   # Shared platform config (ClusterIssuers with DNS-01, DNS token Secret, Gateway with wildcard TLS)
-  onprem/            # On-prem only (Cilium HelmRelease with gatewayAPI.enabled, LB-IPAM, OpenEBS)
-  cc/                # Control Center operators (vault-operator) + namespace definitions (vault, harbor, minio)
-  cc-config/         # Control Center services (Vault CR in vault ns, Harbor + MinIO HelmReleases in their namespaces)
-  cc-routes/         # Control Center HTTPRoutes (vault, harbor, minio — deployed after cc-config services healthy)
-  env/               # App Environment services (Mojaloop app + dependencies)
+  platform/           # Shared platform services (cert-manager, external-dns, ESO, metrics-server)
+  platform-config/    # Shared platform config (Gateway with ${gateway_class_name}, wildcard TLS)
+
+  # Vendor-specific kustomizations — exactly one deployed per cluster
+  onprem/             # Proxmox: Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers, DNS secret
+  openstack/          # OpenStack: Cilium, Harbor, ClusterIssuers, DNS secret
+  aws/                # AWS: Cilium (BYOCNI), ClusterIssuers (Route53), DNS secret
+  gcp/                # GCP: ClusterIssuers (Cloud DNS), DNS secret
+
+  # Role-specific
+  cc/                 # CC operators (vault-operator) + namespace definitions
+  cc-config/          # CC services (Vault CR, SecretStore)
+  cc-routes/          # CC HTTPRoutes (vault, and conditionally harbor, minio)
+  env/                # Env operators (Strimzi, Percona, Redis, Vault)
+  env-data/           # On-prem/OpenStack env only: data layer CRs (MySQL, Kafka, MongoDB, Redis)
+  env-auth/           # Auth layer (Keycloak, Ory stack)
+  env-app/            # Mojaloop core app (MCM, Finance Portal)
 ```
 
-Note: GatewayClass is not deployed by the artifact. Cilium auto-creates it when `gatewayAPI.enabled: true` (on-prem HelmRelease) or the cloud provider pre-creates it (DOKS, GKE).
+Note: GatewayClass is not deployed by the artifact. It is auto-created by Cilium (`gatewayAPI.enabled: true`) or pre-created by the cloud provider (GKE, DOKS). The Gateway in `platform-config/` references `gatewayClassName: ${gateway_class_name}` — set to `cilium` on most providers, or a GKE-specific class on GCP.
 
 **Deployment matrix:**
 
 | Cluster role | Provider | Paths deployed | Order |
 |-------------|----------|----------------|-------|
-| `cc` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `cc/` → `cc-config/` → `cc-routes/` | Full chain; routes deploy after services healthy |
-| `cc` | DOKS/EKS | `platform/` → `platform-config/` → `cc/` → `cc-config/` → `cc-routes/` | No onprem; routes deploy after services healthy |
-| `env` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `env/` | Full chain with on-prem services |
-| `env` | DOKS/EKS | `platform/` → `platform-config/` → `env/` | No onprem (cloud-native) |
+| `cc` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `cc/` → `cc-config/` → `cc-routes/` | onprem deploys Cilium, LB-IPAM, OpenEBS, MinIO, Harbor, ClusterIssuers |
+| `cc` | AWS | `platform/` → `platform-config/` → `aws/` → `cc/` → `cc-config/` → `cc-routes/` | aws deploys Cilium (BYOCNI), ClusterIssuers; uses S3 + ECR from IaC |
+| `cc` | GCP | `platform/` → `platform-config/` → `gcp/` → `cc/` → `cc-config/` → `cc-routes/` | gcp deploys ClusterIssuers only; GKE manages Cilium + storage |
+| `env` | Proxmox | `platform/` → `platform-config/` → `onprem/` → `env/` → `env-data/` → `env-auth/` → `env-app/` | env-data deploys in-cluster MySQL, Kafka, MongoDB, Redis |
+| `env` | AWS | `platform/` → `platform-config/` → `aws/` → `env/` → `env-auth/` → `env-app/` | No env-data — uses RDS, MSK, DocumentDB, ElastiCache |
+| `env` | GCP | `platform/` → `platform-config/` → `gcp/` → `env/` → `env-auth/` → `env-app/` | No env-data — uses Cloud SQL, Managed Kafka, Memorystore |
 
-Flux uses `dependsOn` to enforce ordering — each Kustomization waits for its dependencies to become healthy before reconciling.
+Every provider gets a vendor kustomization — the concept is no longer "on-prem only". The vendor layer normalizes provider differences so all layers above it (cc, env, app) are generic. Flux uses `dependsOn` to enforce ordering.
 
 ## Directory Conventions
 
@@ -56,51 +68,77 @@ Note: No GatewayClass here — it is auto-created by Cilium (on-prem HelmRelease
 
 ### platform-config/
 
-Provider-agnostic configuration that depends on platform services being ready (e.g. cert-manager must exist before ClusterIssuers can be created):
+Provider-agnostic configuration that depends on platform services being ready (e.g. cert-manager must exist before the Gateway can reference a ClusterIssuer):
 
 ```
 gitops/platform-config/
   kustomization.yaml
-  cert-manager/
-    letsencrypt.yaml           # ClusterIssuers (prod + staging) with DNS-01 solver
-    dns-secret.yaml            # DigitalOcean token for DNS-01 ACME challenges
   gateway/
-    gateway.yaml               # Shared Gateway — wildcard TLS (*.${domain}), allowedRoutes from All namespaces
+    gateway.yaml               # Shared Gateway — wildcard TLS (*.${domain}), gatewayClassName: ${gateway_class_name}
 ```
 
-### onprem/
+Note: ClusterIssuers and DNS credential Secrets have moved to the vendor-specific kustomizations (`onprem/`, `aws/`, `gcp/`, `openstack/`) because the `dns01` solver block is structurally different per DNS provider and cannot be parameterized with simple variable substitution.
 
-On-prem only services (Talos/Proxmox). Skipped on managed K8s where cloud-native equivalents exist:
+### Vendor-specific kustomizations (onprem/, aws/, gcp/, openstack/)
+
+Each provider gets exactly one vendor kustomization that fills the gaps between what the provider manages natively and what the generic platform layer expects. This is the "generalization layer" that normalizes provider differences.
 
 ```
-gitops/onprem/
+gitops/onprem/                         # Proxmox
   kustomization.yaml
   namespace.yaml
   cilium/
-    helmrelease.yaml           # Cilium CNI (Phase 2 — adopts bootstrap install)
+    helmrelease.yaml                   # Cilium CNI (Phase 2 — adopts bootstrap install)
   lb-ipam/
-    lb-ipam.yaml               # L2AnnouncementPolicy + CiliumLoadBalancerIPPool
+    lb-ipam.yaml                       # L2AnnouncementPolicy + CiliumLoadBalancerIPPool
   openebs/
-    helmrelease.yaml           # OpenEBS hostpath storage
+    helmrelease.yaml                   # OpenEBS hostpath storage
+  minio/
+    helmrelease.yaml                   # MinIO standalone (S3-compat object storage)
+    externalsecret.yaml                # MinIO credentials from Vault
+  harbor/
+    helmrelease.yaml                   # Harbor OCI registry + proxy cache
+    ...                                # proxy-cache setup files
+  cert-manager/
+    letsencrypt.yaml                   # ClusterIssuers (prod + staging) with DNS-01 solver
+    dns-secret.yaml                    # DNS provider token (DigitalOcean, Cloudflare, etc.)
 ```
 
-Note: GatewayClass is not deployed here — it is auto-created by Cilium when `gatewayAPI.enabled: true`.
+```
+gitops/aws/                            # AWS EKS
+  kustomization.yaml
+  cilium/
+    helmrelease.yaml                   # Cilium BYOCNI (replaces VPC-CNI, gatewayAPI.enabled)
+  cert-manager/
+    letsencrypt.yaml                   # ClusterIssuers with Route53 DNS-01 solver
+    dns-secret.yaml                    # Route53 credentials (or empty if using IRSA)
+```
+
+```
+gitops/gcp/                            # GCP GKE
+  kustomization.yaml
+  cert-manager/
+    letsencrypt.yaml                   # ClusterIssuers with Cloud DNS solver
+    dns-secret.yaml                    # Cloud DNS credentials (or empty if using Workload Identity)
+```
+
+Note: GatewayClass is not deployed in vendor kustomizations — it is auto-created by Cilium when `gatewayAPI.enabled: true`, or pre-created by the cloud provider (GKE, DOKS).
 
 ### cc/
 
-Operators for the Control Center management plane. Also defines namespaces for CC services (vault, harbor, minio):
+Operators for the Control Center management plane. Also defines namespaces for CC services. On self-hosted providers, all CC namespaces are created (vault, harbor, minio). On managed providers, only `vault` is created — Harbor and MinIO namespaces are not needed since those services are replaced by managed equivalents (ECR/GAR, S3/GCS).
 
 ```
 gitops/cc/
   kustomization.yaml
-  namespace.yaml               # cc-system + vault + harbor + minio namespaces
+  namespace.yaml               # cc-system + vault (+ harbor + minio on self-hosted only)
   vault-operator/
     helmrelease.yaml           # Vault operator (runs in cc-system)
 ```
 
 ### cc-config/
 
-Control Center services. Depends on cc/ (operators and namespaces must be ready). Each service deploys into its own namespace. HTTPRoutes are in `cc-routes/` (deployed after services are healthy):
+Control Center services. Depends on cc/ (operators and namespaces must be ready). Contains only provider-agnostic services — Harbor and MinIO have moved to vendor kustomizations (self-hosted profile only). HTTPRoutes are in `cc-routes/` (deployed after services are healthy):
 
 ```
 gitops/cc-config/
@@ -108,19 +146,11 @@ gitops/cc-config/
   vault/
     vault.yaml                 # Vault CR + RBAC (vault namespace)
     secretstore.yaml           # ClusterSecretStore pointing to vault.vault:8200
-  harbor/
-    helmrelease.yaml           # OCI registry (harbor namespace)
-    externalsecret.yaml        # Harbor credentials from Vault
-    proxy-cache-oci-secret.yaml      # OCI credentials for authenticated upstream registries (Flux-substituted)
-    proxy-cache-externalsecret.yaml  # Admin password for proxy cache setup (harbor namespace)
-    proxy-cache-configmap.yaml       # Setup script: registers upstream registries + proxy cache projects
-    proxy-cache-job.yaml             # One-shot Job: configures Harbor as pull-through cache
-  minio/
-    helmrelease.yaml           # Object storage (minio namespace)
-    externalsecret.yaml        # MinIO credentials from Vault
 ```
 
-**Harbor proxy cache:** A setup Job configures Harbor as a pull-through cache for upstream registries. App Environments pull all images through `harbor.${domain}/<project>/<image>` instead of hitting public registries directly. This enables air-gapped operation and reduces external bandwidth.
+Note: Harbor and MinIO are deployed by the vendor kustomization (`onprem/`, `openstack/`) on self-hosted providers. On managed providers (AWS, GCP), Terraform creates the equivalents (S3/GCS bucket, ECR/Artifact Registry) and passes endpoints as substitution variables.
+
+**Harbor proxy cache (self-hosted CC only):** On self-hosted providers (Proxmox, OpenStack), Harbor is deployed by the vendor kustomization and a setup Job configures it as a pull-through cache for upstream registries. App Environments pull all images through `harbor.${domain}/<project>/<image>` instead of hitting public registries directly. This enables air-gapped operation and reduces external bandwidth. On managed providers (AWS, GCP), Harbor is not deployed — Terraform creates a managed OCI registry (ECR, Artifact Registry) and container images are pulled directly from public registries or via the cloud provider's native caching.
 
 The proxy cache setup files:
 
@@ -166,19 +196,31 @@ Adopter-specific values are injected at reconciliation time via Flux `postBuild.
 | `${cluster_name}` | `config.yaml` | `cc` |
 | `${cluster_vip}` | `config.yaml` | `192.168.88.10` |
 | `${domain}` | `config.yaml` | `example.com` |
-| `${dns_provider}` | `config.yaml` | `digitalocean` |
+| `${dns_provider}` | `config.yaml` | `digitalocean`, `aws`, `google`, `cloudflare` |
 | `${alert_email}` | `config.yaml` | `ops@example.com` |
 | `${lb_ipam_range}` | `config.yaml` | `192.168.88.100-192.168.88.110` |
+| `${gateway_class_name}` | `config.yaml` | `cilium`, `gke-l7-regional-external-managed` |
+| `${s3_endpoint}` | TF output (CC self-hosted) | `http://minio.minio:9000` (Harbor S3 backend, self-hosted CC only) |
+| `${s3_bucket}` | TF output (CC self-hosted) | `harbor` (Harbor S3 backend, self-hosted CC only) |
+| `${s3_region}` | TF output (CC self-hosted) | `us-east-1` (Harbor S3 backend, self-hosted CC only) |
+| `${mysql_central_ledger_host}` | TF output (env managed) | `ml.xxx.rds.amazonaws.com` |
+| `${kafka_host}` | TF output (env managed) | `b-1.ml-msk.xxx.kafka.amazonaws.com` |
+| `${mongodb_host}` | TF output (env managed) | `ml.xxx.docdb.amazonaws.com` |
+| `${redis_host}` | TF output (env managed) | `ml.xxx.cache.amazonaws.com` |
 
 **Available secrets (from Secret `cluster-secrets`):**
 
 | Variable | Source | Example |
 |----------|--------|---------|
-| `${digitalocean_token}` | `.env` | API token |
+| `${digitalocean_token}` | `.env` | API token (DigitalOcean DNS) |
 | `${oci_repo_username}` | `.env` | OCI repo registry username |
 | `${oci_repo_password}` | `.env` | OCI repo registry password |
-| `${oci_proxy_username}` | `.env` | OCI proxy (Harbor) username |
-| `${oci_proxy_password}` | `.env` | OCI proxy (Harbor) password |
+| `${oci_proxy_username}` | `.env` | OCI proxy (Harbor) username — self-hosted CC only |
+| `${oci_proxy_password}` | `.env` | OCI proxy (Harbor) password — self-hosted CC only |
+| `${minio_root_user}` | `.env` | MinIO root user (CC self-hosted) |
+| `${minio_root_password}` | `.env` | MinIO root password (CC self-hosted) |
+| `${harbor_admin_password}` | `.env` | Harbor admin password (CC self-hosted) |
+| `${mysql_*_password}` | `.env` | Database passwords (env clusters) |
 
 ### Example: using variables in a HelmRelease
 
@@ -266,9 +308,10 @@ oci:
 ```
 
 The URL format is `oci://<registry>/<owner>/<package-name>`:
-- **GHCR**: `oci://ghcr.io/mojaloop/ml-gitops`
-- **Harbor**: `oci://harbor.cc.example.com/mojaloop/ml-gitops`
-- **ECR**: `oci://123456789.dkr.ecr.us-east-1.amazonaws.com/ml-gitops`
+- **GHCR** (Platform Team public registry): `oci://ghcr.io/mojaloop/ml-gitops`
+- **Harbor** (self-hosted CC only — Proxmox, OpenStack): `oci://harbor.cc.example.com/mojaloop/ml-gitops`
+- **ECR** (managed CC on AWS): `oci://123456789.dkr.ecr.us-east-1.amazonaws.com/ml-gitops`
+- **Artifact Registry** (managed CC on GCP): `oci://us-docker.pkg.dev/project-id/ml-gitops`
 
 The package name (`ml-gitops`) is arbitrary — it is created on first push.
 
@@ -342,7 +385,7 @@ make tag-gitops ENV=cc TAG=stable
 
 ### Version coherence
 
-All seven directories (platform/, platform-config/, onprem/, cc/, cc-config/, cc-routes/, env/) ship in a single artifact. When you push `v1.2.0`, the adopter gets a coherent snapshot of all three paths. There is no risk of version drift between platform and role-specific paths.
+All directories (platform/, platform-config/, vendor kustomizations, cc/, cc-config/, cc-routes/, env/, env-data/, env-auth/, env-app/) ship in a single artifact. When you push `v1.2.0`, the adopter gets a coherent snapshot of all paths. There is no risk of version drift between platform, vendor, and role-specific paths.
 
 ## CI/CD Integration
 
