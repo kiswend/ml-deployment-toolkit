@@ -92,6 +92,11 @@ spec:
           path "secret/data/onboarding_pm4mls*" {
             capabilities = ["create", "read", "update", "delete", "list"]
           }
+      - name: allow_secrets
+        rules: |
+          path "secret/*" {
+            capabilities = ["create", "read", "update", "delete", "list"]
+          }
 
     auth:
       - type: kubernetes
@@ -103,6 +108,13 @@ spec:
             bound_service_account_namespaces:
               - mcm
             policies: mcm-policy
+            ttl: 1h
+          - name: external-secrets
+            bound_service_account_names:
+              - external-secrets-external-secrets
+            bound_service_account_namespaces:
+              - external-secrets
+            policies: allow_secrets
             ttl: 1h
 
     secrets:
@@ -131,6 +143,29 @@ spec:
               max_ttl: 43800h
               client_flag: true
               server_flag: false
+
+    startupSecrets:
+      - type: kv
+        path: secret/data/kratos
+        data:
+          data:
+            dsn: "mysql://kratos:${kratos_db_password}@tcp(${auth_db_host}.mojaloop.svc.cluster.local:3306)/kratos?max_conns=20&max_idle_conns=4"
+            secretsCipher: "${kratos_secrets_cipher}"
+            secretsCookie: "${kratos_secrets_cookie}"
+            secretsCSRFCookie: "${kratos_secrets_csrf_cookie}"
+            secretsDefault: "${kratos_secrets_default}"
+            smtpConnectionURI: "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
+      - type: kv
+        path: secret/data/keto
+        data:
+          data:
+            dsn: "mysql://keto:${keto_db_password}@tcp(${auth_db_host}.mojaloop.svc.cluster.local:3306)/keto?max_conns=20&max_idle_conns=4"
+      - type: kv
+        path: secret/data/finance-portal
+        data:
+          data:
+            role_assign_svc_secret: "${role_assign_svc_secret}"
+            mongodb_app_password: "${mongodb_app_password}"
 
   # Persistent storage for Vault data
   volumeMounts:

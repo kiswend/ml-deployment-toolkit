@@ -56,6 +56,16 @@ spec:
     podTemplate:
       spec:
         initContainers:
+          - name: wait-for-db
+            image: busybox:1.28
+            command:
+              - sh
+              - -c
+              - |
+                until nslookup auth-db-haproxy.mojaloop.svc.cluster.local; do
+                  echo "Waiting for auth-db DNS..."
+                  sleep 5
+                done
           - name: build-keycloak
             image: quay.io/keycloak/keycloak:22.0.2
             command:
@@ -75,6 +85,13 @@ spec:
                 mountPath: /quarkus-build
         containers:
           - name: keycloak
+            startupProbe:
+              httpGet:
+                path: /health/live
+                port: 8080
+              initialDelaySeconds: 20
+              periodSeconds: 2
+              failureThreshold: 300
             volumeMounts:
               - name: quarkus-build
                 mountPath: /opt/keycloak/lib/quarkus

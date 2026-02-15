@@ -31,20 +31,20 @@ spec:
     remediation:
       retries: 3
   values:
+    global:
+      keto:
+        readURL: "http://keto-read:80"
+        writeURL: "http://keto-write:80"
+      rolePermOperator:
+        mojaloopRole: {}
+        mojaloopPermissionExclusion: {}
+        apiSvc: {}
+
     security-role-perm-operator-svc:
       enabled: true
-      config:
-        ketoReadUrl: "http://keto-read.ory.svc.cluster.local:80"
-        ketoWriteUrl: "http://keto-write.ory.svc.cluster.local:80"
-      resources:
-        requests:
-          cpu: 50m
-          memory: 64Mi
-        limits:
-          cpu: 100m
-          memory: 128Mi
+      ingress:
+        enabled: false
 
-    # Disable sub-charts that are deployed separately
     security-hub-bop-api-svc:
       enabled: false
     security-hub-bop-kratos-svc:

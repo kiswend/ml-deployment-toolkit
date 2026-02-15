@@ -21,13 +21,13 @@ classes:
     talos_type: "worker"
     talos_patches:
       - patch-cilium-install.yaml
-      - patch-openebs.yaml
+      - patch-openebs.yaml  
 
   mixed-plane:
     talos_type: "controlplane"
     talos_patches:
       - patch-cilium-install.yaml
-      - patch-openebs.yaml
+      - patch-openebs.yaml  
       - patch-allow-scheduling-on-cp.yaml
 
   # Future example:

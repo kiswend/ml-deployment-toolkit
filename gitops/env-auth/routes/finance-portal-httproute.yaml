@@ -1,3 +1,6 @@
+# Finance-portal routing — replicates sw002 Istio VirtualService pattern.
+# Shell, UIs, and Kratos proxy go directly to backend services.
+# API routes go through Oathkeeper proxy for auth enforcement.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,6 +13,133 @@ spec:
   hostnames:
     - "finance-portal.${domain}"
   rules:
-    - backendRefs:
-        - name: ory-oathkeeper-proxy
+    # --- Kratos proxy (no auth) ---
+    # Logout browser flow
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /kratos
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: kratos-public
+          port: 80
+
+    # --- API routes through Oathkeeper (auth required) ---
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/
+      backendRefs:
+        - name: oathkeeper-proxy
           port: 4455
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /central-admin/
+      backendRefs:
+        - name: oathkeeper-proxy
+          port: 4455
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /settlementWindows
+      backendRefs:
+        - name: oathkeeper-proxy
+          port: 4455
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /settlements
+      backendRefs:
+        - name: oathkeeper-proxy
+          port: 4455
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /users
+      backendRefs:
+        - name: oathkeeper-proxy
+          port: 4455
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /participants
+      backendRefs:
+        - name: oathkeeper-proxy
+          port: 4455
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /roles
+      backendRefs:
+        - name: oathkeeper-proxy
+          port: 4455
+
+    # --- UI micro-frontends (direct, no auth, strip prefix) ---
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /uis/iam
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: fin-portal-reporting-hub-bop-role-ui
+          namespace: mojaloop
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /uis/transfers
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: fin-portal-reporting-hub-bop-trx-ui
+          namespace: mojaloop
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /uis/settlements
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: fin-portal-reporting-hub-bop-settlements-ui
+          namespace: mojaloop
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /uis/positions
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: fin-portal-reporting-hub-bop-positions-ui
+          namespace: mojaloop
+          port: 80
+
+    # --- Shell catch-all (direct, no auth) ---
+    - backendRefs:
+        - name: fin-portal-reporting-hub-bop-shell
+          namespace: mojaloop
+          port: 80

@@ -39,6 +39,31 @@ locals {
   auth_db_host              = local.is_talos ? "auth-db-haproxy" : var.auth_db_host
 }
 
+# Kratos secrets — generated once, stored in Terraform state, seeded into Vault via cluster-secrets → Flux substitution
+resource "random_password" "kratos_secrets_cipher" {
+  count   = local.is_env ? 1 : 0
+  length  = 32
+  special = false
+}
+
+resource "random_password" "kratos_secrets_cookie" {
+  count   = local.is_env ? 1 : 0
+  length  = 32
+  special = false
+}
+
+resource "random_password" "kratos_secrets_csrf_cookie" {
+  count   = local.is_env ? 1 : 0
+  length  = 32
+  special = false
+}
+
+resource "random_password" "kratos_secrets_default" {
+  count   = local.is_env ? 1 : 0
+  length  = 32
+  special = false
+}
+
 # ConfigMap with cluster configuration for postBuild substitution
 resource "kubernetes_config_map_v1" "cluster_config" {
   metadata {
@@ -106,6 +131,10 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       hubop_oidc_secret             = var.hubop_oidc_secret
       mcm_oidc_client_secret        = var.mcm_oidc_client_secret
       role_assign_svc_secret        = var.role_assign_svc_secret
+      kratos_secrets_cipher         = random_password.kratos_secrets_cipher[0].result
+      kratos_secrets_cookie         = random_password.kratos_secrets_cookie[0].result
+      kratos_secrets_csrf_cookie    = random_password.kratos_secrets_csrf_cookie[0].result
+      kratos_secrets_default        = random_password.kratos_secrets_default[0].result
     } : {}
   )
 

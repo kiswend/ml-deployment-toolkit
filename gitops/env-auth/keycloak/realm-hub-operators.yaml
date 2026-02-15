@@ -1,7 +1,7 @@
-# Keycloak Realm: hub-operators (Finance Portal)
-# NOTE: All Keycloak-internal ${...} expressions are escaped as $${...}
-#       to prevent Flux postBuild substitution. Our own variables (e.g. ${domain})
-#       use single $ and are resolved by Flux normally.
+# Keycloak Realm: hub-operators
+# Replicated from sw002 reference implementation
+# NOTE: Keycloak-internal ${...} expressions are escaped as $${...}
+#       to prevent Flux postBuild substitution.
 apiVersion: k8s.keycloak.org/v2alpha1
 kind: KeycloakRealmImport
 metadata:
@@ -12,117 +12,252 @@ spec:
   realm:
     realm: hub-operators
     enabled: true
-    displayName: Hub Operators
-    sslRequired: external
-    registrationAllowed: false
-    loginWithEmailAllowed: true
-    duplicateEmailsAllowed: false
-    resetPasswordAllowed: true
-    editUsernameAllowed: false
-    bruteForceProtected: true
+    registrationEmailAsUsername: true
+
+    clients:
+    - clientId: connection-manager-api-service
+      secret: "${mcm_oidc_client_secret}"
+      enabled: true
+      clientAuthenticatorType: client-secret
+      redirectUris: []
+      webOrigins: []
+      publicClient: false
+      protocol: openid-connect
+      serviceAccountsEnabled: true
+      standardFlowEnabled: false
+      directAccessGrantsEnabled: false
+      authorizationServicesEnabled: false
+      implicitFlowEnabled: false
+      attributes:
+        access.token.lifespan: "43200"
+    - clientId: hub-op
+      secret: "${hubop_oidc_secret}"
+      enabled: true
+      clientAuthenticatorType: client-secret
+      redirectUris:
+      - "*"
+      - "https://mcm.${domain}/api/auth/callback"
+      - "https://mcm.${domain}/*"
+      - "https://auth.${domain}/*"
+      webOrigins:
+      - "*"
+      - "https://mcm.${domain}"
+      - "https://auth.${domain}"
+      publicClient: false
+      protocol: openid-connect
+      serviceAccountsEnabled: false
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      authorizationServicesEnabled: false
+      implicitFlowEnabled: false
+      attributes:
+        access.token.lifespan: "43200"
+      protocolMappers:
+      - name: groups
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        consentRequired: false
+        config:
+          full.path: 'true'
+          id.token.claim: 'true'
+          access.token.claim: 'true'
+          claim.name: groups
+          userinfo.token.claim: 'true'
+      - name: realm roles
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-realm-role-mapper
+        consentRequired: false
+        config:
+          multivalued: 'true'
+          id.token.claim: 'true'
+          access.token.claim: 'true'
+          claim.name: realm_roles
+          userinfo.token.claim: 'true'
 
     roles:
       realm:
-        - name: manager
-          description: "Hub manager — full access"
-        - name: operator
-          description: "Hub operator — standard operations"
-        - name: clerk
-          description: "Hub clerk — limited operations"
-        - name: financeManager
-          description: "Finance manager — settlement and position management"
-        - name: audit
-          description: "Audit — read-only access"
-        - name: "$${role_default-roles-hub-operators}"
-          description: "Composite default role"
-          composite: true
-          composites:
-            realm:
-              - operator
+      - name: dfsp-admin
+        description: Administrator role for DFSP users
+        composite: true
+        composites:
+          client:
+            realm-management:
+            - manage-users
+            - view-users
+            - manage-clients
+            - view-clients
+      - name: hub-admin
+        description: Administrator role for hub operations
 
-    clients:
-      - clientId: finance-portal
-        name: Finance Portal
-        enabled: true
-        publicClient: false
-        standardFlowEnabled: true
-        directAccessGrantsEnabled: true
-        serviceAccountsEnabled: false
-        protocol: openid-connect
-        rootUrl: "https://finance-portal.${domain}"
-        baseUrl: /
-        redirectUris:
-          - "https://finance-portal.${domain}/*"
-        webOrigins:
-          - "https://finance-portal.${domain}"
-        secret: "${hubop_oidc_secret}"
-        defaultClientScopes:
-          - web-origins
-          - profile
-          - roles
-          - email
-        optionalClientScopes:
-          - address
-          - phone
-          - offline_access
-        protocolMappers:
-          - name: realm-roles
-            protocol: openid-connect
-            protocolMapper: oidc-usermodel-realm-role-mapper
-            config:
-              claim.name: roles
-              jsonType.label: String
-              multivalued: "true"
-              id.token.claim: "true"
-              access.token.claim: "true"
-              userinfo.token.claim: "true"
+    groups:
+    - name: Application
+      subGroups:
+      - name: MTA
+        attributes:
+          description:
+          - Mojabox Technical Administrators
+      - name: PTA
+        attributes:
+          description:
+          - Portal Technical Administrators
 
-      - clientId: role-assign-svc
-        name: Role Assignment Service
-        enabled: true
-        publicClient: false
-        standardFlowEnabled: false
-        directAccessGrantsEnabled: false
-        serviceAccountsEnabled: true
-        protocol: openid-connect
-        secret: "${role_assign_svc_secret}"
-
+    # Standard OIDC client scopes — KeycloakRealmImport does not create
+    # built-in defaults automatically, so we define them explicitly.
     clientScopes:
-      - name: roles
+      - name: profile
+        description: "OpenID Connect built-in scope: profile"
         protocol: openid-connect
         attributes:
           include.in.token.scope: "true"
         protocolMappers:
-          - name: realm-roles
+          - name: given name
             protocol: openid-connect
-            protocolMapper: oidc-usermodel-realm-role-mapper
+            protocolMapper: oidc-usermodel-attribute-mapper
             config:
-              claim.name: roles
-              jsonType.label: String
-              multivalued: "true"
+              user.attribute: firstName
+              claim.name: given_name
               id.token.claim: "true"
               access.token.claim: "true"
               userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: family name
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: lastName
+              claim.name: family_name
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: username
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: username
+              claim.name: preferred_username
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: full name
+            protocol: openid-connect
+            protocolMapper: oidc-full-name-mapper
+            config:
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+      - name: email
+        description: "OpenID Connect built-in scope: email"
+        protocol: openid-connect
+        attributes:
+          include.in.token.scope: "true"
+        protocolMappers:
+          - name: email
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: email
+              claim.name: email
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: email verified
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-property-mapper
+            config:
+              user.attribute: emailVerified
+              claim.name: email_verified
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: boolean
+      - name: web-origins
+        description: "OpenID Connect scope for allowed web origins"
+        protocol: openid-connect
+        attributes:
+          include.in.token.scope: "false"
+        protocolMappers:
+          - name: allowed web origins
+            protocol: openid-connect
+            protocolMapper: oidc-allowed-origins-mapper
 
     users:
-      - username: admin
-        enabled: true
-        emailVerified: true
-        email: "admin@${domain}"
-        credentials:
-          - type: password
-            value: "${keycloak_admin_password}"
-            temporary: true
-        realmRoles:
-          - manager
-      - username: role-assign-svc
-        enabled: true
-        email: "role-assign-svc@none.com"
-        firstName: Role
-        lastName: Assign
-        credentials:
-          - type: password
-            value: "${role_assign_svc_secret}"
-        clientRoles:
-          realm-management:
-            - view-users
+    - username: service-account-connection-manager-api-service
+      emailVerified: false
+      enabled: true
+      totp: false
+      serviceAccountClientId: connection-manager-api-service
+      disableableCredentialTypes: []
+      requiredActions: []
+      realmRoles:
+      - default-roles-hub-operators
+      - dfsp-admin
+      clientRoles: {}
+      notBefore: 0
+      groups: []
+    - username: role-assign-svc
+      enabled: true
+      email: role-assign-svc@none.com
+      firstName: Role
+      lastName: Assign
+      credentials:
+      - type: password
+        value: "${role_assign_svc_secret}"
+      clientRoles:
+        realm-management:
+        - view-users
+      groups: []
+    - username: "portal_admin"
+      email: "portal_admin@${domain}"
+      emailVerified: true
+      enabled: true
+      firstName: Portal
+      lastName: Admin
+      credentials:
+      - type: password
+        value: "${keycloak_admin_password}"
+      clientRoles: {}
+      requiredActions: []
+      notBefore: 0
+      groups:
+      - Application/PTA
+    - username: mcm_admin
+      enabled: true
+      email: "mcm_admin@${domain}"
+      firstName: Mcm
+      lastName: Admin
+      credentials:
+      - type: password
+        value: "${keycloak_admin_password}"
+      groups: []
+
+    clientScopeMappings:
+      connection-manager-api-service:
+      - client: realm-management
+        roles:
+        - dfsp-admin
+
+    otpPolicyType: totp
+    otpPolicyAlgorithm: HmacSHA1
+    otpPolicyInitialCounter: 0
+    otpPolicyDigits: 6
+    otpPolicyLookAheadWindow: 1
+    otpPolicyPeriod: 30
+
+    browserSecurityHeaders:
+      contentSecurityPolicyReportOnly: ''
+      xContentTypeOptions: nosniff
+      xRobotsTag: none
+      xFrameOptions: SAMEORIGIN
+      contentSecurityPolicy: "frame-src 'self'; frame-ancestors 'self'; object-src 'none';"
+      xXSSProtection: "1; mode=block"
+      strictTransportSecurity: "max-age=31536000; includeSubDomains"
+
+    eventsEnabled: true
+    eventsListeners:
+    - jboss-logging
+    enabledEventTypes: []
+    adminEventsEnabled: true
+    adminEventsDetailsEnabled: true
