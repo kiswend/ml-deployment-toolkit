@@ -1,0 +1,234 @@
+# Oathkeeper Rule CRDs for finance-portal API routes (auth required).
+# Only API routes come through oathkeeper-proxy (via HTTPRoute).
+# Shell, UIs, and Kratos are routed directly by the HTTPRoute.
+#
+# Auth: cookie_session + jwt for API endpoints.
+# Authz: 'allow' for now — switch to 'remote_json' (Keto RBAC)
+#        once ory-rbac-role-permissions.yaml is deployed and users assigned roles.
+---
+# API: transfers (reporting-hub-bop-api-svc)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-api-transfers
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/api/transfers<.*>
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://fin-portal-reporting-hub-bop-api-svc.mojaloop.svc.cluster.local:80
+---
+# API: IAM / role-assignment-service (strip /api/iam → /)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-api-iam
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/api/iam/<.*>
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    stripPath: /api/iam
+    url: http://fin-portal-role-assignment-service.mojaloop.svc.cluster.local:80
+---
+# API: central-admin (experience-api-svc, strip /api → keeps /central-admin/)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-api-central-admin
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/api/central-admin/<.*>
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    stripPath: /api
+    url: http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80
+---
+# API: central-settlements (strip /api/central-settlements → /v2/)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-api-central-settlements
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/api/central-settlements/<.*>
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    stripPath: /api/central-settlements
+    url: http://moja-centralsettlement-service.mojaloop.svc.cluster.local:80/v2
+---
+# API: reports (reporting-legacy-api)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-api-reports
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/api/reports<.*>
+    methods:
+      - GET
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://fin-portal-reporting-legacy-api.mojaloop.svc.cluster.local:80
+---
+# Central-admin participants (direct path, not /api/ prefixed)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-central-admin
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/central-admin/<.*>
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80
+---
+# IAM RBAC endpoints (users, participants, roles — for role-assignment UI)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-iam-resources
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/<(users|participants|roles)(/.*)?>
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://fin-portal-role-assignment-service.mojaloop.svc.cluster.local:80
+---
+# Settlement windows (matches /settlementWindows before /settlements)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-settlement-windows
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/settlementWindows<.*>
+    methods:
+      - GET
+      - POST
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://moja-centralsettlement-service.mojaloop.svc.cluster.local:80
+---
+# Settlements (use /settlements/ with trailing slash to avoid matching /settlementWindows)
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: fp-settlements
+  namespace: ory
+spec:
+  match:
+    url: <http|https>://finance-portal.${domain}/settlements<(/.*|$)>
+    methods:
+      - GET
+      - POST
+      - PUT
+  authenticators:
+    - handler: jwt
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://moja-centralsettlement-service.mojaloop.svc.cluster.local:80

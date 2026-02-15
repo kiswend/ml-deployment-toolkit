@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: finance-portal
-      version: "4.2.x"
+      version: "5.1.x"
       sourceRef:
         kind: HelmRepository
         name: mojaloop-charts
@@ -31,8 +31,8 @@ spec:
         host: moja-centralsettlement-service
         port: 80
       keto:
-        readURL: "http://ory-keto-read.ory.svc.cluster.local:80"
-        writeURL: "http://ory-keto-write.ory.svc.cluster.local:80"
+        readURL: "http://keto-read.ory.svc.cluster.local:80"
+        writeURL: "http://keto-write.ory.svc.cluster.local:80"
       reportingDB:
         host: "${mysql_central_ledger_host}"
         port: 3306
@@ -71,26 +71,111 @@ spec:
 
     reporting-hub-bop-shell:
       enabled: true
+      ingress:
+        enabled: false
       config:
         env:
           AUTH_MOCK_API: false
+          REMOTE_API_BASE_URL: ''
+          REMOTE_MOCK_API: false
           LOGIN_URL: "https://auth.${domain}/kratos/self-service/login/browser"
-          LOGOUT_URL: "/kratos/self-service/logout/browser"
+          LOGOUT_URL: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Fkeycloak.${domain}%2Frealms%2Fhub-operators%2Fprotocol%2Fopenid-connect%2Flogout"
           LOGIN_PROVIDER: keycloak
           AUTH_TOKEN_URL: "/kratos/sessions/whoami"
           AUTH_ENABLED: true
+          REMOTE_1_URL: "https://finance-portal.${domain}/uis/iam"
+          REMOTE_2_URL: "https://finance-portal.${domain}/uis/transfers"
+          REMOTE_3_URL: "https://finance-portal.${domain}/uis/settlements"
+          REMOTE_4_URL: "https://finance-portal.${domain}/uis/positions"
+      configFiles:
+        config.json:
+          AUTH_API_BASE_URL: ''
+          AUTH_MOCK_API: 'false'
+          REMOTE_API_BASE_URL: ''
+          REMOTE_MOCK_API: 'false'
+          AUTH_ENABLED: 'true'
+          LOGIN_URL: "https://auth.${domain}/kratos/self-service/login/browser"
+          LOGIN_PROVIDER: keycloak
+          LOGOUT_URL: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Fkeycloak.${domain}%2Frealms%2Fhub-operators%2Fprotocol%2Fopenid-connect%2Flogout"
+          AUTH_TOKEN_URL: /kratos/sessions/whoami
+        remotes.json:
+          roles:
+            path: /iam
+            label: Roles
+            menuComponent: Menu
+            appComponent: App
+            baseUrl: "https://finance-portal.${domain}/uis/iam"
+            url: "https://finance-portal.${domain}/uis/iam/app.js"
+            appName: reporting_hub_bop_role_ui
+          transfers:
+            path: /transfers
+            label: Transfers
+            menuComponent: Menu
+            appComponent: App
+            baseUrl: "https://finance-portal.${domain}/uis/transfers"
+            url: "https://finance-portal.${domain}/uis/transfers/app.js"
+            appName: reporting_hub_bop_trx_ui
+          settlements:
+            path: /settlements
+            label: Settlements
+            menuComponent: Menu
+            appComponent: App
+            baseUrl: "https://finance-portal.${domain}/uis/settlements"
+            url: "https://finance-portal.${domain}/uis/settlements/app.js"
+            appName: reporting_hub_bop_settlements_ui
+          positions:
+            path: /positions
+            label: Financial Positions
+            menuComponent: Menu
+            appComponent: App
+            baseUrl: "https://finance-portal.${domain}/uis/positions"
+            url: "https://finance-portal.${domain}/uis/positions/app.js"
+            appName: reporting_hub_bop_positions_ui
 
     reporting-hub-bop-role-ui:
       enabled: true
-
-    reporting-hub-bop-positions-ui:
-      enabled: true
-
-    reporting-hub-bop-settlements-ui:
-      enabled: true
+      ingress:
+        enabled: false
+      configFiles:
+        runtime-env.js: |
+          window.roleEnv = {
+            REACT_APP_API_BASE_URL: 'https://finance-portal.${domain}/api/iam',
+            REACT_APP_MOCK_API: 'false'
+          };
 
     reporting-hub-bop-trx-ui:
       enabled: true
+      ingress:
+        enabled: false
+      configFiles:
+        runtime-env.js: |
+          window.transferEnv = {
+            REACT_APP_API_BASE_URL: 'https://finance-portal.${domain}/api/transfers',
+            REACT_APP_MOCK_API: 'false'
+          };
+
+    reporting-hub-bop-settlements-ui:
+      enabled: true
+      ingress:
+        enabled: false
+      configFiles:
+        runtime-env.js: |
+          window.settlementEnv = {
+            CENTRAL_LEDGER_ENDPOINT: 'https://finance-portal.${domain}/api/central-admin',
+            CENTRAL_SETTLEMENTS_ENDPOINT: 'https://finance-portal.${domain}/api/central-settlements',
+            REPORTING_API_ENDPOINT: 'https://finance-portal.${domain}/api/transfers',
+            REPORTING_TEMPLATE_API_ENDPOINT: 'https://finance-portal.${domain}/api/reports/report-bilateral-settlement'
+          };
+
+    reporting-hub-bop-positions-ui:
+      enabled: true
+      ingress:
+        enabled: false
+      configFiles:
+        runtime-env.js: |
+          window.positionsEnv = {
+            CENTRAL_LEDGER_ENDPOINT: 'https://finance-portal.${domain}/api/central-admin'
+          };
 
     reporting-events-processor-svc:
       enabled: true
@@ -107,6 +192,21 @@ spec:
         enabled: false
       install-templates: false
       auth: true
+      config:
+        env:
+          VALIDATION_RETRY_COUNT: "10"
+          VALIDATION_RETRY_INTERVAL_MS: "5000"
+      reporting-k8s-templates:
+        templates:
+          settlement: true
+          dfspSettlement: true
+          dfspSettlementDetail: true
+          reconciliationAmount: true
+          settlementWindow: true
+          settlementInitiation: true
+          transactionReconciliation: true
+          dfspSettlementStatement: true
+          settlementAudit: true
 
     role-assignment-service:
       enabled: true
@@ -120,9 +220,13 @@ spec:
               "clerk",
               "financeManager",
               "dfspReconciliationReports",
-              "audit"
+              "audit",
+              "mcmadmin"
             ],
             "AUTO_GRANT_PORTAL_ADMIN_ROLES": [
               "manager"
             ]
           }
+
+    reporting-aggregator-svc:
+      enabled: true

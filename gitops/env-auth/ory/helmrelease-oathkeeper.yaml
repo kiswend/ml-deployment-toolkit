@@ -22,6 +22,14 @@ spec:
     remediation:
       retries: 3
   values:
+    global:
+      ory:
+        oathkeeper:
+          maester:
+            mode: controller
+
+    fullnameOverride: "oathkeeper"
+
     oathkeeper:
       config:
         log:
@@ -36,17 +44,15 @@ spec:
             config:
               jwks_urls:
                 - "https://keycloak.${domain}/realms/hub-operators/protocol/openid-connect/certs"
-                - "https://keycloak.${domain}/realms/dfsps/protocol/openid-connect/certs"
-              required_scope: []
           cookie_session:
             enabled: true
             config:
-              check_session_url: "http://ory-kratos-public.ory.svc.cluster.local:80/sessions/whoami"
+              check_session_url: http://kratos-public/sessions/whoami
               preserve_path: true
               extra_from: "@this"
               subject_from: "identity.traits.subject"
               only:
-                - ory_kratos_session
+              - ory_kratos_session
           anonymous:
             enabled: true
             config:
@@ -55,32 +61,39 @@ spec:
             enabled: true
 
         authorizers:
+          allow:
+            enabled: true
+          keto_engine_acp_ory:
+            enabled: true
+            config:
+              base_url: "http://keto-read"
+              required_action: "read"
+              required_resource: "unknown"
+              flavor: "regex"
           remote_json:
             enabled: true
             config:
-              remote: "http://ory-keto-read.ory.svc.cluster.local:80/relation-tuples/check"
+              remote: http://keto-read/relation-tuples/check
               payload: |
                 {
                   "subject": "{{ print .Subject }}",
                   "resource": "{{ printIndex .MatchContext.RegexpCaptureGroups 0 }}"
                 }
-          allow:
-            enabled: true
 
         mutators:
           id_token:
             enabled: true
             config:
-              issuer_url: "http://ory-oathkeeper-api.ory.svc.cluster.local:4456/"
-              jwks_url: "file:///etc/secrets/oathkeeper/id_token.jwks.json"
+              issuer_url: http://oathkeeper-api:4456/
+              jwks_url: http://oathkeeper-api:4456/.well-known/jwks.json
           header:
             enabled: true
             config:
               headers:
-                X-User: "{{ print .Subject }}"
-                X-Extra: "{{ print .Extra }}"
-                X-Email: "{{ print (((.Extra.identity).traits).email) }}"
-                X-Roles: "{{ toJson (((.Extra.identity).traits).roles) }}"
+                X-User: '{{ print .Subject }}'
+                X-Extra: '{{ print .Extra }}'
+                X-Email: '{{ print (((.Extra.identity).traits).email) }}'
+                X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
           noop:
             enabled: true
 
@@ -95,140 +108,28 @@ spec:
             redirect:
               enabled: false
 
-      # Inline access rules with upstream URLs (proxy mode)
-      # Rules are evaluated in order; more specific rules must come first.
-      accessRules: |
-        - id: finance-portal-kratos
-          upstream:
-            url: "http://ory-kratos-public.ory.svc.cluster.local:80"
-            strip_path: "/kratos"
-          match:
-            url: "<http|https>://finance-portal.${domain}/kratos/<.*>"
-            methods: ["GET", "POST", "PUT", "DELETE"]
-          authenticators:
-            - handler: noop
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: noop
+        serve:
+          proxy:
+            port: 4455
+          api:
+            port: 4456
 
-        - id: finance-portal-central-admin
-          upstream:
-            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
-          match:
-            url: "<http|https>://finance-portal.${domain}/central-admin/<.*>"
-            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-          authenticators:
-            - handler: jwt
-            - handler: cookie_session
-          authorizer:
-            handler: remote_json
-            config:
-              remote: "http://ory-keto-read.ory.svc.cluster.local:80/relation-tuples/check"
-              payload: |
-                {
-                  "namespace": "permission",
-                  "object": "participantView",
-                  "relation": "granted",
-                  "subject_id": "{{ print .Subject }}"
-                }
-          mutators:
-            - handler: header
-
-        - id: finance-portal-settlements
-          upstream:
-            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
-          match:
-            url: "<http|https>://finance-portal.${domain}/settlement<.*>"
-            methods: ["GET", "POST", "PUT", "DELETE"]
-          authenticators:
-            - handler: jwt
-            - handler: cookie_session
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: header
-
-        - id: finance-portal-api
-          upstream:
-            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
-          match:
-            url: "<http|https>://finance-portal.${domain}/api/<.*>"
-            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-          authenticators:
-            - handler: jwt
-            - handler: cookie_session
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: header
-
-        - id: finance-portal-iam
-          upstream:
-            url: "http://fin-portal-reporting-hub-bop-experience-api-svc.mojaloop.svc.cluster.local:80"
-          match:
-            url: "<http|https>://finance-portal.${domain}/<(users|participants|roles)(/.*)?>"
-            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-          authenticators:
-            - handler: jwt
-            - handler: cookie_session
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: header
-
-        - id: finance-portal-ui
-          upstream:
-            url: "http://fin-portal-reporting-hub-bop-shell.mojaloop.svc.cluster.local:80"
-          match:
-            url: "<http|https>://finance-portal.${domain}/<(?!kratos/|central-admin/|settlement|api/|users/|participants/|roles/).*>"
-            methods: ["GET"]
-          authenticators:
-            - handler: anonymous
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: noop
-
-        - id: mcm-api
-          upstream:
-            url: "http://mcm-connection-manager-api.mcm.svc.cluster.local:3001"
-          match:
-            url: "<http|https>://mcm.${domain}/api/<.*>"
-            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-          authenticators:
-            - handler: jwt
-            - handler: cookie_session
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: header
-
-        - id: mcm-ui
-          upstream:
-            url: "http://mcm-connection-manager-ui.mcm.svc.cluster.local:8080"
-          match:
-            url: "<http|https>://mcm.${domain}/<(?!api/).*>"
-            methods: ["GET"]
-          authenticators:
-            - handler: anonymous
-          authorizer:
-            handler: allow
-          mutators:
-            - handler: noop
-
-    secret:
-      enabled: true
-      filename: id_token.jwks.json
+      managedAccessRules: false
 
     maester:
       enabled: true
+      oathkeeperFullnameOverride: 'oathkeeper'
 
     oathkeeper-maester:
+      fullnameOverride: 'oathkeeper-maester'
+      oathkeeperFullnameOverride: 'oathkeeper'
       deployment:
         envs:
-          - name: authorizersAvailable
-            value: allow,deny,noop,remote_json,keto_engine_acp_ory
+        - name: authorizersAvailable
+          value: allow,deny,noop,remote_json,keto_engine_acp_ory
+
+    # Access rules are managed via Rule CRDs (picked up by maester controller),
+    # not inline. See gitops/env-app/ory-blank-rule.yaml and future Rule CRDs.
 
     service:
       proxy:
@@ -237,11 +138,3 @@ spec:
       api:
         enabled: true
         port: 4456
-
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 250m
-        memory: 256Mi

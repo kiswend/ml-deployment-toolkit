@@ -1,8 +1,8 @@
 # openebs-storage-patch.yaml
 machine:
-  # Enable HugePages for Mayastor (minimum 1024 pages = 2GiB)
-  sysctls:
-    vm.nr_hugepages: "1024"
+  # # Enable HugePages for Mayastor (minimum 1024 pages = 2GiB)
+  # sysctls:
+  #   vm.nr_hugepages: "1024"
 
   # Mount the second disk for Mayastor WITHOUT formatting
   # Talos will make it available but won't partition/format it

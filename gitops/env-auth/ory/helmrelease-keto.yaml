@@ -22,11 +22,25 @@ spec:
     remediation:
       retries: 3
   values:
+    fullnameOverride: "keto"
+
+    secret:
+      enabled: false
+      nameOverride: keto-secret
+
     keto:
       automigration:
         enabled: true
+        type: initContainer
       config:
-        dsn: "mysql://keto:${keto_db_password}@tcp(auth-db-haproxy.mojaloop.svc.cluster.local:3306)/keto?max_conns=20&max_idle_conns=4"
+        dsn: "mysql://keto:${keto_db_password}@tcp(${auth_db_host}.mojaloop.svc.cluster.local:3306)/keto?max_conns=20&max_idle_conns=4"
+        serve:
+          read:
+            port: 4466
+          write:
+            port: 4467
+          metrics:
+            port: 4468
         namespaces:
           - id: 0
             name: role
@@ -34,18 +48,3 @@ spec:
             name: permission
           - id: 2
             name: participant
-        serve:
-          read:
-            host: 0.0.0.0
-            port: 4466
-          write:
-            host: 0.0.0.0
-            port: 4467
-
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 250m
-        memory: 256Mi

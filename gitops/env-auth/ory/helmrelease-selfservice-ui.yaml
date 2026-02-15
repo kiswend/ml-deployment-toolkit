@@ -21,16 +21,22 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  dependsOn:
+    - name: kratos
   values:
-    kratosPublicUrl: "http://kratos-public.ory.svc.cluster.local:80"
-    kratosBrowserUrl: "https://auth.${domain}"
-    config:
-      csrfCookieName: "__HOST-ory_kratos_csrf"
+    fullnameOverride: "kratos-ui"
 
-    resources:
-      requests:
-        cpu: 50m
-        memory: 64Mi
-      limits:
-        cpu: 100m
-        memory: 128Mi
+    secret:
+      enabled: false
+      nameOverride: kratos-secret
+
+    config:
+      csrfCookieName: "__HOST-auth.${domain}-x-csrf-token"
+
+    kratosAdminUrl: "http://kratos-admin"
+    kratosPublicUrl: "http://kratos-public"
+    kratosBrowserUrl: "https://auth.${domain}/kratos"
+
+    jwksUrl: "http://oathkeeper-api"
+
+    projectName: "SecureApp"

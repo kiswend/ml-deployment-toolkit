@@ -11,5 +11,5 @@ spec:
     - "mcm.${domain}"
   rules:
     - backendRefs:
-        - name: ory-oathkeeper-proxy
+        - name: oathkeeper-proxy
           port: 4455
