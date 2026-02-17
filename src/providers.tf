@@ -20,6 +20,8 @@ provider "aws" {
   skip_credentials_validation = true
   skip_requesting_account_id  = true
   skip_metadata_api_check     = true
+  access_key                  = try(local.config_raw.infra.provider, "") != "aws" ? "unused" : null
+  secret_key                  = try(local.config_raw.infra.provider, "") != "aws" ? "unused" : null
 }
 
 # Kubernetes Provider - configured with kubeconfig from cluster bootstrap
