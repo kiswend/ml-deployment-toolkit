@@ -1,0 +1,94 @@
+# ------------------------------------------------------------------
+# INFRASTRUCTURE & CLUSTER CONFIGURATION
+# ------------------------------------------------------------------
+# Secrets live in config/.env (sourced via Makefile).
+# Proxmox credentials: native PROXMOX_VE_* env vars.
+# Flux-config secrets: TF_VAR_* env vars (digitalocean_token, oci_repo_*, oci_proxy_*).
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# 1. INFRASTRUCTURE PROVIDER
+# ------------------------------------------------------------------
+infra:
+  provider: "proxmox"  # proxmox | aws | digitalocean
+
+  # --- Proxmox ---
+  proxmox:
+    # Maps deployment template placement groups → Proxmox physical nodes
+    placement:
+      placement-group-1: "worker1"
+      placement-group-2: "worker2"
+      placement-group-3: "worker3"
+      placement-group-4: "worker4"
+
+  # # --- AWS ---
+  # aws:
+  #   region: "us-east-1"
+  #   vpc_cidr: "10.0.0.0/16"
+  #   availability_zones:
+  #     - "us-east-1a"
+  #     - "us-east-1b"
+  #     - "us-east-1c"
+
+  # # --- DigitalOcean ---
+  # digitalocean:
+  #   region: "nyc1"
+  #   vpc_cidr: "10.10.0.0/16"
+
+# ------------------------------------------------------------------
+# 2. DEPLOYMENT TOPOLOGY
+# ------------------------------------------------------------------
+template: "h1m1"  # h1m1 | h2c3w3 | h3c3w3
+
+# ------------------------------------------------------------------
+# 3. CLUSTER PARAMETERS
+# ------------------------------------------------------------------
+cluster:
+  name: "dc-cc"
+  role: "cc"                        # cc | env — determines which gitops paths are deployed
+
+  # Kubernetes API endpoint
+  vip: "192.168.0.240"              # Proxmox: floating IP
+
+  # Flux configuration
+  flux:
+    version: "2.7.2"
+
+# ------------------------------------------------------------------
+# 4. DNS
+# ------------------------------------------------------------------
+dns:
+  provider: "digitalocean"
+  domain: "dc-cc.ml.delma.me"
+
+  # For Cloudflare:
+  # cloudflare:
+  #   proxied: false
+
+  # For AWS:
+  # aws:
+  #   region: "us-east-1"
+
+# ------------------------------------------------------------------
+# 5. APPLICATION PARAMETERS
+# ------------------------------------------------------------------
+app:
+  lb_ipam:
+    range: "192.168.0.241-192.168.0.242"
+  alert_email: "nathan@delma.me"
+
+# ------------------------------------------------------------------
+# 6. OCI CONFIGURATION
+# ------------------------------------------------------------------
+oci:
+  # OCI-REPO: Platform team's OCI registry where the Flux gitops artifact lives
+  repo:
+    active: true                    # Enable Flux OCI reconciliation
+    url: "oci://ghcr.io/kiswend/ml-iac3"
+    version: "latest"               # OCI tag — use "latest" or pin to a specific version
+
+  # OCI-PROXY: Harbor as transparent pull-through cache for container images
+  # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
+  proxy:
+    active: false                   # Enable container image proxy through Harbor
+    url: "harbor.ml-cc.ml.delma.me"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
