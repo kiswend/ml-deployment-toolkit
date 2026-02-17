@@ -50,6 +50,10 @@ spec:
       directAccessGrantsEnabled: false
       authorizationServicesEnabled: false
       implicitFlowEnabled: false
+      defaultClientScopes:
+      - web-origins
+      - profile
+      - email
       attributes:
         access.token.lifespan: "43200"
       protocolMappers:

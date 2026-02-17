@@ -16,7 +16,9 @@ provider "digitalocean" {}
 
 # AWS Provider - reads region from config, credentials from env (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
 provider "aws" {
-  region = try(local.config_raw.infra.aws.region, "us-east-1")
+  region                      = try(local.config_raw.infra.aws.region, "us-east-1")
+  skip_credentials_validation = true
+  skip_requesting_account_id  = true
 }
 
 # Kubernetes Provider - configured with kubeconfig from cluster bootstrap

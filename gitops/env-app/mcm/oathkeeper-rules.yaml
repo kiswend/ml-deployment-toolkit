@@ -1,0 +1,53 @@
+# MCM Oathkeeper Rule CRDs — auth endpoints use cookie_session only,
+# all other API routes use cookie_session + jwt
+---
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-auth
+  namespace: ory
+spec:
+  match:
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+    url: "<https>://mcm.${domain}/api/auth/<.*>"
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+    stripPath: ""
+---
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api
+  namespace: ory
+spec:
+  match:
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+    url: "<https>://mcm.${domain}/api/<.*>"
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+    stripPath: ""

@@ -372,8 +372,10 @@ resource "kubectl_manifest" "kustomization_role" {
       name      = var.cluster_role
       namespace = var.flux_namespace
     }
+    # env clusters: wait for operators to install CRDs before env-data can apply CRs
     spec = {
       interval = "10m"
+      timeout  = local.is_env ? "10m" : "5m"
       path     = "./${var.cluster_role}"
       prune    = true
       dependsOn = local.has_vendor ? [
@@ -385,6 +387,26 @@ resource "kubectl_manifest" "kustomization_role" {
         kind = "OCIRepository"
         name = "ml-gitops"
       }
+      healthChecks = local.is_env ? [
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "psmdb-operator"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "pxc-operator"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "strimzi-kafka-operator"
+          namespace  = var.flux_namespace
+        }
+      ] : []
       postBuild = {
         substituteFrom = [
           {
@@ -505,6 +527,49 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
   ]
 }
 
+# Kustomization: istio (Istio service mesh — control plane + DFSP-facing gateway)
+resource "kubectl_manifest" "kustomization_istio" {
+  count = local.is_env ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "istio"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "10m"
+      path     = "./istio"
+      prune    = true
+      dependsOn = [
+        { name = "platform-config" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_platform_config
+  ]
+}
+
 # Kustomization: env-data (self-hosted data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
 resource "kubectl_manifest" "kustomization_env_data" {
   count = local.is_talos && local.is_env ? 1 : 0
@@ -533,6 +598,18 @@ resource "kubectl_manifest" "kustomization_env_data" {
           apiVersion = "pxc.percona.com/v1"
           kind       = "PerconaXtraDBCluster"
           name       = "central-ledger-db"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "pxc.percona.com/v1"
+          kind       = "PerconaXtraDBCluster"
+          name       = "auth-db"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "pxc.percona.com/v1"
+          kind       = "PerconaXtraDBCluster"
+          name       = "account-lookup-db"
           namespace  = "mojaloop"
         },
         {
