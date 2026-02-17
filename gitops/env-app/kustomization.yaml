@@ -2,7 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ory-rbac-role-permissions.yaml
-  - ory-blank-rule.yaml
   - mojaloop/helmrelease.yaml
   - mcm/helmrelease.yaml
   - mcm/secrets.yaml

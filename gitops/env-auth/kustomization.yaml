@@ -11,6 +11,7 @@ resources:
   - ory/externalsecret-keto.yaml
   - ory/helmrelease-kratos.yaml
   - ory/helmrelease-oathkeeper.yaml
+  - ory/blank-rule.yaml
   - ory/helmrelease-keto.yaml
   - ory/helmrelease-selfservice-ui.yaml
   - ory/helmrelease-bof.yaml

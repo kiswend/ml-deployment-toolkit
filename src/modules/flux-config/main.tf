@@ -594,6 +594,7 @@ resource "kubectl_manifest" "kustomization_env_data" {
         name = "ml-gitops"
       }
       healthChecks = [
+        # MySQL clusters
         {
           apiVersion = "pxc.percona.com/v1"
           kind       = "PerconaXtraDBCluster"
@@ -612,10 +613,49 @@ resource "kubectl_manifest" "kustomization_env_data" {
           name       = "account-lookup-db"
           namespace  = "mojaloop"
         },
+        # Kafka
         {
           apiVersion = "kafka.strimzi.io/v1beta2"
           kind       = "Kafka"
           name       = "mojaloop-kafka"
+          namespace  = "mojaloop"
+        },
+        # MongoDB
+        {
+          apiVersion = "psmdb.percona.com/v1"
+          kind       = "PerconaServerMongoDB"
+          name       = "bulk-mongodb"
+          namespace  = "mojaloop"
+        },
+        # Init jobs (create databases/users — must complete before migrations run)
+        {
+          apiVersion = "batch/v1"
+          kind       = "Job"
+          name       = "init-central-ledger-db"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "batch/v1"
+          kind       = "Job"
+          name       = "init-auth-db"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "batch/v1"
+          kind       = "Job"
+          name       = "init-account-lookup-db"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "batch/v1"
+          kind       = "Job"
+          name       = "init-bulk-mongodb"
+          namespace  = "mojaloop"
+        },
+        {
+          apiVersion = "batch/v1"
+          kind       = "Job"
+          name       = "init-reporting-mongodb"
           namespace  = "mojaloop"
         }
       ]
@@ -671,11 +711,37 @@ resource "kubectl_manifest" "kustomization_env_auth" {
           name       = "vault"
           namespace  = "vault"
         },
+        # Keycloak: operator + instance
         {
           apiVersion = "apps/v1"
           kind       = "Deployment"
           name       = "keycloak-operator"
           namespace  = "keycloak"
+        },
+        {
+          apiVersion = "k8s.keycloak.org/v2alpha1"
+          kind       = "Keycloak"
+          name       = "keycloak"
+          namespace  = "keycloak"
+        },
+        # Ory stack
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "kratos"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "oathkeeper"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "keto"
+          namespace  = var.flux_namespace
         }
       ]
       postBuild = {
@@ -723,6 +789,26 @@ resource "kubectl_manifest" "kustomization_env_app" {
         kind = "OCIRepository"
         name = "ml-gitops"
       }
+      healthChecks = [
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "mojaloop"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "mcm"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "finance-portal"
+          namespace  = var.flux_namespace
+        }
+      ]
       postBuild = {
         substituteFrom = [
           {
