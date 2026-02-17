@@ -49,7 +49,9 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_keycloak_admin_password=$${KEYCLOAK_ADMIN_PASSWORD:-} \
 	       TF_VAR_hubop_oidc_secret=$${HUBOP_OIDC_SECRET:-} \
 	       TF_VAR_mcm_oidc_client_secret=$${MCM_OIDC_CLIENT_SECRET:-} \
-	       TF_VAR_role_assign_svc_secret=$${ROLE_ASSIGN_SVC_SECRET:-}
+	       TF_VAR_role_assign_svc_secret=$${ROLE_ASSIGN_SVC_SECRET:-} && \
+	export AWS_ACCESS_KEY_ID=$${AWS_ACCESS_KEY_ID:-unused} \
+	       AWS_SECRET_ACCESS_KEY=$${AWS_SECRET_ACCESS_KEY:-unused}
 
 # Default target
 .DEFAULT_GOAL := help
