@@ -26,10 +26,11 @@ spec:
   install:
     createNamespace: false
     remediation:
-      retries: 3
+      retries: -1
   upgrade:
     remediation:
-      retries: 3
+      retries: -1
+      strategy: uninstall
   values:
     fullnameOverride: "kratos"
 
