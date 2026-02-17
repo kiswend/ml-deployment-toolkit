@@ -40,7 +40,7 @@ locals {
   instances = try([
     for instance in local.deployment_template.instances : merge(instance, {
       name = "${local.config.cluster.name}-${instance.name}"
-      tags = try(instance.tags, [])
+      tags = concat(try(instance.tags, []), [local.config.cluster.name])
       resolved_placement = {
         placement_group = try(
           lookup(local.placement_map, instance.placement_group, instance.placement_group),
