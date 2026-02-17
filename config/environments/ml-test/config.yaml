@@ -58,7 +58,8 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "ml-test.ml.delma.me"
+  # domain: "ml-test.ml.delma.me"
+  domain: "ml-sw1.ml.delma.me"
 
   # For Cloudflare:
   # cloudflare:

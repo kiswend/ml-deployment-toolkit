@@ -23,17 +23,10 @@ locals {
   }
   active_provider = try(local.provider_outputs[local.provider_name], null)
 
-  # Kubeconfig path — two strategies depending on deployment phase:
-  # 1. File exists (subsequent runs): use static path to avoid cascading "known after apply"
-  #    from module output chain, which would break Helm/Kubernetes providers at plan time.
-  # 2. File missing (first deploy): fall back to module output, which is "unknown" at plan
-  #    time and triggers Terraform's deferred provider configuration — providers get
-  #    configured during apply, after the bootstrap module writes the kubeconfig.
-  kubeconfig_path = (
-    fileexists("${local.artifacts_path}/kubernetes/kubeconfig")
-    ? "${local.artifacts_path}/kubernetes/kubeconfig"
-    : local.active_provider != null ? local.active_provider.kubeconfig_path : null
-  )
+  # Kubeconfig path — derived from provider module output (local_sensitive_file.filename).
+  # This is an input attribute, so it's known at plan time even for new resources.
+  # On first deploy, providers defer configuration until apply when the file is written.
+  kubeconfig_path = local.active_provider != null ? local.active_provider.kubeconfig_path : null
 }
 
 # Load configuration from YAML files
