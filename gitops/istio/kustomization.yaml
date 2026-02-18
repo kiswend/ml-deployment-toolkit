@@ -5,3 +5,4 @@ resources:
   - base/helmrelease.yaml
   - istiod/helmrelease.yaml
   - gateway/helmrelease.yaml
+  - gateway/gateway.yaml

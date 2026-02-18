@@ -35,12 +35,12 @@ spec:
         directAccessGrantsEnabled: true
         serviceAccountsEnabled: false
         protocol: openid-connect
-        rootUrl: "https://mcm.${domain}"
+        rootUrl: "https://mcm.int.${domain}"
         baseUrl: /
         redirectUris:
-          - "https://mcm.${domain}/*"
+          - "https://mcm.int.${domain}/*"
         webOrigins:
-          - "https://mcm.${domain}"
+          - "https://mcm.int.${domain}"
         secret: "${mcm_oidc_client_secret}"
         defaultClientScopes:
           - web-origins

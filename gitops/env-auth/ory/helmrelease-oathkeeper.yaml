@@ -44,7 +44,7 @@ spec:
             enabled: true
             config:
               jwks_urls:
-                - "https://keycloak.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+                - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
           cookie_session:
             enabled: true
             config:

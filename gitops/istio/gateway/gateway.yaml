@@ -1,21 +1,21 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: gw-int
-  namespace: platform-system
+  name: gw-ext
+  namespace: istio-ingress-ext
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  gatewayClassName: ${gateway_class_name}
+  gatewayClassName: istio
   listeners:
     - name: https
-      hostname: "*.int.${domain}"
+      hostname: "*.ext.${domain}"
       port: 443
       protocol: HTTPS
       tls:
         mode: Terminate
         certificateRefs:
-          - name: wildcard-int-tls
+          - name: wildcard-ext-tls
       allowedRoutes:
         namespaces:
           from: All

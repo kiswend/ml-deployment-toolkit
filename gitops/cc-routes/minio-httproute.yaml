@@ -5,10 +5,10 @@ metadata:
   namespace: minio
 spec:
   parentRefs:
-    - name: main-gateway
+    - name: gw-int
       namespace: platform-system
   hostnames:
-    - "minio.${domain}"
+    - "minio.int.${domain}"
   rules:
     - backendRefs:
         - name: minio-console

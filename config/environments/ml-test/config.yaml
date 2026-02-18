@@ -91,4 +91,4 @@ oci:
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
     active: true                   # Enable container image proxy through Harbor
-    url: "harbor.ml-cc.ml.delma.me"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    url: "harbor.int.ml-cc.ml.delma.me"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)

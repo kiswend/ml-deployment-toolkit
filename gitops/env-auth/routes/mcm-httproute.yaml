@@ -7,10 +7,10 @@ metadata:
   namespace: mcm
 spec:
   parentRefs:
-    - name: main-gateway
+    - name: gw-int
       namespace: platform-system
   hostnames:
-    - "mcm.${domain}"
+    - "mcm.int.${domain}"
   rules:
     # Kratos proxy (no auth) — whoami + logout
     - matches:

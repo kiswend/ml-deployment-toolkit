@@ -32,11 +32,11 @@ spec:
       nameOverride: kratos-secret
 
     config:
-      csrfCookieName: "__HOST-auth.${domain}-x-csrf-token"
+      csrfCookieName: "__HOST-auth.int.${domain}-x-csrf-token"
 
     kratosAdminUrl: "http://kratos-admin"
     kratosPublicUrl: "http://kratos-public"
-    kratosBrowserUrl: "https://auth.${domain}/kratos"
+    kratosBrowserUrl: "https://auth.int.${domain}/kratos"
 
     jwksUrl: "http://oathkeeper-api"
 

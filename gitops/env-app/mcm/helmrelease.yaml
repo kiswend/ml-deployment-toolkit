@@ -13,7 +13,7 @@ metadata:
   name: mcm
   namespace: flux-system
 spec:
-  interval: 30m
+  interval: 10m
   chart:
     spec:
       chart: connection-manager
@@ -42,14 +42,14 @@ spec:
       schema: mcm
 
     api:
-      url: "https://mcm.${domain}"
+      url: "https://mcm.int.${domain}"
       switchFQDN: "${domain}"
       switchId: "hub-${domain}"
 
       keycloak:
         enabled: true
-        baseUrl: "https://keycloak.${domain}"
-        discoveryUrl: "https://keycloak.${domain}/realms/dfsps/.well-known/openid-configuration"
+        baseUrl: "https://keycloak.int.${domain}"
+        discoveryUrl: "https://keycloak.int.${domain}/realms/dfsps/.well-known/openid-configuration"
         adminClientId: mcm-portal
         adminClientSecretName: mcm-oidc-client-secret
         adminClientSecretKey: secret
@@ -78,13 +78,13 @@ spec:
         externallyManaged: false
 
     ui:
-      checkSessionUrl: "https://mcm.${domain}/kratos/sessions/whoami"
-      loginUrl: "https://auth.${domain}/kratos/self-service/login/browser"
+      checkSessionUrl: "https://mcm.int.${domain}/kratos/sessions/whoami"
+      loginUrl: "https://auth.int.${domain}/kratos/self-service/login/browser"
       loginProvider: keycloak
       logoutUrl: "/kratos/self-service/logout/browser"
       oauth:
         enabled: true
-        hubOidcProviderUrl: "https://keycloak.${domain}/realms/dfsps/protocol/openid-connect"
+        hubOidcProviderUrl: "https://keycloak.int.${domain}/realms/dfsps/protocol/openid-connect"
         clientId: mcm-portal
         clientSecretName: mcm-oidc-client-secret
         clientSecretKey: secret

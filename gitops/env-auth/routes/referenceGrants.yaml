@@ -18,6 +18,9 @@ spec:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       namespace: mcm
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: mojaloop
   to:
     - group: gateway.networking.k8s.io
       kind: Gateway

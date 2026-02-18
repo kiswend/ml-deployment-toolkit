@@ -5,10 +5,10 @@ metadata:
   namespace: vault
 spec:
   parentRefs:
-    - name: main-gateway
+    - name: gw-int
       namespace: platform-system
   hostnames:
-    - "vault.${domain}"
+    - "vault.int.${domain}"
   rules:
     - backendRefs:
         - name: vault
