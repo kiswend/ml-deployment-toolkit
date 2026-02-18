@@ -734,12 +734,6 @@ resource "kubectl_manifest" "kustomization_env_auth" {
         {
           apiVersion = "helm.toolkit.fluxcd.io/v2"
           kind       = "HelmRelease"
-          name       = "oathkeeper"
-          namespace  = var.flux_namespace
-        },
-        {
-          apiVersion = "helm.toolkit.fluxcd.io/v2"
-          kind       = "HelmRelease"
           name       = "keto"
           namespace  = var.flux_namespace
         }

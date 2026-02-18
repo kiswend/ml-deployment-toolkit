@@ -239,6 +239,24 @@ spec:
     # --- TTK (Testing Toolkit) ---
     ml-testing-toolkit:
       enabled: true
+      config:
+        mongodb:
+          host: "${mongodb_host}"
+          port: "${mongodb_port}"
+          user: mojaloop
+          password: "${mongodb_app_password}"
+          database: ttk
+          secret: null
+          connectionString: null
+          connectionStringSecret:
+            name: null
+            key: null
+          params: {}
+          ssl:
+            enabled: false
+            verify: false
+            caSecret: {}
+            clientCert: {}
       ml-testing-toolkit-backend:
         initContainers: |
           - name: wait-for-mongodb
