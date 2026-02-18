@@ -55,6 +55,60 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
+  name: init-ttk-mongodb
+  namespace: mojaloop
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-mongodb
+          image: percona/percona-server-mongodb:7.0
+          command:
+            - sh
+            - -c
+            - |
+              until mongosh "mongodb://userAdmin:$MONGODB_ADMIN_PASSWORD@bulk-mongodb-rs0.mojaloop.svc.cluster.local/admin?replicaSet=rs0" --eval 'db.runCommand({ping:1})' 2>/dev/null; do
+                echo "Waiting for bulk-mongodb..."
+                sleep 5
+              done
+          env:
+            - name: MONGODB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bulk-mongodb-secrets
+                  key: MONGODB_USER_ADMIN_PASSWORD
+      containers:
+        - name: init-db
+          image: percona/percona-server-mongodb:7.0
+          command:
+            - sh
+            - -c
+            - |
+              mongosh "mongodb://userAdmin:$MONGODB_ADMIN_PASSWORD@bulk-mongodb-rs0.mojaloop.svc.cluster.local/admin?replicaSet=rs0" <<'EOF'
+              use ttk;
+              db.createUser({
+                user: "mojaloop",
+                pwd: process.env.MONGODB_APP_PASSWORD,
+                roles: [{ role: "readWrite", db: "ttk" }]
+              });
+              EOF
+          env:
+            - name: MONGODB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bulk-mongodb-secrets
+                  key: MONGODB_USER_ADMIN_PASSWORD
+            - name: MONGODB_APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bulk-mongodb-app-secrets
+                  key: MONGODB_APP_PASSWORD
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
   name: init-reporting-mongodb
   namespace: mojaloop
 spec:

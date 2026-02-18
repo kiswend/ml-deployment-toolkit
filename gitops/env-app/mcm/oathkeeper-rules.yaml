@@ -14,7 +14,7 @@ spec:
       - PUT
       - DELETE
       - PATCH
-    url: "<https>://mcm.${domain}/api/auth/<.*>"
+    url: "<https>://mcm.int.${domain}/api/auth/<.*>"
   authenticators:
     - handler: cookie_session
   authorizer:
@@ -39,7 +39,7 @@ spec:
       - PUT
       - DELETE
       - PATCH
-    url: "<https>://mcm.${domain}/api/<.*>"
+    url: "<https>://mcm.int.${domain}/api/<.*>"
   authenticators:
     - handler: cookie_session
     - handler: jwt

@@ -14,7 +14,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/api/transfers<.*>
+    url: <http|https>://finance-portal.int.${domain}/api/transfers<.*>
     methods:
       - GET
       - POST
@@ -40,7 +40,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/api/iam/<.*>
+    url: <http|https>://finance-portal.int.${domain}/api/iam/<.*>
     methods:
       - GET
       - POST
@@ -67,7 +67,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/api/central-admin/<.*>
+    url: <http|https>://finance-portal.int.${domain}/api/central-admin/<.*>
     methods:
       - GET
       - POST
@@ -94,7 +94,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/api/central-settlements/<.*>
+    url: <http|https>://finance-portal.int.${domain}/api/central-settlements/<.*>
     methods:
       - GET
       - POST
@@ -121,7 +121,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/api/reports<.*>
+    url: <http|https>://finance-portal.int.${domain}/api/reports<.*>
     methods:
       - GET
   authenticators:
@@ -143,7 +143,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/central-admin/<.*>
+    url: <http|https>://finance-portal.int.${domain}/central-admin/<.*>
     methods:
       - GET
       - POST
@@ -168,7 +168,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/<(users|participants|roles)(/.*)?>
+    url: <http|https>://finance-portal.int.${domain}/<(users|participants|roles)(/.*)?>
     methods:
       - GET
       - POST
@@ -194,7 +194,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/settlementWindows<.*>
+    url: <http|https>://finance-portal.int.${domain}/settlementWindows<.*>
     methods:
       - GET
       - POST
@@ -217,7 +217,7 @@ metadata:
   namespace: ory
 spec:
   match:
-    url: <http|https>://finance-portal.${domain}/settlements<(/.*|$)>
+    url: <http|https>://finance-portal.int.${domain}/settlements<(/.*|$)>
     methods:
       - GET
       - POST

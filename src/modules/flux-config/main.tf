@@ -527,9 +527,9 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
   ]
 }
 
-# Kustomization: istio (Istio service mesh — control plane + DFSP-facing gateway)
+# Kustomization: istio (Istio service mesh — control plane + DFSP-facing ext gateway)
 resource "kubectl_manifest" "kustomization_istio" {
-  count = local.is_env ? 1 : 0
+  count = 1
 
   yaml_body = yamlencode({
     apiVersion = "kustomize.toolkit.fluxcd.io/v1"

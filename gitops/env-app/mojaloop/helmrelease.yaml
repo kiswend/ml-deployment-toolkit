@@ -13,8 +13,8 @@ metadata:
   name: mojaloop
   namespace: flux-system
 spec:
-  interval: 30m
-  timeout: 30m
+  interval: 10m
+  timeout: 10m
   chart:
     spec:
       chart: mojaloop
@@ -286,7 +286,7 @@ spec:
                   PARAMS=$(echo "$DB_PARAMS" | jq -r 'to_entries | map("\(.key)=\(.value|tostring)") | join("&")');
                   PARAMS="?$PARAMS";
                 fi;
-                until mongosh "mongodb://${DB_HOST}:${DB_PORT}/${DB_DATABASE}${PARAMS}" --authenticationDatabase "${DB_DATABASE}" --username "${DB_USER}" --password "${DB_PASS}" $MONGO_TLS_ARGS --eval "disableTelemetry();db.adminCommand('ping')" ;
+                until mongosh "mongodb://$DB_HOST:$DB_PORT/$DB_DATABASE$PARAMS" --authenticationDatabase "$DB_DATABASE" --username "$DB_USER" --password "$DB_PASS" $MONGO_TLS_ARGS --eval "disableTelemetry();db.adminCommand('ping')" ;
                 do
                   echo --------------------;
                   echo Waiting for MongoDB...;
@@ -341,7 +341,9 @@ spec:
             user: mojaloop
             password: "${mongodb_app_password}"
             database: ttk
-            secret: null
+            secret:
+              name: bulk-mongodb-app-secrets
+              key: MONGODB_APP_PASSWORD
             connectionString: null
             connectionStringSecret:
               name: null
@@ -353,8 +355,12 @@ spec:
               caSecret: {}
               clientCert: {}
 
-    ml-testing-toolkit-cli:
-      enabled: false
+      ml-testing-toolkit-frontend:
+        config:
+          API_BASE_URL: https://ttk-backend.int.${domain}
+
+      ml-testing-toolkit-cli:
+        enabled: false
 
     # --- Third Party (deferred) ---
     thirdparty:

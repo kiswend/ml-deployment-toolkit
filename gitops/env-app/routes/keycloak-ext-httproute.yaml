@@ -1,14 +1,15 @@
+# Keycloak external interface — DFSP OIDC authentication
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: keycloak
+  name: keycloak-ext
   namespace: keycloak
 spec:
   parentRefs:
-    - name: gw-int
-      namespace: platform-system
+    - name: gw-ext
+      namespace: istio-ingress-ext
   hostnames:
-    - "keycloak.int.${domain}"
+    - "keycloak.ext.${domain}"
   rules:
     - backendRefs:
         - name: keycloak-service

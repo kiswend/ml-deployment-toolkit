@@ -13,3 +13,15 @@ resources:
   - finance-portal/externalsecret-reporting-events-db.yaml
   - finance-portal/oathkeeper-rules.yaml
   - finance-portal/referencegrant.yaml
+  # gw-ext routes (DFSP-facing)
+  - routes/extapi-httproute.yaml
+  - routes/mcm-ext-httproute.yaml
+  - routes/keycloak-ext-httproute.yaml
+  - routes/referencegrant-ext.yaml
+  # gw-int routes (internal ops)
+  - routes/intapi-httproute.yaml
+  - routes/ttk-httproute.yaml
+  - routes/ttk-backend-httproute.yaml
+  - routes/simulator-httproute.yaml
+  - routes/settlement-httproute.yaml
+  - routes/tx-requests-httproute.yaml

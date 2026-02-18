@@ -44,7 +44,7 @@ spec:
   transaction:
     xaEnabled: false
   hostname:
-    hostname: "keycloak.${domain}"
+    hostname: "keycloak.int.${domain}"
     strict: false
     strictBackchannel: false
   additionalOptions:

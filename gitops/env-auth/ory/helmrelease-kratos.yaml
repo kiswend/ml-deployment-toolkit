@@ -102,7 +102,7 @@ spec:
 
         serve:
           public:
-            base_url: "https://auth.${domain}/kratos/"
+            base_url: "https://auth.int.${domain}/kratos/"
             port: 4433
             cors:
               enabled: true
@@ -112,7 +112,7 @@ spec:
             port: 4434
 
         selfservice:
-          default_browser_return_url: "https://auth.${domain}/ui/welcome"
+          default_browser_return_url: "https://auth.int.${domain}/ui/welcome"
           allowed_return_urls:
             - "https://*.${domain}"
 
@@ -132,15 +132,15 @@ spec:
                       - profile
                       - email
                     mapper_url: "base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7Cgp7CiAgaWRlbnRpdHk6IHsKICAgIHRyYWl0czogewogICAgICBlbWFpbDogY2xhaW1zLmVtYWlsLAogICAgICBuYW1lOiBjbGFpbXMubmFtZSwKICAgICAgc3ViamVjdDogY2xhaW1zLnN1YgogICAgfSwKICB9LAp9Cg=="
-                    issuer_url: "https://keycloak.${domain}/realms/hub-operators"
+                    issuer_url: "https://keycloak.int.${domain}/realms/hub-operators"
 
           flows:
             login:
-              ui_url: "https://auth.${domain}/ui/login"
+              ui_url: "https://auth.int.${domain}/ui/login"
               lifespan: 10m
               after:
                 oidc:
-                  default_browser_return_url: "https://auth.${domain}/ui/welcome"
+                  default_browser_return_url: "https://auth.int.${domain}/ui/welcome"
                   hooks:
                     - hook: web_hook
                       config:
@@ -158,10 +158,10 @@ spec:
 
             logout:
               after:
-                default_browser_return_url: "https://keycloak.${domain}/realms/hub-operators/protocol/openid-connect/logout"
+                default_browser_return_url: "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/logout"
 
             error:
-              ui_url: "https://auth.${domain}/ui/error"
+              ui_url: "https://auth.int.${domain}/ui/error"
 
         log:
           level: debug

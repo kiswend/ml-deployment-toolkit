@@ -36,13 +36,13 @@ spec:
       clientAuthenticatorType: client-secret
       redirectUris:
       - "*"
-      - "https://mcm.${domain}/api/auth/callback"
-      - "https://mcm.${domain}/*"
-      - "https://auth.${domain}/*"
+      - "https://mcm.int.${domain}/api/auth/callback"
+      - "https://mcm.int.${domain}/*"
+      - "https://auth.int.${domain}/*"
       webOrigins:
       - "*"
-      - "https://mcm.${domain}"
-      - "https://auth.${domain}"
+      - "https://mcm.int.${domain}"
+      - "https://auth.int.${domain}"
       publicClient: false
       protocol: openid-connect
       serviceAccountsEnabled: false

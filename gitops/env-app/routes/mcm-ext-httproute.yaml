@@ -1,0 +1,27 @@
+# MCM external interface — DFSP-facing pm4mlapi
+# Rewrite /pm4mlapi → /api for the MCM connection manager API
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcm-ext
+  namespace: mcm
+spec:
+  parentRefs:
+    - name: gw-ext
+      namespace: istio-ingress-ext
+  hostnames:
+    - "mcm.ext.${domain}"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /pm4mlapi
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /api
+      backendRefs:
+        - name: mcm-connection-manager-api
+          port: 3001

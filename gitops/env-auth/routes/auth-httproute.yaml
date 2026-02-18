@@ -8,10 +8,10 @@ metadata:
   namespace: ory
 spec:
   parentRefs:
-    - name: main-gateway
+    - name: gw-int
       namespace: platform-system
   hostnames:
-    - "auth.${domain}"
+    - "auth.int.${domain}"
   rules:
     # Kratos public API — strip /kratos prefix
     - matches:
