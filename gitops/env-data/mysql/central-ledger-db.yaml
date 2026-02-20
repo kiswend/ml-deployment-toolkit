@@ -8,7 +8,7 @@ spec:
   allowUnsafeConfigurations: true
   secretsName: central-ledger-db-secrets
   pxc:
-    size: 3
+    size: 1
     image: percona/percona-xtradb-cluster:8.0.44-35.1
     resources:
       requests:
@@ -26,6 +26,9 @@ spec:
       [mysqld]
       pxc_strict_mode=PERMISSIVE
       default_authentication_plugin=mysql_native_password
+      wsrep_auto_increment_control=OFF
+      auto_increment_increment=1
+      auto_increment_offset=1
       innodb_buffer_pool_size=1G
       max_connections=2000
       character_set_server=utf8
