@@ -1,0 +1,267 @@
+# Keycloak Realm: hub-operators
+# Replicated from sw002 reference implementation
+# NOTE: Keycloak-internal ${...} expressions are escaped as $${...}
+#       to prevent Flux postBuild substitution.
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: hub-operators-realm
+  namespace: keycloak
+spec:
+  keycloakCRName: keycloak
+  realm:
+    realm: hub-operators
+    enabled: true
+    registrationEmailAsUsername: true
+
+    clients:
+    - clientId: connection-manager-api-service
+      secret: "${mcm_oidc_client_secret}"
+      enabled: true
+      clientAuthenticatorType: client-secret
+      redirectUris: []
+      webOrigins: []
+      publicClient: false
+      protocol: openid-connect
+      serviceAccountsEnabled: true
+      standardFlowEnabled: false
+      directAccessGrantsEnabled: false
+      authorizationServicesEnabled: false
+      implicitFlowEnabled: false
+      attributes:
+        access.token.lifespan: "43200"
+    - clientId: hub-op
+      secret: "${hubop_oidc_secret}"
+      enabled: true
+      clientAuthenticatorType: client-secret
+      redirectUris:
+      - "*"
+      - "https://mcm.int.${domain}/api/auth/callback"
+      - "https://mcm.int.${domain}/*"
+      - "https://auth.int.${domain}/*"
+      webOrigins:
+      - "*"
+      - "https://mcm.int.${domain}"
+      - "https://auth.int.${domain}"
+      publicClient: false
+      protocol: openid-connect
+      serviceAccountsEnabled: false
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      authorizationServicesEnabled: false
+      implicitFlowEnabled: false
+      defaultClientScopes:
+      - web-origins
+      - profile
+      - email
+      attributes:
+        access.token.lifespan: "43200"
+      protocolMappers:
+      - name: groups
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        consentRequired: false
+        config:
+          full.path: 'true'
+          id.token.claim: 'true'
+          access.token.claim: 'true'
+          claim.name: groups
+          userinfo.token.claim: 'true'
+      - name: realm roles
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-realm-role-mapper
+        consentRequired: false
+        config:
+          multivalued: 'true'
+          id.token.claim: 'true'
+          access.token.claim: 'true'
+          claim.name: realm_roles
+          userinfo.token.claim: 'true'
+
+    roles:
+      realm:
+      - name: dfsp-admin
+        description: Administrator role for DFSP users
+        composite: true
+        composites:
+          client:
+            realm-management:
+            - manage-users
+            - view-users
+            - manage-clients
+            - view-clients
+      - name: hub-admin
+        description: Administrator role for hub operations
+
+    groups:
+    - name: Application
+      subGroups:
+      - name: MTA
+        attributes:
+          description:
+          - Mojabox Technical Administrators
+      - name: PTA
+        attributes:
+          description:
+          - Portal Technical Administrators
+
+    # Standard OIDC client scopes — KeycloakRealmImport does not create
+    # built-in defaults automatically, so we define them explicitly.
+    clientScopes:
+      - name: profile
+        description: "OpenID Connect built-in scope: profile"
+        protocol: openid-connect
+        attributes:
+          include.in.token.scope: "true"
+        protocolMappers:
+          - name: given name
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: firstName
+              claim.name: given_name
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: family name
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: lastName
+              claim.name: family_name
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: username
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: username
+              claim.name: preferred_username
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: full name
+            protocol: openid-connect
+            protocolMapper: oidc-full-name-mapper
+            config:
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+      - name: email
+        description: "OpenID Connect built-in scope: email"
+        protocol: openid-connect
+        attributes:
+          include.in.token.scope: "true"
+        protocolMappers:
+          - name: email
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-attribute-mapper
+            config:
+              user.attribute: email
+              claim.name: email
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: String
+          - name: email verified
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-property-mapper
+            config:
+              user.attribute: emailVerified
+              claim.name: email_verified
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              jsonType.label: boolean
+      - name: web-origins
+        description: "OpenID Connect scope for allowed web origins"
+        protocol: openid-connect
+        attributes:
+          include.in.token.scope: "false"
+        protocolMappers:
+          - name: allowed web origins
+            protocol: openid-connect
+            protocolMapper: oidc-allowed-origins-mapper
+
+    users:
+    - username: service-account-connection-manager-api-service
+      emailVerified: false
+      enabled: true
+      totp: false
+      serviceAccountClientId: connection-manager-api-service
+      disableableCredentialTypes: []
+      requiredActions: []
+      realmRoles:
+      - default-roles-hub-operators
+      - dfsp-admin
+      clientRoles: {}
+      notBefore: 0
+      groups: []
+    - username: role-assign-svc
+      enabled: true
+      email: role-assign-svc@none.com
+      firstName: Role
+      lastName: Assign
+      credentials:
+      - type: password
+        value: "${role_assign_svc_secret}"
+      clientRoles:
+        realm-management:
+        - view-users
+      groups: []
+    - username: "portal_admin"
+      email: "portal_admin@${domain}"
+      emailVerified: true
+      enabled: true
+      firstName: Portal
+      lastName: Admin
+      credentials:
+      - type: password
+        value: "${keycloak_admin_password}"
+      clientRoles: {}
+      requiredActions: []
+      notBefore: 0
+      groups:
+      - Application/PTA
+    - username: mcm_admin
+      enabled: true
+      email: "mcm_admin@${domain}"
+      firstName: Mcm
+      lastName: Admin
+      credentials:
+      - type: password
+        value: "${keycloak_admin_password}"
+      groups: []
+
+    clientScopeMappings:
+      connection-manager-api-service:
+      - client: realm-management
+        roles:
+        - dfsp-admin
+
+    otpPolicyType: totp
+    otpPolicyAlgorithm: HmacSHA1
+    otpPolicyInitialCounter: 0
+    otpPolicyDigits: 6
+    otpPolicyLookAheadWindow: 1
+    otpPolicyPeriod: 30
+
+    browserSecurityHeaders:
+      contentSecurityPolicyReportOnly: ''
+      xContentTypeOptions: nosniff
+      xRobotsTag: none
+      xFrameOptions: SAMEORIGIN
+      contentSecurityPolicy: "frame-src 'self'; frame-ancestors 'self'; object-src 'none';"
+      xXSSProtection: "1; mode=block"
+      strictTransportSecurity: "max-age=31536000; includeSubDomains"
+
+    eventsEnabled: true
+    eventsListeners:
+    - jboss-logging
+    enabledEventTypes: []
+    adminEventsEnabled: true
+    adminEventsDetailsEnabled: true

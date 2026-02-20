@@ -14,7 +14,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  timeout: 10m
+  timeout: 30m
   chart:
     spec:
       chart: mojaloop
@@ -25,11 +25,11 @@ spec:
       interval: 12h
   releaseName: moja
   targetNamespace: mojaloop
-  # storageNamespace: mojaloop
+  storageNamespace: mojaloop
   install:
     createNamespace: false
     remediation:
-      retries: -1
+      retries: 3
   upgrade:
     remediation:
       retries: -1

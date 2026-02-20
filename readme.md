@@ -32,3 +32,18 @@ mojaloop@ccu6:~$ ssh-add ssh_key_ml_iac3
 mojaloop@ccu6:~$ git clone git@github.com:kiswend/ml-iac3.git
 
 ```
+
+
+
+
+## DNS zone
+
+```bash
+# 1. Create the subdomain zone
+doctl compute domain create sw1.pj1.moja-do.example.com
+
+# 2. Add NS delegation in the parent zone
+doctl compute domain records create moja-do.example.com --record-type NS --record-name sw1.pj1 --record-data ns1.digitalocean.com. --record-ttl 300
+doctl compute domain records create moja-do.example.com --record-type NS --record-name sw1.pj1 --record-data ns2.digitalocean.com. --record-ttl 300
+doctl compute domain records create moja-do.example.com --record-type NS --record-name sw1.pj1 --record-data ns3.digitalocean.com. --record-ttl 300
+```

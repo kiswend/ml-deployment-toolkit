@@ -81,9 +81,9 @@ spec:
     hubble:
       enabled: true
       relay:
-        enabled: false
+        enabled: true
       ui:
-        enabled: false
+        enabled: true
 
     # Envoy proxy (external)
     envoy:
