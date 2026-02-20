@@ -15,9 +15,29 @@ spec:
             - sh
             - -c
             - |
-              until mysql -h central-ledger-db-haproxy -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -e 'SELECT 1' 2>/dev/null; do
-                echo "Waiting for central-ledger-db..."
+              HOST=central-ledger-db-haproxy
+              EXPECTED_SIZE=1
+              echo "Waiting for MySQL connectivity..."
+              until mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -e 'SELECT 1' 2>/dev/null; do
+                echo "Waiting for $HOST..."
                 sleep 5
+              done
+              echo "MySQL reachable. Waiting for PXC cluster (wsrep_cluster_size=$EXPECTED_SIZE)..."
+              while true; do
+                SIZE=$(mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -Nse "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'" 2>/dev/null | awk '{print $2}')
+                if [ "$SIZE" = "$EXPECTED_SIZE" ]; then
+                  echo "Cluster size=$EXPECTED_SIZE. Settling for 30s (HAProxy reload buffer)..."
+                  sleep 30
+                  SIZE=$(mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -Nse "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'" 2>/dev/null | awk '{print $2}')
+                  if [ "$SIZE" = "$EXPECTED_SIZE" ]; then
+                    echo "PXC cluster stable."
+                    break
+                  fi
+                  echo "Cluster size changed to $SIZE during settling. Retrying..."
+                else
+                  echo "wsrep_cluster_size=$SIZE (expected $EXPECTED_SIZE), waiting..."
+                  sleep 5
+                fi
               done
           env:
             - name: MYSQL_ROOT_PASSWORD
@@ -62,9 +82,29 @@ spec:
             - sh
             - -c
             - |
-              until mysql -h account-lookup-db-haproxy -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -e 'SELECT 1' 2>/dev/null; do
-                echo "Waiting for account-lookup-db..."
+              HOST=account-lookup-db-haproxy
+              EXPECTED_SIZE=1
+              echo "Waiting for MySQL connectivity..."
+              until mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -e 'SELECT 1' 2>/dev/null; do
+                echo "Waiting for $HOST..."
                 sleep 5
+              done
+              echo "MySQL reachable. Waiting for PXC cluster (wsrep_cluster_size=$EXPECTED_SIZE)..."
+              while true; do
+                SIZE=$(mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -Nse "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'" 2>/dev/null | awk '{print $2}')
+                if [ "$SIZE" = "$EXPECTED_SIZE" ]; then
+                  echo "Cluster size=$EXPECTED_SIZE. Settling for 30s (HAProxy reload buffer)..."
+                  sleep 30
+                  SIZE=$(mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -Nse "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'" 2>/dev/null | awk '{print $2}')
+                  if [ "$SIZE" = "$EXPECTED_SIZE" ]; then
+                    echo "PXC cluster stable."
+                    break
+                  fi
+                  echo "Cluster size changed to $SIZE during settling. Retrying..."
+                else
+                  echo "wsrep_cluster_size=$SIZE (expected $EXPECTED_SIZE), waiting..."
+                  sleep 5
+                fi
               done
           env:
             - name: MYSQL_ROOT_PASSWORD
@@ -114,9 +154,29 @@ spec:
             - sh
             - -c
             - |
-              until mysql -h auth-db-haproxy -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -e 'SELECT 1' 2>/dev/null; do
-                echo "Waiting for auth-db..."
+              HOST=auth-db-haproxy
+              EXPECTED_SIZE=1
+              echo "Waiting for MySQL connectivity..."
+              until mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -e 'SELECT 1' 2>/dev/null; do
+                echo "Waiting for $HOST..."
                 sleep 5
+              done
+              echo "MySQL reachable. Waiting for PXC cluster (wsrep_cluster_size=$EXPECTED_SIZE)..."
+              while true; do
+                SIZE=$(mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -Nse "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'" 2>/dev/null | awk '{print $2}')
+                if [ "$SIZE" = "$EXPECTED_SIZE" ]; then
+                  echo "Cluster size=$EXPECTED_SIZE. Settling for 30s (HAProxy reload buffer)..."
+                  sleep 30
+                  SIZE=$(mysql -h $HOST -P 3306 -u root -p"$MYSQL_ROOT_PASSWORD" -Nse "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'" 2>/dev/null | awk '{print $2}')
+                  if [ "$SIZE" = "$EXPECTED_SIZE" ]; then
+                    echo "PXC cluster stable."
+                    break
+                  fi
+                  echo "Cluster size changed to $SIZE during settling. Retrying..."
+                else
+                  echo "wsrep_cluster_size=$SIZE (expected $EXPECTED_SIZE), waiting..."
+                  sleep 5
+                fi
               done
           env:
             - name: MYSQL_ROOT_PASSWORD
