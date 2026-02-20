@@ -56,16 +56,6 @@ spec:
     podTemplate:
       spec:
         initContainers:
-          - name: wait-for-db
-            image: busybox:1.28
-            command:
-              - sh
-              - -c
-              - |
-                until nslookup auth-db-haproxy.mojaloop.svc.cluster.local; do
-                  echo "Waiting for auth-db DNS..."
-                  sleep 5
-                done
           - name: build-keycloak
             image: quay.io/keycloak/keycloak:22.0.2
             command:
@@ -83,6 +73,43 @@ spec:
             volumeMounts:
               - name: quarkus-build
                 mountPath: /quarkus-build
+          - name: wait-for-db
+            image: percona/percona-xtradb-cluster:8.0.44-35.1
+            command:
+              - sh
+              - -c
+              - |
+                HOST=auth-db-haproxy.mojaloop.svc.cluster.local
+                echo "Waiting for MySQL connectivity..."
+                until mysql -h $HOST -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1" keycloak 2>/dev/null; do
+                  echo "Waiting for keycloak database..."
+                  sleep 5
+                done
+                echo "MySQL reachable. Verifying DDL readiness..."
+                STABLE=0
+                while [ $STABLE -lt 3 ]; do
+                  if mysql -h $HOST -u "$DB_USER" -p"$DB_PASS" keycloak \
+                    -e "CREATE TABLE IF NOT EXISTS __init_check (id INT PRIMARY KEY) ENGINE=InnoDB; DROP TABLE IF EXISTS __init_check;" 2>/dev/null; then
+                    STABLE=$((STABLE + 1))
+                    echo "DDL check passed ($STABLE/3)"
+                  else
+                    STABLE=0
+                    echo "DDL not ready, retrying..."
+                  fi
+                  sleep 2
+                done
+                echo "Database ready!"
+            env:
+              - name: DB_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: keycloak-db-secret
+                    key: username
+              - name: DB_PASS
+                valueFrom:
+                  secretKeyRef:
+                    name: keycloak-db-secret
+                    key: password
         containers:
           - name: keycloak
             startupProbe:

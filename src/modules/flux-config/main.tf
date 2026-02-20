@@ -593,26 +593,19 @@ resource "kubectl_manifest" "kustomization_env_data" {
         kind = "OCIRepository"
         name = "ml-gitops"
       }
+      # CEL-based health check: PXC CR .status.state must be 'ready' (all nodes synced + proxies healthy)
+      # Matches ALL PerconaXtraDBCluster CRs deployed by this kustomization (auth-db, central-ledger-db, account-lookup-db)
+      # This gates downstream kustomizations (env-auth, env-app) from starting migrations before DDL is safe
+      healthCheckExprs = [
+        {
+          apiVersion = "pxc.percona.com/v1"
+          kind       = "PerconaXtraDBCluster"
+          inProgress = "!has(status.state) || status.state == 'initializing'"
+          current    = "has(status.state) && status.state == 'ready'"
+          failed     = "has(status.state) && status.state == 'error'"
+        }
+      ]
       healthChecks = [
-        # MySQL clusters
-        {
-          apiVersion = "pxc.percona.com/v1"
-          kind       = "PerconaXtraDBCluster"
-          name       = "central-ledger-db"
-          namespace  = "mojaloop"
-        },
-        {
-          apiVersion = "pxc.percona.com/v1"
-          kind       = "PerconaXtraDBCluster"
-          name       = "auth-db"
-          namespace  = "mojaloop"
-        },
-        {
-          apiVersion = "pxc.percona.com/v1"
-          kind       = "PerconaXtraDBCluster"
-          name       = "account-lookup-db"
-          namespace  = "mojaloop"
-        },
         # Kafka
         {
           apiVersion = "kafka.strimzi.io/v1beta2"
@@ -760,6 +753,49 @@ resource "kubectl_manifest" "kustomization_env_auth" {
   ]
 }
 
+# Kustomization: env-auth-config (Keycloak realm imports — must wait for Keycloak instance to be ready)
+resource "kubectl_manifest" "kustomization_env_auth_config" {
+  count = local.is_env ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "env-auth-config"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "10m"
+      path     = "./env-auth-config"
+      prune    = true
+      dependsOn = [
+        { name = "env-auth" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_env_auth
+  ]
+}
+
 # Kustomization: env-app (Mojaloop core + MCM + Finance Portal — always deployed for env clusters)
 resource "kubectl_manifest" "kustomization_env_app" {
   count = local.is_env ? 1 : 0
@@ -777,7 +813,7 @@ resource "kubectl_manifest" "kustomization_env_app" {
       path     = "./env-app"
       prune    = true
       dependsOn = [
-        { name = "env-auth" }
+        { name = "env-auth-config" }
       ]
       sourceRef = {
         kind = "OCIRepository"
@@ -822,6 +858,7 @@ resource "kubectl_manifest" "kustomization_env_app" {
     kubectl_manifest.kustomization_role,
     kubectl_manifest.kustomization_env_data,
     kubectl_manifest.kustomization_env_auth,
+    kubectl_manifest.kustomization_env_auth_config,
     kubectl_manifest.kustomization_vendor
   ]
 }

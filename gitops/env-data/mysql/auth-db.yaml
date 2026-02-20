@@ -33,6 +33,16 @@ spec:
     enabled: true
     size: 1
     image: percona/haproxy:2.8.17
+    readinessProbes:
+      initialDelaySeconds: 30
+      timeoutSeconds: 10
+      periodSeconds: 10
+      failureThreshold: 30
+    livenessProbes:
+      initialDelaySeconds: 60
+      timeoutSeconds: 10
+      periodSeconds: 10
+      failureThreshold: 30
     resources:
       requests:
         memory: 128Mi

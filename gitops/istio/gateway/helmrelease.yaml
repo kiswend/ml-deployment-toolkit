@@ -26,4 +26,6 @@ spec:
     disableSchemaValidation: true
     remediation:
       retries: 3
-  values: {}
+  values:
+    service:
+      type: ClusterIP

@@ -5,8 +5,6 @@ resources:
   - vault/secretstore.yaml
   - keycloak/operator.yaml
   - keycloak/keycloak.yaml
-  - keycloak/realm-hub-operators.yaml
-  - keycloak/realm-dfsps.yaml
   - ory/externalsecret-kratos.yaml
   - ory/externalsecret-keto.yaml
   - ory/helmrelease-kratos.yaml
