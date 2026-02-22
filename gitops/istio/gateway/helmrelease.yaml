@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: gateway
-      version: "1.24.x"
+      version: "1.29.x"
       sourceRef:
         kind: HelmRepository
         name: istio
