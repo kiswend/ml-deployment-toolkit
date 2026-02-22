@@ -42,6 +42,17 @@
       "matchManagers": ["flux"],
       "matchFileNames": ["gitops/cc/**", "gitops/cc-config/**"],
       "groupName": "control center helm charts"
+    },
+    {
+      "description": "Ory stack (Kratos, Keto, Oathkeeper, BOF, Selfservice UI)",
+      "matchManagers": ["flux"],
+      "matchFileNames": ["gitops/env-auth/ory/**"],
+      "groupName": "ory helm charts"
+    },
+    {
+      "description": "Separate major updates for review",
+      "matchUpdateTypes": ["major"],
+      "separateMinorPatch": true
     }
   ],
   "ignorePaths": ["legacy/**"]
