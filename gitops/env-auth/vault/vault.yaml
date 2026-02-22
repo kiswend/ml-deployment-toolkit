@@ -149,7 +149,7 @@ spec:
         path: secret/data/kratos
         data:
           data:
-            dsn: "mysql://kratos:${kratos_db_password}@tcp(${auth_db_host}.mojaloop.svc.cluster.local:3306)/kratos?max_conns=20&max_idle_conns=4"
+            dsn: "mysql://kratos:${kratos_db_password}@tcp(${mysql_host}:${mysql_port})/kratos?max_conns=20&max_idle_conns=4"
             secretsCipher: "${kratos_secrets_cipher}"
             secretsCookie: "${kratos_secrets_cookie}"
             secretsCSRFCookie: "${kratos_secrets_csrf_cookie}"
@@ -159,7 +159,7 @@ spec:
         path: secret/data/keto
         data:
           data:
-            dsn: "mysql://keto:${keto_db_password}@tcp(${auth_db_host}.mojaloop.svc.cluster.local:3306)/keto?max_conns=20&max_idle_conns=4"
+            dsn: "mysql://keto:${keto_db_password}@tcp(${mysql_host}:${mysql_port})/keto?max_conns=20&max_idle_conns=4"
       - type: kv
         path: secret/data/finance-portal
         data:

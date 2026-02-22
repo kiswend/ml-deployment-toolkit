@@ -30,7 +30,7 @@ spec:
   image: quay.io/keycloak/keycloak:22.0.2
   db:
     vendor: mysql
-    host: auth-db-haproxy.mojaloop.svc.cluster.local
+    host: ${mysql_host}
     port: 3306
     database: keycloak
     usernameSecret:
@@ -79,7 +79,7 @@ spec:
               - sh
               - -c
               - |
-                HOST=auth-db-haproxy.mojaloop.svc.cluster.local
+                HOST=${mysql_host}
                 echo "Waiting for MySQL connectivity..."
                 until mysql -h $HOST -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1" keycloak 2>/dev/null; do
                   echo "Waiting for keycloak database..."

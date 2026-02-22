@@ -9,6 +9,25 @@ spec:
   allowUnsafeConfigurations: true
   secrets:
     users: bulk-mongodb-secrets
+  users:
+    - name: mojaloop
+      db: admin
+      roles:
+        - name: readWrite
+          db: mlos
+        - name: readWrite
+          db: ttk
+      passwordSecretRef:
+        name: bulk-mongodb-app-secrets
+        key: MONGODB_APP_PASSWORD
+    - name: reporting
+      db: admin
+      roles:
+        - name: readWrite
+          db: reporting_events
+      passwordSecretRef:
+        name: bulk-mongodb-app-secrets
+        key: MONGODB_APP_PASSWORD
   replsets:
     - name: rs0
       size: 3

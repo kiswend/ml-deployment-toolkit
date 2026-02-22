@@ -170,14 +170,8 @@ variable "mongodb_app_password" {
 
 # --- App Environment Data Endpoints (cloud override) ---
 
-variable "mysql_central_ledger_host" {
-  description = "MySQL host for central-ledger database (cloud: RDS endpoint)"
-  type        = string
-  default     = ""
-}
-
-variable "mysql_account_lookup_host" {
-  description = "MySQL host for account-lookup database (cloud: RDS endpoint)"
+variable "mysql_host" {
+  description = "MySQL host (cloud: RDS endpoint)"
   type        = string
   default     = ""
 }
@@ -282,10 +276,3 @@ variable "role_assign_svc_secret" {
   sensitive   = true
 }
 
-# --- App Environment Auth Endpoints (cloud override) ---
-
-variable "auth_db_host" {
-  description = "MySQL host for auth database (cloud: RDS endpoint)"
-  type        = string
-  default     = ""
-}

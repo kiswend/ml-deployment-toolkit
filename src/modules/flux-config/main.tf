@@ -27,16 +27,14 @@ locals {
   }) : ""
 
   # Data layer endpoints — self-hosted uses in-cluster service names, managed uses cloud service endpoints
-  mysql_central_ledger_host = local.is_talos ? "central-ledger-db-haproxy" : var.mysql_central_ledger_host
-  mysql_account_lookup_host = local.is_talos ? "account-lookup-db-haproxy" : var.mysql_account_lookup_host
-  mysql_port                = local.is_talos ? "3306" : var.mysql_port
-  kafka_host                = local.is_talos ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
-  kafka_port                = local.is_talos ? "9092" : var.kafka_port
-  mongodb_host              = local.is_talos ? "bulk-mongodb-rs0" : var.mongodb_host
-  mongodb_port              = local.is_talos ? "27017" : var.mongodb_port
-  redis_host                = local.is_talos ? "ttk-redis" : var.redis_host
-  redis_port                = local.is_talos ? "6379" : var.redis_port
-  auth_db_host              = local.is_talos ? "auth-db-haproxy" : var.auth_db_host
+  mysql_host   = local.is_talos ? "mojaloop-db-haproxy.mojaloop.svc.cluster.local" : var.mysql_host
+  mysql_port   = local.is_talos ? "3306" : var.mysql_port
+  kafka_host   = local.is_talos ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
+  kafka_port   = local.is_talos ? "9092" : var.kafka_port
+  mongodb_host = local.is_talos ? "bulk-mongodb-rs0" : var.mongodb_host
+  mongodb_port = local.is_talos ? "27017" : var.mongodb_port
+  redis_host   = local.is_talos ? "ttk-redis" : var.redis_host
+  redis_port   = local.is_talos ? "6379" : var.redis_port
 }
 
 # Kratos secrets — generated once, stored in Terraform state, seeded into Vault via cluster-secrets → Flux substitution
@@ -84,16 +82,14 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       lb_ipam_stop       = split("-", var.lb_ipam_range)[1]
     },
     local.is_env ? {
-      mysql_central_ledger_host = local.mysql_central_ledger_host
-      mysql_account_lookup_host = local.mysql_account_lookup_host
-      mysql_port                = local.mysql_port
-      kafka_host                = local.kafka_host
-      kafka_port                = local.kafka_port
-      mongodb_host              = local.mongodb_host
-      mongodb_port              = local.mongodb_port
-      redis_host                = local.redis_host
-      redis_port                = local.redis_port
-      auth_db_host              = local.auth_db_host
+      mysql_host   = local.mysql_host
+      mysql_port   = local.mysql_port
+      kafka_host   = local.kafka_host
+      kafka_port   = local.kafka_port
+      mongodb_host = local.mongodb_host
+      mongodb_port = local.mongodb_port
+      redis_host   = local.redis_host
+      redis_port   = local.redis_port
     } : {}
   )
 }
@@ -594,8 +590,7 @@ resource "kubectl_manifest" "kustomization_env_data" {
         name = "ml-gitops"
       }
       # CEL-based health check: PXC CR .status.state must be 'ready' (all nodes synced + proxies healthy)
-      # Matches ALL PerconaXtraDBCluster CRs deployed by this kustomization (auth-db, central-ledger-db, account-lookup-db)
-      # This gates downstream kustomizations (env-auth, env-app) from starting migrations before DDL is safe
+      # Matches ALL PerconaXtraDBCluster CRs — gates downstream kustomizations from starting migrations before DDL is safe
       healthCheckExprs = [
         {
           apiVersion = "pxc.percona.com/v1"
@@ -606,49 +601,16 @@ resource "kubectl_manifest" "kustomization_env_data" {
         }
       ]
       healthChecks = [
-        # Kafka
         {
           apiVersion = "kafka.strimzi.io/v1beta2"
           kind       = "Kafka"
           name       = "mojaloop-kafka"
           namespace  = "mojaloop"
         },
-        # MongoDB
         {
           apiVersion = "psmdb.percona.com/v1"
           kind       = "PerconaServerMongoDB"
           name       = "bulk-mongodb"
-          namespace  = "mojaloop"
-        },
-        # Init jobs (create databases/users — must complete before migrations run)
-        {
-          apiVersion = "batch/v1"
-          kind       = "Job"
-          name       = "init-central-ledger-db"
-          namespace  = "mojaloop"
-        },
-        {
-          apiVersion = "batch/v1"
-          kind       = "Job"
-          name       = "init-auth-db"
-          namespace  = "mojaloop"
-        },
-        {
-          apiVersion = "batch/v1"
-          kind       = "Job"
-          name       = "init-account-lookup-db"
-          namespace  = "mojaloop"
-        },
-        {
-          apiVersion = "batch/v1"
-          kind       = "Job"
-          name       = "init-bulk-mongodb"
-          namespace  = "mojaloop"
-        },
-        {
-          apiVersion = "batch/v1"
-          kind       = "Job"
-          name       = "init-reporting-mongodb"
           namespace  = "mojaloop"
         }
       ]

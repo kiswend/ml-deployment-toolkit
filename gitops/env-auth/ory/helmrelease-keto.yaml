@@ -34,7 +34,7 @@ spec:
         enabled: true
         type: initContainer
       config:
-        dsn: "mysql://keto:${keto_db_password}@tcp(${auth_db_host}.mojaloop.svc.cluster.local:3306)/keto?max_conns=20&max_idle_conns=4"
+        dsn: "mysql://keto:${keto_db_password}@tcp(${mysql_host}:${mysql_port})/keto?max_conns=20&max_idle_conns=4"
         serve:
           read:
             port: 4466
