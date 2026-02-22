@@ -10,18 +10,24 @@ spec:
   secrets:
     users: bulk-mongodb-secrets
   users:
-    - name: mojaloop
-      db: admin
+    - name: mlos
+      db: mlos
       roles:
         - name: readWrite
           db: mlos
+      passwordSecretRef:
+        name: bulk-mongodb-app-secrets
+        key: MONGODB_APP_PASSWORD
+    - name: ttk
+      db: ttk
+      roles:
         - name: readWrite
           db: ttk
       passwordSecretRef:
         name: bulk-mongodb-app-secrets
         key: MONGODB_APP_PASSWORD
     - name: reporting
-      db: admin
+      db: reporting_events
       roles:
         - name: readWrite
           db: reporting_events
