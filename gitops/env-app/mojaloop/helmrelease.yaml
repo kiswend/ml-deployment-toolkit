@@ -46,7 +46,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -57,7 +57,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -66,7 +66,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -75,7 +75,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -84,7 +84,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -93,7 +93,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -102,7 +102,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -111,7 +111,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -123,7 +123,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -133,7 +133,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -145,7 +145,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -154,7 +154,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -163,7 +163,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -173,7 +173,7 @@ spec:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
-          db_host: "${mysql_central_ledger_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
@@ -183,7 +183,7 @@ spec:
     account-lookup-service:
       account-lookup-service:
         config:
-          db_host: "${mysql_account_lookup_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: account_lookup
           db_password: "${mysql_account_lookup_password}"
@@ -195,7 +195,7 @@ spec:
           enabled: true
       account-lookup-service-admin:
         config:
-          db_host: "${mysql_account_lookup_host}"
+          db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: account_lookup
           db_password: "${mysql_account_lookup_password}"
@@ -207,7 +207,7 @@ spec:
     # --- ALS MSISDN Oracle ---
     als-msisdn-oracle:
       config:
-        db_host: "${mysql_account_lookup_host}"
+        db_host: "${mysql_host}"
         db_port: ${mysql_port}
         db_user: oracle_msisdn
         db_password: "${mysql_oracle_msisdn_password}"
