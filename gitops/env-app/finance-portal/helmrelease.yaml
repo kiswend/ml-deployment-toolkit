@@ -60,19 +60,83 @@ spec:
         realm: "hub-operators"
       rolePermOperator:
         apiSvc:
-          host: ory-bof-security-role-perm-operator-svc.ory.svc.cluster.local
+          host: bof-security-role-perm-operator-svc.ory.svc.cluster.local
           port: 80
 
     reporting-hub-bop-api-svc:
       enabled: true
+      image:
+        tag: v4.3.0
       containerSecurityContext:
         enabled: false
 
     reporting-hub-bop-experience-api-svc:
       enabled: true
+      image:
+        tag: v2.0.5
+      sidecar:
+        enabled: false
+      configOverride:
+        .EVENT_SDKrc:
+          AUDIT: kafka
+          KAFKA:
+            PRODUCER:
+              EVENT:
+                AUDIT:
+                  config:
+                    options:
+                      messageCharset: utf8
+                      sync: true
+                    rdkafkaConf:
+                      client.id: producer-event-audit
+                      compression.type: lz4
+                      dr_cb: false
+                      event_cb: true
+                      metadata.broker.list: "${kafka_host}:${kafka_port}"
+                      queue.buffering.max.messages: 10000000
+                      socket.keepalive.enable: true
+                    topicConf:
+                      partitioner: murmur2_random
+                      request.required.acks: all
+                LOG:
+                  config:
+                    options:
+                      messageCharset: utf8
+                      sync: true
+                    rdkafkaConf:
+                      client.id: producer-event-log
+                      compression.type: lz4
+                      dr_cb: false
+                      event_cb: true
+                      metadata.broker.list: "${kafka_host}:${kafka_port}"
+                      queue.buffering.max.messages: 10000000
+                      socket.keepalive.enable: true
+                    topicConf:
+                      partitioner: murmur2_random
+                      request.required.acks: all
+                TRACE:
+                  config:
+                    options:
+                      messageCharset: utf8
+                      sync: true
+                    rdkafkaConf:
+                      client.id: producer-event-trace
+                      compression.type: lz4
+                      dr_cb: false
+                      event_cb: true
+                      metadata.broker.list: "${kafka_host}:${kafka_port}"
+                      queue.buffering.max.messages: 10000000
+                      socket.keepalive.enable: true
+                    topicConf:
+                      partitioner: murmur2_random
+                      request.required.acks: all
+          LOG: 'off'
+          TRACE: 'off'
 
     reporting-hub-bop-shell:
       enabled: true
+      image:
+        tag: v2.3.5
       ingress:
         enabled: false
       config:
@@ -91,6 +155,12 @@ spec:
           REMOTE_4_URL: "https://finance-portal.int.${domain}/uis/positions"
       configFiles:
         config.json:
+          # Header branding — TITLE uses Flux substitution so each
+          # environment automatically displays its own cluster name.
+          TITLE: "${cluster_name}"
+          SUBTITLE: "Finance Portal"
+          TITLE_IMAGE: "https://mojaloop.io/wp-content/uploads/2020/07/mojaloop-foundation-orange.svg"
+          TITLE_BAR_COLOR: "#0C1C8C"
           AUTH_API_BASE_URL: ''
           AUTH_MOCK_API: 'false'
           REMOTE_API_BASE_URL: ''
@@ -136,6 +206,8 @@ spec:
 
     reporting-hub-bop-role-ui:
       enabled: true
+      image:
+        tag: v1.5.10
       ingress:
         enabled: false
       configFiles:
@@ -147,6 +219,8 @@ spec:
 
     reporting-hub-bop-trx-ui:
       enabled: true
+      image:
+        tag: v2.0.7
       ingress:
         enabled: false
       configFiles:
@@ -158,6 +232,8 @@ spec:
 
     reporting-hub-bop-settlements-ui:
       enabled: true
+      image:
+        tag: v0.0.30
       ingress:
         enabled: false
       configFiles:
@@ -171,6 +247,8 @@ spec:
 
     reporting-hub-bop-positions-ui:
       enabled: true
+      image:
+        tag: v0.0.16
       ingress:
         enabled: false
       configFiles:
@@ -181,19 +259,49 @@ spec:
 
     reporting-events-processor-svc:
       enabled: true
+      image:
+        tag: v3.5.2
       kafka:
         host: "${kafka_host}"
         port: ${kafka_port}
         topicEvent: topic-event-audit
         consumerGroup: reporting_events_processor_consumer_group
         clientId: reporting_events_processor_consumer
+      configFiles:
+        default.json:
+          KAFKA:
+            TOPIC_EVENT: "topic-event-audit"
+            CONSUMER:
+              EVENT:
+                config:
+                  options:
+                    mode: 2
+                    batchSize: 50
+                    pollFrequency: 10
+                    recursiveTimeout: 100
+                    messageCharset: "utf8"
+                    messageAsJSON: true
+                    sync: true
+                    consumeTimeout: 10
+                  rdkafkaConf:
+                    clientId: "reporting_events_processor_consumer"
+                    groupId: "reporting_events_processor_consumer_group"
+                    metadataBrokerList: "${kafka_host}:${kafka_port}"
+                    socketKeepaliveEnable: true
+                    allowAutoCreateTopics: true
+                    partitionAssignmentStrategy: ""
+                    enableAutoCommit: false
+                  topicConf:
+                    autoOffsetReset: "earliest"
 
     reporting-legacy-api:
       enabled: true
+      image:
+        tag: v12.4.2
       containerSecurityContext:
         enabled: false
       install-templates: false
-      auth: true
+      auth: false
       config:
         env:
           VALIDATION_RETRY_COUNT: "10"
@@ -226,9 +334,17 @@ spec:
               "mcmadmin"
             ],
             "AUTO_GRANT_PORTAL_ADMIN_ROLES": [
-              "manager"
+              "manager",
+              "pta"
             ]
           }
 
     reporting-aggregator-svc:
       enabled: true
+      image:
+        tag: v0.0.9
+
+    reporting-nifi-processor-svc:
+      resources:
+        limits:
+          cpu: 1

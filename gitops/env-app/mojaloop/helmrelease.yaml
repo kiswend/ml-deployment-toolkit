@@ -41,6 +41,11 @@ spec:
         port: ${kafka_port}
 
     # --- Central Ledger ---
+    # Event SDK (configOverride.EVENT_SDKrc) enables audit event production to
+    # Kafka topic-event-audit. The reporting-events-processor-svc consumes these
+    # events and writes them to MongoDB, which the Finance Portal Transfers UI
+    # queries. Without this config, no audit events are produced and the
+    # Transfers page shows empty results.
     centralledger:
       centralledger-service:
         config:
@@ -53,6 +58,62 @@ spec:
           db_database: central_ledger
         init:
           enabled: true
+        configOverride:
+          .EVENT_SDKrc: &eventSdkConfig
+            AUDIT: kafka
+            KAFKA:
+              PRODUCER:
+                EVENT:
+                  AUDIT:
+                    config:
+                      options:
+                        messageCharset: utf8
+                        sync: true
+                      rdkafkaConf:
+                        client.id: producer-event-audit
+                        compression.type: lz4
+                        dr_cb: false
+                        event_cb: true
+                        metadata.broker.list: "${kafka_host}:${kafka_port}"
+                        queue.buffering.max.messages: 10000000
+                        socket.keepalive.enable: true
+                      topicConf:
+                        partitioner: murmur2_random
+                        request.required.acks: all
+                  LOG:
+                    config:
+                      options:
+                        messageCharset: utf8
+                        sync: true
+                      rdkafkaConf:
+                        client.id: producer-event-log
+                        compression.type: lz4
+                        dr_cb: false
+                        event_cb: true
+                        metadata.broker.list: "${kafka_host}:${kafka_port}"
+                        queue.buffering.max.messages: 10000000
+                        socket.keepalive.enable: true
+                      topicConf:
+                        partitioner: murmur2_random
+                        request.required.acks: all
+                  TRACE:
+                    config:
+                      options:
+                        messageCharset: utf8
+                        sync: true
+                      rdkafkaConf:
+                        client.id: producer-event-trace
+                        compression.type: lz4
+                        dr_cb: false
+                        event_cb: true
+                        metadata.broker.list: "${kafka_host}:${kafka_port}"
+                        queue.buffering.max.messages: 10000000
+                        socket.keepalive.enable: true
+                      topicConf:
+                        partitioner: murmur2_random
+                        request.required.acks: all
+            LOG: 'off'
+            TRACE: 'off'
       centralledger-handler-transfer-prepare:
         config:
           kafka_host: "${kafka_host}"
@@ -62,6 +123,8 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-position:
         config:
           kafka_host: "${kafka_host}"
@@ -71,6 +134,8 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-position-batch:
         config:
           kafka_host: "${kafka_host}"
@@ -80,6 +145,8 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-get:
         config:
           kafka_host: "${kafka_host}"
@@ -89,6 +156,8 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-fulfil:
         config:
           kafka_host: "${kafka_host}"
@@ -98,6 +167,8 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-timeout:
         config:
           kafka_host: "${kafka_host}"
@@ -107,6 +178,8 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-admin-transfer:
         config:
           kafka_host: "${kafka_host}"
@@ -116,8 +189,11 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
 
     # --- Quoting Service (shares central_ledger DB) ---
+    # Event SDK: produces audit events to Kafka for Finance Portal reporting
     quoting-service:
       quoting-service:
         config:
@@ -129,6 +205,8 @@ spec:
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
           simple_routing_mode_enabled: false
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       quoting-service-handler:
         config:
           kafka_host: "${kafka_host}"
@@ -138,6 +216,12 @@ spec:
           db_user: central_ledger
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
+          # Must be false so the handler persists quotes to MySQL.
+          # Without this, the aggregator's INNER JOIN on the quote table
+          # returns zero rows, and the Finance Portal Transfers UI is empty.
+          simple_routing_mode_enabled: false
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
 
     # --- Central Settlement (shares central_ledger DB) ---
     centralsettlement:
@@ -180,6 +264,7 @@ spec:
           db_database: central_ledger
 
     # --- Account Lookup Service ---
+    # Event SDK: produces audit events to Kafka for Finance Portal reporting
     account-lookup-service:
       account-lookup-service:
         config:
@@ -193,6 +278,8 @@ spec:
             key: mysql-als-password
         init:
           enabled: true
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       account-lookup-service-admin:
         config:
           db_host: "${mysql_host}"
@@ -203,6 +290,8 @@ spec:
           db_secret:
             name: mysqldb
             key: mysql-als-password
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
 
     # --- ALS MSISDN Oracle ---
     als-msisdn-oracle:
@@ -217,15 +306,20 @@ spec:
           key: mysql-oracle-password
 
     # --- ML API Adapter ---
+    # Event SDK: produces audit events to Kafka for Finance Portal reporting
     ml-api-adapter:
       ml-api-adapter-service:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
       ml-api-adapter-handler-notification:
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
+        configOverride:
+          .EVENT_SDKrc: *eventSdkConfig
 
     # --- Bulk (MongoDB) ---
     mojaloop-bulk:

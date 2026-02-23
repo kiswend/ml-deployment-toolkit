@@ -1,0 +1,175 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-agent-config
+  namespace: mcm
+data:
+  init-config.hcl: |
+    auto_auth {
+      method "kubernetes" {
+        mount_path = "auth/kubernetes"
+        config = {
+          role = "mcm"
+        }
+      }
+      sink {
+        type = "file"
+        config = {
+          path = "/home/vault/.token"
+        }
+      }
+    }
+
+    api_proxy {
+      use_auto_auth_token = "force"
+    }
+
+    listener "tcp" {
+      address     = "127.0.0.1:8100"
+      tls_disable = true
+    }
+
+    exit_after_auth = true
+    pid_file        = "/home/vault/.pid"
+
+    template {
+      contents    = "placeholder"
+      destination = "/vault/secrets/tmp/init-done"
+      command     = "export VAULT_ADDR=http://127.0.0.1:8100 && (vault kv get -mount=secret whitelist_fsps || vault kv put -mount=secret whitelist_fsps loopback=127.0.0.1/32) && (vault kv get -mount=secret whitelist_pm4mls || vault kv put -mount=secret whitelist_pm4mls loopback=127.0.0.1/32)"
+    }
+
+    vault {
+      address = "http://vault.vault.svc.cluster.local:8200"
+    }
+
+  config.hcl: |
+    auto_auth {
+      method "kubernetes" {
+        mount_path = "auth/kubernetes"
+        config = {
+          role = "mcm"
+        }
+      }
+      sink {
+        type = "file"
+        config = {
+          path = "/home/vault/.token"
+        }
+      }
+    }
+
+    exit_after_auth = false
+    pid_file        = "/home/vault/.pid"
+
+    template {
+      contents = <<EOH
+    {{ range secrets "secret/metadata/onboarding_pm4mls/" }}
+    {{ with secret (printf "secret/data/onboarding_pm4mls/%s" .) }}
+    ---
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: {{ .Data.data.host }}-clientcert-tls
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+    type: kubernetes.io/tls
+    stringData:
+      ca.crt: |
+    {{ .Data.data.ca_bundle | indent 4 }}
+      tls.key: |
+    {{ .Data.data.client_key | indent 4 }}
+      tls.crt: |
+    {{ .Data.data.client_cert_chain | indent 4 }}
+    ---
+    apiVersion: networking.istio.io/v1
+    kind: ServiceEntry
+    metadata:
+      name: {{ .Data.data.host }}
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+    spec:
+      hosts:
+        - '{{ .Data.data.fqdn }}'
+      ports:
+        - number: 80
+          name: http
+          protocol: HTTP
+          targetPort: 443
+        - number: 443
+          name: https
+          protocol: HTTPS
+      resolution: DNS
+    ---
+    apiVersion: networking.istio.io/v1
+    kind: DestinationRule
+    metadata:
+      name: originate-mtls-for-{{ .Data.data.host }}-callback
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+    spec:
+      host: {{ .Data.data.fqdn }}
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            connectTimeout: 3s
+            tcpKeepalive:
+              time: 300s
+              interval: 30s
+              probes: 5
+        loadBalancer:
+          simple: ROUND_ROBIN
+        portLevelSettings:
+          - port:
+              number: 80
+            tls:
+              mode: MUTUAL
+              credentialName: {{ .Data.data.host }}-clientcert-tls
+              sni: {{ .Data.data.fqdn }}
+    {{ end }}{{ end }}
+      EOH
+      destination = "/vault/secrets/tmp/callback.yaml"
+      command     = "/tools/kubectl apply -f /vault/secrets/tmp/callback.yaml 2>/dev/null || true"
+    }
+
+    template {
+      contents = <<EOH
+    apiVersion: security.istio.io/v1
+    kind: AuthorizationPolicy
+    metadata:
+      name: dfsp-whitelist-ingress-policy
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+    spec:
+      targetRefs:
+        - kind: Service
+          group: core
+          name: moja-account-lookup-service
+        - kind: Service
+          group: core
+          name: moja-quoting-service
+        - kind: Service
+          group: core
+          name: moja-ml-api-adapter-service
+        - kind: Service
+          group: core
+          name: moja-transaction-requests-service
+      action: DENY
+      rules:
+        - from:
+            - source:
+                notRemoteIpBlocks: [{{ with secret "secret/data/whitelist_fsps" }}{{ range $k, $v := .Data.data }}{{ $v }},{{ end }}{{ end }}{{ with secret "secret/data/whitelist_pm4mls" }}{{ range $k, $v := .Data.data }}{{ $v }},{{ end }}{{ end }}10.0.0.0/8]
+          to:
+            - operation:
+                hosts: ["extapi.ext.${domain}", "extapi.ext.${domain}:*"]
+      EOH
+      destination = "/vault/secrets/tmp/whitelist.yaml"
+      command     = "/tools/kubectl -n mojaloop delete authorizationpolicy dfsp-whitelist-ingress-policy --ignore-not-found; /tools/kubectl apply -f /vault/secrets/tmp/whitelist.yaml"
+    }
+
+    vault {
+      address = "http://vault.vault.svc.cluster.local:8200"
+    }

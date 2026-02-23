@@ -59,7 +59,7 @@ cluster:
 dns:
   provider: "digitalocean"
   # domain: "ml-test.ml.delma.me"
-  domain: "sw2.pj1.moja-do.delma.me"
+  domain: "sw3.pj1.moja-do.delma.me"
 
   # For Cloudflare:
   # cloudflare:
