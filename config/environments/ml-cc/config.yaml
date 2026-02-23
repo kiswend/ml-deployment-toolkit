@@ -57,7 +57,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "ml-cc.ml.example.com"
+  domain: "cc1.pj1.moja-do.example.com"
 
   # For Cloudflare:
   # cloudflare:
@@ -89,4 +89,4 @@ oci:
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
     active: false                   # Enable container image proxy through Harbor
-    url: "harbor.ml-cc.ml.example.com"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    url: "harbor.cc1.pj1.moja-do.example.com"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)

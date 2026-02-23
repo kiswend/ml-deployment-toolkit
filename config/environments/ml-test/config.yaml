@@ -18,7 +18,6 @@ infra:
     placement:
       placement-group-1: "node0"
       placement-group-2: "node1"
-      placement-group-3: "node0"
 
   # # --- AWS ---
   # aws:
@@ -91,4 +90,4 @@ oci:
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
     active: true                   # Enable container image proxy through Harbor
-    url: "harbor.int.ml-cc.ml.example.com"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    url: "harbor.cc1.pj1.moja-do.example.com"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
