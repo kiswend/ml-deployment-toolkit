@@ -36,7 +36,7 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 | Certificates | cert-manager + Let's Encrypt | TLS automation, ACME DNS-01 issuers (supports Route53, Cloud DNS, DigitalOcean, Cloudflare, RFC-2136, and more) |
 | Ingress | Gateway API | Kubernetes-native ingress (replaces deprecated Ingress resource) |
 | Secrets | External Secrets Operator (ESO) | Vault/external secret store integration |
-| Partner Edge | Envoy | External mTLS with dynamic partner onboarding (xDS/SDS) |
+| DFSP mTLS | CiliumEnvoyConfig | Inbound mTLS verification + outbound mTLS origination via Cilium's Envoy DaemonSet |
 
 **Vendor-specific services (deployed by per-provider GitOps kustomizations):**
 
@@ -180,7 +180,7 @@ A single OCI artifact contains multiple Kustomize roots. Flux deploys a subset b
 ```
 gitops/
   platform/           # Always — shared services (metrics-server, external-dns, cert-manager, ESO)
-  platform-config/    # Always — shared config (Gateway with ${gateway_class_name}, wildcard TLS)
+  platform-config/    # Always — shared config (gw-int + gw-ext Gateways with ${gateway_class_name}, wildcard TLS)
 
   # DNS-provider kustomizations — exactly one deployed per cluster (independent of infra provider)
   dns/
@@ -203,7 +203,7 @@ gitops/
   env/                # Env operators (Strimzi, Percona, Redis, Vault)
   env-data/           # Self-hosted env only: data layer CRs (MySQL, Kafka, MongoDB, Redis)
   env-auth/           # Auth layer (Keycloak, Ory stack)
-  env-app/            # Mojaloop core app (MCM, Finance Portal)
+  env-app/            # Mojaloop core app (MCM, Finance Portal, DFSP mTLS partner edge)
 ```
 
 Two independent provider dimensions determine which kustomizations are deployed:
@@ -354,7 +354,7 @@ Each environment is provisioned independently from the operator's workstation us
 
 **Partner connectivity:**
 - Internal traffic: Cilium with network policies
-- External partners: Envoy gateway with dynamic mTLS (see below)
+- External partners: CiliumEnvoyConfig for inbound + outbound mTLS (see Partner Edge section below)
 
 **Sovereignty:** On self-hosted profile, all images and configs are served from CC Harbor — the App Env operates even if public internet is unreachable (fully air-gapped). On managed profile, there is no in-cluster OCI registry or object store; sovereignty depends on the adopter's cloud region, managed registry (ECR/GAR) configuration, and network policies. Air-gapped operation on cloud requires additional VPC endpoint and registry mirroring configuration outside the scope of this platform.
 
@@ -407,14 +407,14 @@ These kustomizations are provider-agnostic and consume substitution variables fr
 |--------------|----------|------------------|
 | `platform/` | metrics-server, external-dns (base, no provider config), cert-manager, ESO | `${dns_provider}` (provider name only) |
 | `dns/{provider}` | ClusterIssuers (prod + staging), DNS credential Secret, external-dns values patch | DNS credentials from `cluster-secrets` (provider-specific keys) |
-| `platform-config/` | Gateway with wildcard TLS | `${gateway_class_name}`, `${domain}` |
+| `platform-config/` | gw-int + gw-ext Gateways with wildcard TLS | `${gateway_class_name}`, `${domain}` |
 | `cc/` | vault-operator, namespace definitions | None |
 | `cc-config/` | Vault CR, ESO SecretStore | `${domain}` |
 | `cc-routes/` | HTTPRoutes for vault (and conditionally harbor, minio) | `${domain}` |
 | `env/` | Strimzi, Percona XtraDB, Percona MongoDB, Redis operators, Vault operator | None |
 | `env-data/` | Data layer CRs (MySQL, Kafka, MongoDB, Redis clusters) | Database passwords via `cluster-secrets` |
 | `env-auth/` | Keycloak, Ory stack (Kratos, Keto, Oathkeeper), Vault CR, HTTPRoutes | `${domain}`, auth DB endpoints, OIDC secrets |
-| `env-app/` | Mojaloop core, MCM, Finance Portal | Data endpoints (mysql_host, kafka_host, etc.) |
+| `env-app/` | Mojaloop core, MCM, Finance Portal, DFSP mTLS partner edge | Data endpoints, `${domain}` |
 
 ### Managed vs Self-Hosted Decision Matrix
 
@@ -465,79 +465,52 @@ App Environment clusters expose the Mojaloop FSPIOP API to external DFSPs (Digit
 
 mTLS applies to **all phases equally** — the infrastructure is DFSP-centric, not service-centric. A single DFSP callback URL registered in Central Ledger is used by all three handler services. This section describes the complete partner edge architecture. Control Center clusters do not need this — they have no DFSP connectivity.
 
-### Two-Gateway Architecture
+### Three-LB Architecture
 
-Each App Environment has two Gateways with distinct security profiles:
+Each App Environment uses three LoadBalancer IPs with distinct security profiles:
 
 ```
                             App Environment
   ┌──────────────────────────────────────────────────────────────────────────┐
   │                                                                          │
-  │   main-gateway (operators)          partner-gateway (DFSPs)              │
-  │   *.${domain} :443                  fspiop.${domain} :443                │
-  │   TLS only (no client cert)         mTLS (client cert required)          │
-  │   IP: A                             IP: B                                │
-  │     │                                 │                                  │
-  │     ├── mcm.${domain}                 └── fspiop.${domain}               │
-  │     ├── keycloak.${domain}                  │                            │
-  │     ├── portal.${domain}           ┌────────┼────────┐                   │
-  │     ├── vault.${domain}            ▼        ▼        ▼                   │
-  │     └── auth.${domain}         account-  quoting  ml-api-               │
-  │           │                    lookup    service  adapter    (inbound)    │
-  │           ▼                    service                                    │
-  │     Oathkeeper → services        │        │        │                     │
-  │                                  │  Kafka │  Kafka │  Kafka              │
-  │                                  ▼        ▼        ▼                     │
-  │                              account-  quoting  notification (outbound)  │
-  │                              lookup    handler  handler                   │
-  │                              handler     │        │                      │
-  │                                  │       │        │                      │
-  │                                  └───────┼────────┘                      │
-  │                                          ▼                               │
-  │                                  partner-egress-proxy                    │
-  │                                  (CiliumEnvoyConfig)                     │
-  │                                  Source IP: B ◄── same IP                │
-  │                                          │                               │
-  └──────────────────────────────────────────┼───────────────────────────────┘
-                                             │ mTLS
-                                             ▼
-                                       Partner DFSPs
+  │   gw-int (operators)        gw-ext (DFSPs — no mTLS)     extapi-mtls   │
+  │   *.int.${domain} :443      *.ext.${domain} :443          (CEC — mTLS) │
+  │   TLS termination           TLS termination               extapi.ext.  │
+  │   IP: A (LB-IPAM)          IP: B (LB-IPAM)               ${domain}:443│
+  │     │                        │                            IP: C (LB-IPAM)
+  │     ├── ttk.int.            ├── mcm.ext.                    │          │
+  │     ├── settlement.int.      ├── keycloak.ext.               │          │
+  │     ├── intapi.int.          │                               │          │
+  │     └── simulator.int.       │                      ┌────────┼────────┐ │
+  │           │                  │                      ▼        ▼        ▼ │
+  │     Oathkeeper → services    │                  account-  quoting  ml-api│
+  │                              │                  lookup    service  adapter│
+  │                              │                  service           (inbound)
+  │                              │                                          │
+  │                              │                   ▼        ▼        ▼    │
+  │                              │               account-  quoting  notif.  │
+  │                              │               lookup    handler  handler  │
+  │                              │               handler     │        │     │
+  │                              │                   └───────┼────────┘     │
+  │                              │                           ▼              │
+  │                              │                 dfsp-callback-mtls (CEC) │
+  │                              │                   Cilium Envoy DaemonSet │
+  │                              │                           │              │
+  └──────────────────────────────┼───────────────────────────┼──────────────┘
+                                                             │ mTLS
+                                                             ▼
+                                                       Partner DFSPs
 ```
 
-| Gateway | Audience | Hostname pattern | TLS mode | Backend |
-|---------|----------|-----------------|----------|---------|
-| `main-gateway` | Hub operators, admin UIs | `*.${domain}` | TLS termination (no client cert) | Oathkeeper → internal services |
-| `partner-gateway` | External DFSPs | `fspiop.${domain}` | **mTLS** (client cert required, validated against scheme CA) | Path-based: account-lookup, quoting, ml-api-adapter, bulk-api-adapter, transaction-requests |
+| LoadBalancer | Audience | Hostname pattern | TLS mode | Backend |
+|-------------|----------|-----------------|----------|---------|
+| `gw-int` | Hub operators, admin UIs | `*.int.${domain}` | TLS termination (SIMPLE) | Oathkeeper → internal services |
+| `gw-ext` | DFSPs (non-mTLS services) | `*.ext.${domain}` | TLS termination (SIMPLE) | MCM pm4mlapi, Keycloak OIDC |
+| `extapi-mtls` | DFSPs (FSPIOP APIs) | `extapi.ext.${domain}` | **mTLS** (client cert required) | CEC path routing → account-lookup, quoting, ml-api-adapter, transaction-requests |
 
-The `main-gateway` exists in `platform-config/` (deployed on all clusters). The `partner-gateway` exists in `env-edge/` (deployed only on env clusters).
+**Why three LBs instead of two?** Gateway API does not support `tls.mode: Mutual` — the HTTPS listener only supports `Terminate` (SIMPLE TLS). CiliumEnvoyConfig (CEC) provides native Envoy `DownstreamTlsContext` with `require_client_certificate: true`, but CEC requires its own LoadBalancer Service to intercept traffic. Sharing an IP between a Gateway (SIMPLE TLS) and a CEC (mTLS) on the same port 443 is not possible because Gateway API's TLSRoute Passthrough (the only mechanism for mixed TLS modes) is experimental (v1alpha2), has known bugs in Cilium, and is not spec-compliant when mixed with HTTPS Terminate listeners.
 
-### Consistent IP Requirement
-
-DFSPs whitelist a single IP address for the Hub. The Hub must present the **same IP for both inbound and outbound** connections — DFSPs see a consistent identity. This means:
-
-- **Inbound**: DFSP connects to `fspiop.${domain}` → resolves to IP **B** (`partner-gateway` LoadBalancer IP)
-- **Outbound**: Hub sends callback to DFSP → DFSP sees source IP **B** (same IP)
-
-This is enforced via `CiliumEgressGatewayPolicy`: egress traffic from the `partner-egress-proxy` is SNAT'd to the `partner-gateway`'s external IP. On self-hosted providers, this IP comes from LB-IPAM. On cloud providers, it comes from the cloud Load Balancer's public IP or an Elastic IP / static IP assigned to the egress path.
-
-```yaml
-apiVersion: cilium.io/v2
-kind: CiliumEgressGatewayPolicy
-metadata:
-  name: partner-egress-snat
-spec:
-  selectors:
-    - podSelector:
-        matchLabels:
-          app: partner-egress-proxy
-  destinationCIDRs:
-    - "0.0.0.0/0"                       # All external destinations
-  egressGateway:
-    nodeSelector:
-      matchLabels:
-        cilium.io/partner-egress: "true" # Node(s) with the partner-gateway LB IP
-    egressIP: "${partner_gateway_ip}"    # Same IP as partner-gateway LoadBalancer
-```
+Both `gw-int` and `gw-ext` Gateways are defined in `platform-config/` (deployed on all clusters). The `extapi-mtls` CEC and its supporting resources are defined in `env-app/routes/` (deployed only on env clusters).
 
 ### Mojaloop PKI Model
 
@@ -551,9 +524,7 @@ Mojaloop mandates a **single shared scheme CA** for all participants. This simpl
 | Cert types per participant | TLS (transport), JWS (signing), JWE (encryption) — no key reuse |
 | CA management | Vault PKI secrets engine, operated via MCM |
 
-All DFSPs and the Hub receive certificates from the same CA. This means:
-- **Inbound**: One CA cert validates ALL DFSP client certs (no per-DFSP CA)
-- **Outbound**: Per-DFSP client certs are issued by the Hub (for cert isolation / revocation granularity), validated by DFSPs against the same scheme CA
+All DFSPs and the Hub receive certificates from the same CA. The `dfsp-ca-bundle` Secret (vault-agent rendered) concatenates all DFSP CA bundles — this handles both single-CA deployments (same cert repeated, harmless) and multi-CA deployments (multiple intermediate CAs from the scheme CA chain).
 
 ### Security Layers
 
@@ -563,7 +534,7 @@ Five security layers protect Hub–DFSP communication:
 |-------|-----------|-------|
 | **1. mTLS** | X.509 mutual certificate authentication (TLSv1.2+) | Transport — both directions |
 | **2. JWS** | JSON Web Signatures (RFC 7515) on HTTP request bodies | Message integrity — requests only (not responses) |
-| **3. IP whitelisting** | Firewall rules on both Hub and DFSP sides | Network — both directions |
+| **3. IP whitelisting** | Deferred — mTLS client cert verification is the primary security boundary | Network — future enhancement |
 | **4. OAuth 2.0** | API authorization (Keycloak OIDC) | Application — inbound only |
 | **5. ILP** | Interledger Protocol cryptographic transfer proof | Transfer integrity — end-to-end |
 
@@ -571,166 +542,94 @@ JWS provides **end-to-end integrity** — even the Hub cannot modify a message b
 
 ### Inbound Flow (DFSP → Hub)
 
-The `partner-gateway` (Gateway API) handles inbound mTLS for **all three FSPIOP phases**. This is static infrastructure — configured via GitOps, not per-DFSP. A single mTLS listener validates all DFSP client certificates against the scheme CA, then HTTPRoutes fan out to the appropriate backend services.
+Inbound mTLS is handled by a **CiliumEnvoyConfig** (CEC) attached to a dedicated LoadBalancer Service. This is static infrastructure — configured via GitOps, not per-DFSP. The CEC runs on Cilium's existing Envoy DaemonSet (zero additional pods).
 
 ```
-DFSP ──mTLS──▶ partner-gateway (port 443)
+DFSP ──mTLS──▶ extapi-mtls Service (LB IP C, port 443)
                 │
-                │  1. Hub presents hub-server-tls cert
-                │  2. Requests DFSP client certificate
-                │  3. Validates client cert against scheme CA
-                │  4. mTLS established
+                │  CEC intercepts traffic to this Service
                 │
                 ▼
-              HTTPRoute (hostname: fspiop.${domain})
+              CiliumEnvoyConfig: extapi-mtls (Cilium Envoy DaemonSet)
                 │
-                │  Path-based routing:
+                │  DownstreamTlsContext:
+                │  1. Hub presents extapi-mtls-tls cert (cert-manager, Let's Encrypt)
+                │  2. Requests DFSP client certificate
+                │  3. Validates client cert against dfsp-ca-bundle (vault-agent rendered)
+                │  4. require_client_certificate: true
                 │
-                ├── /parties/*          → account-lookup-service:80  (Discovery)
-                ├── /participants/*     → account-lookup-service:80  (Discovery)
-                ├── /quotes/*           → quoting-service:80         (Agreement)
-                ├── /transfers/*        → ml-api-adapter-service:80  (Transfer)
-                ├── /bulkQuotes/*       → quoting-service:80         (Agreement)
-                ├── /bulkTransfers/*    → bulk-api-adapter-service:80 (Transfer)
-                └── /transactionRequests/* → transaction-requests-service:80
+                ▼
+              HTTP Connection Manager — path-based routing:
+                │
+                ├── /participants     → mojaloop/moja-account-lookup-service:80  (Discovery)
+                ├── /parties          → mojaloop/moja-account-lookup-service:80  (Discovery)
+                ├── /quotes           → mojaloop/moja-quoting-service:80         (Agreement)
+                ├── /fxQuotes         → mojaloop/moja-quoting-service:80         (Agreement)
+                ├── /transfers        → mojaloop/moja-ml-api-adapter-service:80  (Transfer)
+                ├── /fxTransfers      → mojaloop/moja-ml-api-adapter-service:80  (Transfer)
+                ├── /transactionRequests → mojaloop/moja-transaction-requests-service:80
+                └── /authorizations   → mojaloop/moja-transaction-requests-service:80
 ```
 
-All FSPIOP endpoints share the **same mTLS handshake** — one scheme CA, one hub server cert, one Gateway listener. Per-DFSP identity is established at the TLS layer (client cert CN/SAN), not per-service.
+All FSPIOP endpoints share the **same mTLS handshake** — one `dfsp-ca-bundle`, one hub server cert, one CEC listener. Per-DFSP identity is established at the TLS layer (client cert CN/SAN), not per-service.
 
-**Gateway API resources:**
+**CiliumEnvoyConfig resources** (`env-app/routes/extapi-mtls-cec.yaml`):
 
-```yaml
-# partner-gateway.yaml — mTLS Gateway for DFSP traffic
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: partner-gateway
-  namespace: platform-system
-spec:
-  gatewayClassName: ${gateway_class_name}
-  tls:
-    default:
-      frontendValidation:
-        caCertificateRefs:
-          - kind: ConfigMap
-            name: scheme-ca             # Validates ALL DFSP client certs
-        mode: AllowValidOnly            # Reject if no valid client cert
-  listeners:
-    - name: fspiop-https
-      hostname: "fspiop.${domain}"
-      port: 443
-      protocol: HTTPS
-      tls:
-        mode: Terminate
-        certificateRefs:
-          - name: hub-server-tls        # cert-manager issued from Vault PKI
-```
-
-Frontend mTLS validation uses Gateway API GEP-91 (Standard status). Cilium translates this into an Envoy `DownstreamTlsContext` with `require_client_certificate: true` and the scheme CA as `trusted_ca`. No CiliumEnvoyConfig needed for inbound.
-
-The HTTPRoute fans out to backend services by FSPIOP path prefix:
-
-```yaml
-# fspiop-httproute.yaml — routes all FSPIOP API paths to backend services
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: fspiop-routes
-  namespace: mojaloop
-spec:
-  parentRefs:
-    - name: partner-gateway
-      namespace: platform-system
-  hostnames:
-    - "fspiop.${domain}"
-  rules:
-    # Discovery phase
-    - matches:
-        - path: { type: PathPrefix, value: /parties }
-        - path: { type: PathPrefix, value: /participants }
-      backendRefs:
-        - name: moja-account-lookup-service
-          port: 80
-    # Agreement phase
-    - matches:
-        - path: { type: PathPrefix, value: /quotes }
-        - path: { type: PathPrefix, value: /bulkQuotes }
-      backendRefs:
-        - name: moja-quoting-service
-          port: 80
-    # Transfer phase
-    - matches:
-        - path: { type: PathPrefix, value: /transfers }
-      backendRefs:
-        - name: moja-ml-api-adapter-service
-          port: 80
-    - matches:
-        - path: { type: PathPrefix, value: /bulkTransfers }
-      backendRefs:
-        - name: moja-bulk-api-adapter-service
-          port: 80
-    # Transaction requests
-    - matches:
-        - path: { type: PathPrefix, value: /transactionRequests }
-      backendRefs:
-        - name: moja-transaction-requests-service
-          port: 80
-```
-
-The IP whitelist (`CiliumNetworkPolicy`) applies to **all backend services** listed above — not just ml-api-adapter. This matches the sw002 pattern where the `AuthorizationPolicy` targeted account-lookup-service, quoting-service, ml-api-adapter-service, and transaction-requests-service simultaneously.
+The CEC defines an Envoy listener with `DownstreamTlsContext`:
+- **Server cert**: `mojaloop/extapi-mtls-tls` Secret via Cilium SDS (cert-manager managed, Let's Encrypt)
+- **Client verification**: `mojaloop/dfsp-ca-bundle` Secret via Cilium SDS (vault-agent rendered, combined DFSP CAs)
+- **HTTP connection manager** with `route_config` for path-based routing to backend Cilium service clusters (`mojaloop/{service}:{port}` format)
+- `spec.services` references the `extapi-mtls` LoadBalancer Service — Cilium intercepts all traffic to this Service and routes it through the CEC's Envoy listener
 
 ### Outbound Flow (Hub → DFSP)
 
-Outbound is architecturally harder: the Hub sends callbacks to **dynamic DFSP endpoints** (any domain, registered at runtime via MCM) and must present **per-DFSP client certificates**. A dedicated egress proxy with CiliumEnvoyConfig handles this.
+Outbound is architecturally harder: the Hub sends callbacks to **dynamic DFSP endpoints** (any domain, registered at runtime via MCM) and must present **per-DFSP client certificates**. CiliumEnvoyConfig + CiliumNetworkPolicy handle this transparently — zero additional pods.
 
-**All three phases** produce outbound callbacks — each has a dedicated handler service that reads events from Kafka and sends HTTP callbacks to the DFSP's registered callback URL:
+**All three phases** produce outbound callbacks — each has a dedicated handler service that sends HTTP callbacks to the DFSP's registered callback URL:
 
 | Phase | Handler service | Callback example | Kafka topic |
 |-------|----------------|------------------|-------------|
 | **Discovery** | `account-lookup-service` (inline) | `PUT /parties/{Type}/{ID}` | N/A (synchronous) |
 | **Agreement** | `quoting-service` (inline) | `PUT /quotes/{ID}` | N/A (synchronous) |
 | **Transfer** | `ml-api-adapter-handler-notification` | `PUT /transfers/{ID}` | `topic-notification-event` |
-| **Bulk Transfer** | `bulk-api-adapter-handler-notification` | `PUT /bulkTransfers/{ID}` | `topic-bulk-notification-event` |
 
-All handler services resolve the DFSP callback URL from **Central Ledger** (a single URL per DFSP, registered during onboarding) and send plain HTTP. The egress proxy handles mTLS transparently.
+Handler services send plain HTTP to DFSP FQDNs. The CiliumNetworkPolicy intercepts this egress traffic and redirects it through the CEC's Envoy listener, which originates mTLS transparently.
 
 ```
 account-lookup-service  ─┐
-quoting-service          ─┤  HTTP to partner-egress-proxy.mojaloop.svc (port 80)
-notification-handler     ─┤  Headers: FSPIOP-Destination: dfspA, FSPIOP-Source: hub
-bulk-notification-handler─┘  Body: signed with JWS (FSPIOP-Signature header)
+quoting-service          ─┤  HTTP to dfsp.fqdn (plain, no TLS awareness)
+notification-handler     ─┘
+    │
+    │  CiliumNetworkPolicy: dfsp-callback-egress
+    │  endpointSelector: {} (all pods in mojaloop namespace)
+    │  toFQDNs: [all enrolled DFSP FQDNs]
+    │  listener: → dfsp-callback-mtls CEC
     │
     ▼
-partner-egress-proxy Service
+CiliumEnvoyConfig: dfsp-callback-mtls (Cilium Envoy DaemonSet)
     │
-    │  Cilium intercepts (CiliumEnvoyConfig backendServices)
-    │  Envoy reads FSPIOP-Destination header → selects dfspA route
+    │  Route config: virtual hosts per DFSP
+    │  Matches on Host header (DFSP FQDN) → per-DFSP Envoy cluster
     │
-    ▼
-Embedded Envoy (Cilium)
-    │
-    │  Route: FSPIOP-Destination: dfspA → dfspA-upstream cluster
-    │  Host rewrite: → callback.dfspA.com
-    │  Upstream TLS: UpstreamTlsContext (MUTUAL)
-    │    - client cert: cilium-secrets/dfspA-clientcert-tls (SDS)
-    │    - server validation: ca_bundle from same Secret (SDS)
-    │    - SNI: callback.dfspA.com
-    │  Source IP: partner-gateway IP (CiliumEgressGatewayPolicy)
+    │  Per-DFSP cluster: STRICT_DNS → dfsp.fqdn:443
+    │  UpstreamTlsContext (MUTUAL):
+    │    - client cert: mojaloop/{host}-clientcert-tls (SDS)
+    │    - SNI: dfsp.fqdn
     │
     ▼
-callback.dfspA.com:443 (mTLS established)
+dfsp.fqdn:443 (mTLS established)
 ```
 
 **Key design decisions:**
 
-- **All handler services** send plain HTTP to the egress proxy. They have zero TLS awareness — mTLS is entirely infrastructure-managed. This is DFSP-centric: one DFSP onboarding enables mTLS for all three phases simultaneously.
-- Routing uses the **`FSPIOP-Destination` header** (set by every Mojaloop service on every callback) to select the per-DFSP upstream cluster and cert. This header is part of the FSPIOP specification and is always present.
-- The egress proxy is a **minimal pause container** — Cilium's embedded Envoy (via CiliumEnvoyConfig `backendServices`) does all the work. No standalone Envoy deployment.
-- The **single callback URL** registered in Central Ledger during DFSP onboarding points to `http://partner-egress-proxy.mojaloop.svc.cluster.local` (not the real DFSP FQDN). The Envoy route rewrites the Host header and originates the real connection. All services that resolve this URL from Central Ledger automatically route through the egress proxy.
+- **All handler services** send plain HTTP. They have zero TLS awareness — mTLS is entirely infrastructure-managed via CiliumNetworkPolicy egress interception. DFSP onboarding enables mTLS for all three phases simultaneously.
+- **Routing uses the Host header** (DFSP FQDN) to select the per-DFSP upstream cluster and cert. The CiliumNetworkPolicy `listener` field transparently redirects matching egress traffic through the CEC.
+- **Zero additional pods** — Cilium's existing Envoy DaemonSet (via CiliumEnvoyConfig) handles all mTLS origination. No standalone Envoy deployment, no egress proxy pod.
+- **CiliumNetworkPolicy with `toFQDNs` + `listener`** is the key primitive: it intercepts egress to specific FQDNs and redirects through the CEC's Envoy for mTLS origination.
 
-### Dynamic Resource Generation (Vault Agent Template)
+### Dynamic Resource Generation (Vault Agent)
 
-DFSPs are onboarded dynamically via MCM. The Vault Agent template pattern (proven in sw002 — see `doc/sw002-reference.md`) generates all per-DFSP Kubernetes resources automatically. A Vault Agent sidecar on the MCM pod watches `secret/onboarding_pm4mls/` in Vault KV and `kubectl apply`s resources whenever the DFSP list changes.
+DFSPs are onboarded dynamically via MCM. A Vault Agent Deployment in the `mcm` namespace watches `secret/onboarding_pm4mls/` in Vault KV and `kubectl apply`s resources whenever the DFSP list changes.
 
 ```
 MCM onboards DFSP-A
@@ -741,30 +640,49 @@ Vault KV:  store at secret/onboarding_pm4mls/dfspA
            (host, fqdn, client_cert, client_key, ca_bundle, currency)
     │
     ▼
-Vault Agent sidecar (on MCM pod, periodic re-render ~5 min)
-Template: {{ range secrets "secret/onboarding_pm4mls/" }}
+Vault Agent Deployment (mcm namespace, periodic re-render ~5 min)
+
+Template 1 — callback.yaml:
+{{ range secrets "secret/onboarding_pm4mls/" }}
     │
-    │  kubectl apply -f /vault/secrets/tmp/partner-edge.yaml
+    │  kubectl apply --prune -l vault-agent/template=callback
+    │  --prune-allowlist: Secret, CiliumEnvoyConfig, CiliumNetworkPolicy
     │
-    ├──▶ K8s Secret: dfspA-clientcert-tls (in cilium-secrets namespace)
+    ├──▶ K8s Secret: {host}-clientcert-tls (mojaloop namespace)
     │      type: kubernetes.io/tls (ca.crt, tls.key, tls.crt)
-    │      Created directly — no ESO/operator needed
+    │      Per-DFSP client cert for outbound mTLS origination
     │
-    ├──▶ CiliumEnvoyConfig: partner-egress-mtls (SINGLE resource, ALL DFSPs)
-    │      Listener: port 80, routes by FSPIOP-Destination header
+    ├──▶ K8s Secret: dfsp-ca-bundle (mojaloop namespace)
+    │      Concatenation of all DFSP ca_bundle fields
+    │      Referenced by inbound extapi-mtls CEC for client verification
+    │
+    ├──▶ CiliumEnvoyConfig: dfsp-callback-mtls (mojaloop namespace)
+    │      Listener: accepts redirected egress traffic
+    │      Per-DFSP virtual hosts (matched by Host header/FQDN)
     │      Per-DFSP upstream clusters: STRICT_DNS → dfsp-fqdn:443
     │      Per-DFSP UpstreamTlsContext with cert via Cilium SDS
     │
-    ├──▶ CiliumNetworkPolicy: dfsp-whitelist-ingress
-    │      Inbound IP whitelist rebuilt from secret/whitelist_fsps + secret/whitelist_pm4mls
-    │      Targets ALL FSPIOP services: account-lookup, quoting, ml-api-adapter,
-    │        bulk-api-adapter, transaction-requests (all three phases protected)
+    └──▶ CiliumNetworkPolicy: dfsp-callback-egress (mojaloop namespace)
+           endpointSelector: {} (all pods)
+           toFQDNs: [all DFSP FQDNs]
+           listener: → dfsp-callback-mtls CEC
+
+Template 2 — onboarding.yaml:
+{{ range secrets "secret/onboarding_pm4mls/" }}
     │
-    └──▶ ConfigMap + Job: dfspA-onboard-dfsp
-           Provisions DFSP in Central Ledger (callback URL, currency, net debit cap)
-           Callback URL: http://partner-egress-proxy.mojaloop.svc.cluster.local
-           (single URL — used by all handler services across all phases)
+    │  kubectl apply --prune -l vault-agent/template=onboarding
+    │
+    ├──▶ ConfigMap: {host}-ml-ttk-add-dfsp-conf
+    │      TTK CLI config with DFSP-specific provisioning parameters
+    │
+    └──▶ Job: {host}-onboard-dfsp-{timestamp}
+           Runs TTK CLI to provision DFSP in central-ledger
+           (create participant, set limits, fund settlement, register callbacks)
 ```
+
+The Vault Agent Deployment has its own ServiceAccount (`vault-agent` in `mcm` namespace) with RBAC permissions to create/manage Secrets, ConfigMaps, Jobs, CiliumEnvoyConfigs, and CiliumNetworkPolicies in the `mojaloop` namespace (see `vault-agent-rbac.yaml`).
+
+**Prune strategy:** `kubectl apply --prune` with label selector `vault-agent/template=callback` automatically removes resources for DFSPs that were de-enrolled from Vault. When no DFSPs are enrolled, the template renders empty and the fallback deletes all labeled resources.
 
 ESO is **not used** for per-DFSP secrets — ESO requires static `ExternalSecret` manifests, which cannot handle the dynamic DFSP list. The Vault Agent template creates K8s Secrets directly via `kubectl apply`, with the cert data already available in the template context. Cilium SDS watches these Secrets and hot-pushes them to Envoy — zero-downtime cert rotation.
 
@@ -772,80 +690,89 @@ ESO is **not used** for per-DFSP secrets — ESO requires static `ExternalSecret
 
 | Certificate | Issued by | Stored in | Synced to K8s via | Consumed by | Rotation |
 |-------------|-----------|-----------|-------------------|-------------|----------|
-| Hub server cert (`hub-server-tls`) | cert-manager → Vault PKI (`server-cert-role`) | K8s Secret (cert-manager managed) | cert-manager (auto-renewal) | `partner-gateway` listener (Cilium SDS) | Automatic (`renewBefore: 720h`) |
-| Hub client cert per-DFSP (`{dfsp}-clientcert-tls`) | MCM → Vault PKI (`client-cert-role`) → Vault KV | Vault KV at `secret/onboarding_pm4mls/{dfsp}` | Vault Agent template (`kubectl apply`) | `partner-egress-proxy` CiliumEnvoyConfig (Cilium SDS) | Vault Agent re-renders on KV change |
-| Scheme CA (`scheme-ca`) | Generated once in Vault PKI (`pki/root/generate/internal`) | Vault KV at `secret/mcm/scheme-ca` | ESO ExternalSecret (static, `refreshInterval: 1h`) | `partner-gateway` frontendValidation + egress upstream validation | Rarely changes (10-year validity) |
+| Hub server cert (`extapi-mtls-tls`) | cert-manager → Let's Encrypt (DNS-01) | K8s Secret (cert-manager managed) | cert-manager (auto-renewal) | `extapi-mtls` CEC listener (Cilium SDS) | Automatic (cert-manager) |
+| Hub client cert per-DFSP (`{host}-clientcert-tls`) | MCM → Vault PKI → Vault KV | Vault KV at `secret/onboarding_pm4mls/{dfsp}` | Vault Agent template (`kubectl apply`) | `dfsp-callback-mtls` CEC (Cilium SDS) | Vault Agent re-renders on KV change |
+| DFSP CA bundle (`dfsp-ca-bundle`) | Concatenation of per-DFSP `ca_bundle` fields | Vault KV (per-DFSP) → combined by Vault Agent | Vault Agent template (`kubectl apply`) | `extapi-mtls` CEC client verification (Cilium SDS) | Vault Agent re-renders on DFSP change |
 | DFSP JWS public keys | Provided by DFSPs during onboarding | Vault KV at `secret/mcm/{dfsp}` | Vault Agent template or application config | ml-api-adapter (JWS verification) | On DFSP key rotation via MCM |
 
 ### Components
 
-| Component | Deployed by | Cluster | Role in partner edge |
-|-----------|-------------|---------|---------------------|
-| **Vault** (PKI + KV) | `env-auth/` | Env | Issues hub certs, stores per-DFSP cert bundles, scheme CA |
-| **MCM** | `env-app/` | Env | DFSP onboarding portal. Calls Vault PKI, writes cert bundles to KV, manages endpoint URLs and IP whitelists |
-| **Vault Agent** (sidecar on MCM) | `env-app/` (MCM Helm values) | Env | Watches Vault KV, generates per-DFSP K8s resources via template + `kubectl apply` |
-| **cert-manager** | `platform/` | All | Issues `hub-server-tls` from Vault PKI with auto-renewal |
-| **ESO** | `platform/` | All | Syncs scheme CA from Vault KV to ConfigMap (static) |
-| **partner-gateway** | `env-edge/` | Env | Gateway API with frontend mTLS for inbound DFSP traffic |
-| **partner-egress-proxy** | `env-edge/` | Env | Minimal Service — CiliumEnvoyConfig intercepts traffic, Envoy handles per-DFSP mTLS origination |
-| **CiliumEnvoyConfig** | Dynamic (Vault Agent) | Env | Per-DFSP upstream clusters with mTLS, route by `FSPIOP-Destination` header |
-| **CiliumEgressGatewayPolicy** | `env-edge/` | Env | SNATs egress from partner-egress-proxy to partner-gateway IP |
-| **CiliumNetworkPolicy** | Dynamic (Vault Agent) | Env | Inbound IP whitelist from Vault KV — targets all FSPIOP services (account-lookup, quoting, ml-api-adapter, bulk-api-adapter, transaction-requests) |
+| Component | Deployed by | Namespace | Role in partner edge |
+|-----------|-------------|-----------|---------------------|
+| **Vault** (PKI + KV) | `env-auth/` | vault | Issues hub certs, stores per-DFSP cert bundles |
+| **MCM** | `env-app/` | mcm | DFSP onboarding portal. Calls Vault PKI, writes cert bundles to KV |
+| **Vault Agent** (Deployment) | `env-app/` | mcm | Watches Vault KV, generates per-DFSP K8s/Cilium resources via template + `kubectl apply` |
+| **cert-manager** | `platform/` | cert-manager | Issues `extapi-mtls-tls` server cert from Let's Encrypt with auto-renewal |
+| **gw-ext** (Gateway) | `platform-config/` | platform-system | SIMPLE TLS for DFSP-facing non-mTLS services (MCM pm4mlapi, Keycloak OIDC) |
+| **extapi-mtls** (CEC + Service) | `env-app/routes/` | mojaloop | Inbound mTLS: CiliumEnvoyConfig + LoadBalancer Service + Certificate |
+| **dfsp-callback-mtls** (CEC) | Dynamic (Vault Agent) | mojaloop | Outbound mTLS: per-DFSP upstream clusters with mTLS origination |
+| **dfsp-callback-egress** (CNP) | Dynamic (Vault Agent) | mojaloop | Redirects egress to DFSP FQDNs through CEC for mTLS origination |
 
 ### GitOps Placement
 
+All partner edge resources live in `env-app/` — there is no separate `env-edge/` kustomization.
+
 ```
 gitops/
-  env-edge/                                    # Partner edge (env clusters only)
-    kustomization.yaml
-    partner-gateway.yaml                       # Gateway: mTLS for DFSP inbound
-    fspiop-httproute.yaml                      # HTTPRoute → ml-api-adapter
-    partner-egress-proxy.yaml                  # Deployment + Service (egress proxy)
-    egress-gateway-policy.yaml                 # CiliumEgressGatewayPolicy (consistent IP)
-    vault-pki-issuer.yaml                      # ClusterIssuer (cert-manager → Vault PKI)
-    hub-server-cert.yaml                       # Certificate (auto-renewal)
-    scheme-ca-externalsecret.yaml              # ESO → scheme-ca ConfigMap
-    vault-agent-rbac.yaml                      # RBAC for Vault Agent kubectl apply
+  platform-config/
+    gateway/
+      gateway.yaml                         # gw-int: *.int.${domain} (internal ops)
+      gateway-ext.yaml                     # gw-ext: *.ext.${domain} (DFSP non-mTLS)
+  env-app/
+    routes/
+      extapi-mtls-service.yaml             # LoadBalancer Service for mTLS inbound
+      extapi-mtls-cert.yaml                # cert-manager Certificate (Let's Encrypt)
+      extapi-mtls-cec.yaml                 # CEC: inbound mTLS listener + path routing
+      mcm-ext-httproute.yaml               # MCM → gw-ext (SIMPLE TLS)
+      keycloak-ext-httproute.yaml          # Keycloak → gw-ext (SIMPLE TLS)
+      referencegrant-ext.yaml              # ReferenceGrant for gw-ext cross-namespace
+    mcm/
+      vault-agent-configmap.yaml           # Vault Agent HCL templates (callback + onboarding)
+      vault-agent-deployment.yaml          # Vault Agent Deployment
+      vault-agent-rbac.yaml                # RBAC: vault-agent SA → mojaloop namespace
 ```
 
-The Vault Agent template (`vault-config-configmap.hcl`) lives in the MCM Helm values — it is part of the MCM deployment in `env-app/`, not a separate gitops path. Dynamic resources (K8s Secrets, CiliumEnvoyConfig, CiliumNetworkPolicy) are generated at runtime by the Vault Agent, not at artifact build time.
+Dynamic resources (K8s Secrets, CiliumEnvoyConfig, CiliumNetworkPolicy, onboarding Jobs) are generated at runtime by the Vault Agent, not at artifact build time.
 
 **Dependency chain for env clusters:**
 
 ```
-platform → platform-config → vendor → env → env-data → env-auth → env-edge → env-app
-                                                                      │
-                                                        partner-gateway (needs cert-manager)
-                                                        partner-egress-proxy (needs Cilium)
-                                                        scheme-ca (needs ESO + Vault)
-                                                                      │
-                                                        env-app deploys MCM with Vault Agent
-                                                        Vault Agent generates dynamic resources
+platform → platform-config → vendor → env → env-data → env-auth → env-auth-config → env-app
+                                                                                        │
+                                                          extapi-mtls CEC (needs cert-manager)
+                                                          gw-ext Gateway (needs cert-manager)
+                                                          Vault Agent (needs Vault from env-auth)
+                                                          Vault Agent generates dynamic resources
 ```
 
 ### Static vs Dynamic Resources
 
 | Resource | Type | Creator | Lifecycle |
 |----------|------|---------|-----------|
-| `partner-gateway` | Static | GitOps (`env-edge/`) | Deployed once, updated via artifact |
-| `partner-egress-proxy` | Static | GitOps (`env-edge/`) | Deployed once |
-| `CiliumEgressGatewayPolicy` | Static | GitOps (`env-edge/`) | Deployed once |
-| `hub-server-tls` Certificate | Static | GitOps (`env-edge/`) + cert-manager | Auto-renewed |
-| `scheme-ca` ExternalSecret | Static | GitOps (`env-edge/`) + ESO | Refreshed hourly |
-| `fspiop-httproute` | Static | GitOps (`env-edge/`) | Deployed once |
-| Per-DFSP K8s Secrets | **Dynamic** | Vault Agent template | Created/updated on DFSP onboarding |
-| `CiliumEnvoyConfig` (all DFSP routes) | **Dynamic** | Vault Agent template | Regenerated on every DFSP change |
-| `CiliumNetworkPolicy` (IP whitelist) | **Dynamic** | Vault Agent template | Regenerated on whitelist change |
-| Central Ledger provisioning Jobs | **Dynamic** | Vault Agent template | One-shot per DFSP |
+| `gw-ext` Gateway | Static | GitOps (`platform-config/`) | Deployed once, updated via artifact |
+| `extapi-mtls` Service | Static | GitOps (`env-app/routes/`) | Deployed once |
+| `extapi-mtls-tls` Certificate | Static | GitOps (`env-app/routes/`) + cert-manager | Auto-renewed |
+| `extapi-mtls` CEC (inbound) | Static | GitOps (`env-app/routes/`) | Deployed once |
+| `mcm-ext` HTTPRoute | Static | GitOps (`env-app/routes/`) | Deployed once |
+| `keycloak-ext` HTTPRoute | Static | GitOps (`env-app/routes/`) | Deployed once |
+| Per-DFSP TLS Secrets | **Dynamic** | Vault Agent template | Created/updated on DFSP onboarding |
+| `dfsp-ca-bundle` Secret | **Dynamic** | Vault Agent template | Regenerated on every DFSP change |
+| `dfsp-callback-mtls` CEC (outbound) | **Dynamic** | Vault Agent template | Regenerated on every DFSP change |
+| `dfsp-callback-egress` CNP | **Dynamic** | Vault Agent template | Regenerated on every DFSP change |
+| Per-DFSP onboarding ConfigMaps | **Dynamic** | Vault Agent template | Created per DFSP |
+| Per-DFSP onboarding Jobs | **Dynamic** | Vault Agent template | One-shot per DFSP |
 
 ### What Is NOT Deployed
 
-- **No standalone Envoy** — Cilium's embedded Envoy handles both Gateways and the egress CiliumEnvoyConfig
+- **No Istio / service mesh** — removed entirely; Cilium provides all needed L7 features natively
+- **No standalone Envoy** — Cilium's existing Envoy DaemonSet handles both Gateways and CiliumEnvoyConfigs (zero additional pods)
 - **No Envoy Gateway controller** — Gateway API + CiliumEnvoyConfig covers all use cases
 - **No custom xDS control plane** — Cilium acts as the xDS control plane; K8s Secrets + SDS replace custom SDS servers
-- **No Istio / service mesh** — Cilium provides all needed L7 features natively
-- **No per-DFSP Gateway listeners** — single `partner-gateway` listener with one scheme CA validates all DFSPs; per-DFSP routing is header-based in the egress proxy
+- **No per-DFSP Gateway listeners** — single `extapi-mtls` CEC listener with combined CA bundle validates all DFSPs; per-DFSP routing is Host-header-based in the outbound CEC
 - **No ESO for dynamic per-DFSP secrets** — ESO requires static manifests; Vault Agent template handles dynamic cert sync directly
+- **No egress proxy pod** — CiliumNetworkPolicy `listener` field transparently redirects egress through CEC's Envoy
+- **No IP whitelisting** (deferred) — mTLS client cert verification is the primary security boundary; IP whitelisting can be added later as a CEC Envoy RBAC filter
+- **No CiliumEgressGatewayPolicy** (deferred) — consistent source IP for outbound callbacks not yet implemented
 
 ---
 
