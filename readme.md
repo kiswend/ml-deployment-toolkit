@@ -46,4 +46,6 @@ doctl compute domain create sw4.pj1.moja-do.delma.me
 doctl compute domain records create moja-do.delma.me --record-type NS --record-name sw4.pj1 --record-data ns1.digitalocean.com. --record-ttl 300
 doctl compute domain records create moja-do.delma.me --record-type NS --record-name sw4.pj1 --record-data ns2.digitalocean.com. --record-ttl 300
 doctl compute domain records create moja-do.delma.me --record-type NS --record-name sw4.pj1 --record-data ns3.digitalocean.com. --record-ttl 300
+
+
 ```

@@ -819,20 +819,153 @@ Bootstrap produces `recovery-kit/` containing:
 
 ## Disaster Recovery
 
-### Backup Strategy
+### Stateful Services and Backup Strategy
 
-| Component | Location | Criticality |
-|-----------|----------|-------------|
-| Recovery Kit | Offline physical safe | Critical |
-| CC Terraform state | Offline or CC object store (MinIO on-prem, S3/GCS on cloud) | High |
-| App Env state | CC object store (MinIO on-prem, S3/GCS on cloud) | High |
-| Vault data | CC object store + external replica | High |
+App Environment clusters have five stateful services. Each has a different backup mechanism and criticality level:
+
+| Service | Operator | Replicas | Storage | Backup Method | Restore Method | Criticality |
+|---------|----------|----------|---------|---------------|----------------|-------------|
+| **MySQL (PXC)** | Percona XtraDB | 1 + HAProxy | 8Gi | Operator-native: XtraBackup → S3 (scheduled) | `PerconaXtraDBClusterRestore` CR | **High** — all transactional data |
+| **MongoDB (PSMDB)** | Percona MongoDB | 3 (replica set) | 3Gi × 3 | Operator-native: pbm logical → S3 (scheduled) | `PerconaServerMongoDBRestore` CR | **High** — bulk/reporting data |
+| **Vault** | bank-vaults | 1 | 1Gi | Raft snapshots → S3 (CronJob) | `vault operator raft snapshot restore` | **High** — DFSP certs, PKI, secrets |
+| **Kafka** | Strimzi | 3 (KRaft) | 8Gi × 3 | None needed — transient message queue | Redeploy (topics declarative via TopicOperator) | **Low** — no persistent business state |
+| **Redis** | OT Redis | 1 | 1Gi | None needed — TTK cache only | Redeploy | **None** — ephemeral cache |
+
+Additional non-service state:
+
+| Component | Location | Backup Method | Criticality |
+|-----------|----------|---------------|-------------|
+| Recovery Kit | Offline physical safe | Manual (generated at bootstrap) | **Critical** — contains unseal keys |
+| Terraform state | CC object store (MinIO on-prem, S3/GCS on cloud) | Object storage replication | **High** |
+| GitOps artifact | OCI registry (GHCR, Harbor) | OCI registry replication | **Medium** — rebuildable from source |
+
+### Backup Architecture
+
+Backups are **automatic and continuous** — the backup configuration is part of the gitops artifact and deploys with `make push-gitops` + `make plan-apply`. No manual setup is needed after initial deployment.
+
+```
+                    App Environment (env cluster)
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                                                                 │
+  │   MySQL (PXC)          MongoDB (PSMDB)         Vault           │
+  │   spec.backup:         spec.backup:            CronJob:        │
+  │     schedule: daily      tasks: daily            schedule: daily│
+  │     storage: s3-minio    storage: s3-minio       raft snapshot  │
+  │     keep: 7              keep: 7                 → upload to S3 │
+  │         │                    │                        │         │
+  └─────────┼────────────────────┼────────────────────────┼─────────┘
+            │                    │                        │
+            ▼                    ▼                        ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                     MinIO (CC cluster)                          │
+  │                                                                 │
+  │   mysql-backups/          mongodb-backups/     vault-snapshots/ │
+  │     daily-full-2026-02-23   daily-logical-...   vault-2026-...  │
+  │     daily-full-2026-02-22   daily-logical-...   vault-2026-...  │
+  │     ...                     ...                  ...            │
+  │                                                                 │
+  │   Retention: 7 days (operator-managed for MySQL/MongoDB,       │
+  │              CronJob-managed for Vault)                         │
+  └─────────────────────────────────────────────────────────────────┘
+```
+
+**S3 credentials flow:** MinIO credentials are stored in CC Vault → ESO syncs them to a `minio-s3-credentials` Secret in the `mojaloop` namespace → Percona operators and the Vault backup CronJob read from this Secret.
+
+On **managed cloud providers** (AWS, GCP), MinIO is replaced by native S3/GCS. The backup configuration uses the same `s3` storage type — only the endpoint URL and credentials change (via Flux substitution variables).
+
+### Backup Configuration (GitOps)
+
+Backup schedules and retention are configured declaratively in the CRs and deploy automatically:
+
+**MySQL** — `spec.backup` in `gitops/env-data/mysql/mojaloop-db.yaml`:
+- XtraBackup to S3 (hot backup, no downtime)
+- Scheduled via operator (cron expression in CR)
+- Retention managed by operator (`keep: N`)
+
+**MongoDB** — `spec.backup` in `gitops/env-data/mongodb/bulk-mongodb.yaml`:
+- Percona Backup for MongoDB (pbm) logical backup to S3
+- Scheduled via operator (cron expression in CR)
+- Retention managed by operator (`keep: N`)
+
+**Vault** — CronJob in `gitops/env-auth/vault/`:
+- `vault operator raft snapshot save` (atomic, consistent)
+- Upload to MinIO/S3 via CLI
+- Retention managed by CronJob (delete old snapshots)
+- Requires migration from `file` → `raft` storage backend
+
+**Kafka and Redis** do not need backup:
+- Kafka topics are transient message queues; topic definitions are declarative (Strimzi TopicOperator) and recreated from gitops. Data replication factor 3 with min ISR 2 handles node failures.
+- Redis is a TTK cache with no persistent business state.
+
+### Restore Workflow
+
+Restore is a **manual, deliberate operation** — never automatic during deployment. It is invoked separately after infrastructure is running:
+
+```bash
+make plan-apply ENV=ml-test              # 1. Deploy fresh infrastructure
+                                          #    Flux reconciles: operators install,
+                                          #    CRs create empty databases,
+                                          #    Vault bootstraps from externalConfig
+
+make restore ENV=ml-test                  # 2. Restore all services from latest backup
+make restore ENV=ml-test SVC=mysql        # 2. Or restore only MySQL
+make restore ENV=ml-test SVC=vault BACKUP=2026-02-20  # 2. Or restore specific backup
+```
+
+**Why restore is separate from deploy:**
+- Restore is destructive — it overwrites current data with a backup snapshot
+- Different services may need different restore points
+- A fresh deploy without restore is valid — declarative config (`externalConfig`, `startupSecrets`, operator CR `users[]`) bootstraps everything; only runtime state (enrolled DFSPs, issued certs) is lost
+- Restore requires operators and CRs to be ready (deployment must complete first)
+
+**Restore order matters** — services have dependencies:
+
+```
+1. Vault (restore first — other services depend on its secrets)
+     ↓
+2. MySQL + MongoDB (restore in parallel — independent)
+     ↓
+3. Verify: Mojaloop services reconnect, ESO refreshes secrets
+     ↓
+4. Vault Agent re-renders DFSP resources (CEC, CNP, Secrets)
+```
+
+**Per-service restore mechanism:**
+
+| Service | Restore Mechanism | Downtime |
+|---------|------------------|----------|
+| **MySQL** | Create `PerconaXtraDBClusterRestore` CR → operator restores from S3 | Brief (cluster restart) |
+| **MongoDB** | Create `PerconaServerMongoDBRestore` CR → operator restores from S3 | Brief (replica set restart) |
+| **Vault** | `vault operator raft snapshot restore` → overwrites all Vault state | Brief (Vault restart) |
+
+After restore, the bank-vaults operator reconciles Vault's `externalConfig` (policies, auth, secrets engines) on top of the restored data. `startupSecrets` are idempotent and only write if the key doesn't exist.
+
+### Vault Bootstrap vs Restore
+
+Vault has a chicken-and-egg relationship with other services (ESO reads secrets from Vault, MCM writes to Vault). The deployment handles this through layered initialization:
+
+| Layer | Source | Contains | Survives Fresh Deploy? |
+|-------|--------|----------|----------------------|
+| **1. externalConfig** | GitOps (Vault CR) | Auth methods, policies, secret engines, PKI config, roles | Yes — declarative, always applied |
+| **2. startupSecrets** | GitOps (Vault CR) | Initial secrets (Kratos DSN, Keto DSN, Finance Portal) | Yes — idempotent, written if missing |
+| **3. Runtime state** | MCM / applications | DFSP onboarding data, issued PKI certs, whitelist entries | **No** — requires restore |
+
+A fresh deploy without restore creates a fully functional environment — you just need to re-onboard DFSPs through MCM. Restore recovers the runtime state so enrolled DFSPs and their certificates are preserved.
+
+### Recovery: Total Loss of App Environment
+
+1. Retrieve terraform state from CC object store
+2. `make plan-apply ENV=<env>` — provisions new infrastructure, FluxCD reconciles the full gitops chain
+3. Wait for operators and CRs to become ready (~5–10 minutes)
+4. `make restore ENV=<env>` — restores MySQL, MongoDB, and Vault from latest S3 backups
+5. Verify: Mojaloop services reconnect, Vault Agent re-renders DFSP resources
+6. DFSPs can resume operations (mTLS certs restored, callback endpoints preserved)
 
 ### Recovery: Total Loss of Control Center
 
 1. Retrieve recovery kit and terraform state from offline storage
-2. Provision new infrastructure
-3. Run `terraform apply` with saved state
-4. Restore object storage from external backup (MinIO buckets on-prem, S3/GCS on cloud)
-5. Unseal Vault with recovery kit keys
-6. FluxCD reconciles and reconnects to existing App Environments
+2. Provision new CC infrastructure: `make plan-apply ENV=cc`
+3. Restore MinIO data from external backup (contains all App Env backups)
+4. Unseal Vault with recovery kit keys
+5. FluxCD reconciles — CC services (Harbor, Vault, MinIO) come back online
+6. App Environments reconnect automatically (OCI source, transit auto-unseal)
