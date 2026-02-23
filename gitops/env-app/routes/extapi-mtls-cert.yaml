@@ -1,0 +1,13 @@
+# cert-manager Certificate for the mTLS listener's server identity
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: extapi-mtls-tls
+  namespace: mojaloop
+spec:
+  secretName: extapi-mtls-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "extapi.ext.${domain}"

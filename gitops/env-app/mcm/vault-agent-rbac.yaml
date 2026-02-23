@@ -18,11 +18,8 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
-  - apiGroups: ["networking.istio.io"]
-    resources: ["serviceentries", "destinationrules"]
-    verbs: ["get", "list", "create", "update", "patch", "delete"]
-  - apiGroups: ["security.istio.io"]
-    resources: ["authorizationpolicies"]
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumenvoyconfigs", "ciliumnetworkpolicies"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
 ---
 # Bind vault-agent SA (mcm namespace) to the Role in mojaloop namespace
