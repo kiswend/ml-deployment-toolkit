@@ -158,7 +158,7 @@ spec:
           responseHeaderModifier:
             set:
               - name: Content-Security-Policy
-                value: "default-src 'self'; form-action 'self' https://auth.int.${domain}/kratos/ https://keycloak.int.${domain}/realms/hub-operators/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.int.${domain}; img-src 'self' data:"
+                value: "default-src 'self'; form-action 'self' https://auth.int.${domain}/kratos/ https://keycloak.int.${domain}/realms/hub-operators/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.int.${domain}; img-src 'self' data: https://mojaloop.io"
       backendRefs:
         - name: fin-portal-reporting-hub-bop-shell
           namespace: mojaloop
