@@ -79,27 +79,24 @@ spec:
   externalConfig:
     policies:
       - name: mcm-policy
+        # WHY KV-v1 paths (secret/X) instead of KV-v2 (secret/data/X):
+        # MCM API v2.x uses node-vault which writes directly to secret/mcm/... paths.
+        # It does NOT prepend "data/" as KV-v2 requires. Using KV-v2 causes 403 errors
+        # on DFSP creation (the API writes to secret/mcm/dfsp-outbound-enrollment/...).
+        # The secret/ mount is therefore configured as KV-v1 below to match MCM's behavior.
+        # The vault-agent templates also use KV-v1 paths for the same reason.
         rules: |
           path "pki/*" {
             capabilities = ["create", "read", "update", "delete", "list", "sudo"]
           }
-          path "secret/data/mcm/*" {
+          path "secret/mcm/*" {
             capabilities = ["create", "read", "update", "delete", "list"]
           }
-          path "secret/metadata/mcm/*" {
-            capabilities = ["read", "list"]
-          }
-          path "secret/data/whitelist*" {
+          path "secret/whitelist*" {
             capabilities = ["create", "read", "update", "delete", "list"]
           }
-          path "secret/metadata/whitelist*" {
-            capabilities = ["read", "list"]
-          }
-          path "secret/data/onboarding_pm4mls*" {
+          path "secret/onboarding_pm4mls*" {
             capabilities = ["create", "read", "update", "delete", "list"]
-          }
-          path "secret/metadata/onboarding_pm4mls*" {
-            capabilities = ["read", "list"]
           }
       - name: allow_secrets
         rules: |
@@ -128,11 +125,16 @@ spec:
             ttl: 1h
 
     secrets:
+      # WHY KV-v1 (not KV-v2): MCM API v2.x uses node-vault which calls
+      # vault.write("secret/mcm/...") — the KV-v1 convention. KV-v2 requires
+      # "secret/data/..." paths which MCM doesn't generate. Using KV-v2 causes
+      # permission denied (403) errors on every DFSP creation.
+      # Both MCM API and the vault-agent templates use KV-v1 paths accordingly.
       - path: secret
         type: kv
-        description: "KV-v2 secret store"
+        description: "KV-v1 secret store (MCM API requires v1 paths)"
         options:
-          version: 2
+          version: 1
       - path: pki
         type: pki
         description: "MCM PKI for DFSP certificates"
@@ -162,9 +164,15 @@ spec:
               client_flag: true
               server_flag: false
 
+    # startupSecrets: seeded by bank-vaults on first boot.
+    # WHY secret/X (not secret/data/X): KV-v1 paths — no "data/" prefix in the path.
+    # WHY nested data.data: bank-vaults' internal decoder always expects the "data:" wrapper
+    # around the actual key-value pairs, regardless of KV version. This is a bank-vaults
+    # convention, not a Vault API requirement. Without it, the decoder rejects the keys
+    # as "invalid" (it only recognizes well-known fields like "data" and "options" at top level).
     startupSecrets:
       - type: kv
-        path: secret/data/kratos
+        path: secret/kratos
         data:
           data:
             dsn: "mysql://kratos:${kratos_db_password}@tcp(${mysql_host}:${mysql_port})/kratos?max_conns=20&max_idle_conns=4"
@@ -174,12 +182,12 @@ spec:
             secretsDefault: "${kratos_secrets_default}"
             smtpConnectionURI: "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
       - type: kv
-        path: secret/data/keto
+        path: secret/keto
         data:
           data:
             dsn: "mysql://keto:${keto_db_password}@tcp(${mysql_host}:${mysql_port})/keto?max_conns=20&max_idle_conns=4"
       - type: kv
-        path: secret/data/finance-portal
+        path: secret/finance-portal
         data:
           data:
             role_assign_svc_secret: "${role_assign_svc_secret}"
