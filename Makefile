@@ -49,7 +49,11 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_keycloak_admin_password=$${KEYCLOAK_ADMIN_PASSWORD:-} \
 	       TF_VAR_hubop_oidc_secret=$${HUBOP_OIDC_SECRET:-} \
 	       TF_VAR_mcm_oidc_client_secret=$${MCM_OIDC_CLIENT_SECRET:-} \
-	       TF_VAR_role_assign_svc_secret=$${ROLE_ASSIGN_SVC_SECRET:-} && \
+	       TF_VAR_role_assign_svc_secret=$${ROLE_ASSIGN_SVC_SECRET:-} \
+	       TF_VAR_onboarding_hub_name=$${ONBOARDING_HUB_NAME:-} \
+	       TF_VAR_onboarding_funds_in=$${ONBOARDING_FUNDS_IN:-} \
+	       TF_VAR_onboarding_net_debit_cap=$${ONBOARDING_NET_DEBIT_CAP:-} \
+	       TF_VAR_onboarding_collection_version=$${ONBOARDING_COLLECTION_VERSION:-} && \
 	export AWS_ACCESS_KEY_ID=$${AWS_ACCESS_KEY_ID:-unused} \
 	       AWS_SECRET_ACCESS_KEY=$${AWS_SECRET_ACCESS_KEY:-unused}
 

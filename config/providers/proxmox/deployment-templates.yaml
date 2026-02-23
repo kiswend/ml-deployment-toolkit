@@ -284,3 +284,65 @@ h3c3w3:
         - ml
         - ml-worker
 
+h2c1w3:
+  instances:
+    - name: c-0
+      placement_group: placement-group-2
+      cores: 6
+      memory: 8192
+      workload_class: control-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 32
+          interface: scsi0
+      tags:
+        - ml
+        - ml-master
+
+    - name: w-0
+      placement_group: placement-group-1
+      cores: 6
+      memory: 8192
+      workload_class: worker-general
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-worker
+
+    - name: w-1
+      placement_group: placement-group-1
+      cores: 6
+      memory: 8192
+      workload_class: worker-general
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-worker
+
+    - name: w-2
+      placement_group: placement-group-2
+      cores: 6
+      memory: 8192
+      workload_class: worker-general
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-worker

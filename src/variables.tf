@@ -165,3 +165,29 @@ variable "role_assign_svc_secret" {
   default     = ""
   sensitive   = true
 }
+
+# --- DFSP Onboarding Parameters ---
+
+variable "onboarding_hub_name" {
+  description = "Hub participant name in central-ledger for DFSP onboarding"
+  type        = string
+  default     = "hub"
+}
+
+variable "onboarding_funds_in" {
+  description = "Initial deposit into DFSP settlement account"
+  type        = string
+  default     = "100000"
+}
+
+variable "onboarding_net_debit_cap" {
+  description = "Maximum net debit position for DFSP participants"
+  type        = string
+  default     = "1000"
+}
+
+variable "onboarding_collection_version" {
+  description = "TTK test-cases collection version (from mojaloop/testing-toolkit-test-cases)"
+  type        = string
+  default     = "17.0.4"
+}

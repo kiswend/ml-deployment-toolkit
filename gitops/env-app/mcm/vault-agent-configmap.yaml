@@ -141,7 +141,9 @@ data:
     #   - Data access: .Data.host (flat — no .Data.data nesting)
     #
     # When no DFSPs are onboarded, the template renders empty and kubectl
-    # returns an error; "|| true" prevents the agent from restart-looping.
+    # apply fails; the fallback deletes all labeled resources (correct: nothing
+    # should exist). When DFSPs exist, --prune removes orphaned resources for
+    # DFSPs that were removed from Vault since the last render.
     # -------------------------------------------------------------------------
     template {
       contents = <<EOH
@@ -157,6 +159,7 @@ data:
       namespace: mojaloop
       labels:
         app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: callback
     type: kubernetes.io/tls
     stringData:
       ca.crt: |
@@ -176,6 +179,7 @@ data:
       namespace: mojaloop
       labels:
         app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: callback
     spec:
       hosts:
         - '{{ .Data.fqdn }}'
@@ -199,6 +203,7 @@ data:
       namespace: mojaloop
       labels:
         app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: callback
     spec:
       host: {{ .Data.fqdn }}
       trafficPolicy:
@@ -221,7 +226,7 @@ data:
     {{ end }}{{ end }}
       EOH
       destination = "/vault/secrets/tmp/callback.yaml"
-      command     = "/tools/kubectl apply -f /vault/secrets/tmp/callback.yaml 2>/dev/null || true"
+      command     = "/tools/kubectl apply --prune -l vault-agent/template=callback --prune-allowlist=/v1/Secret --prune-allowlist=networking.istio.io/v1/ServiceEntry --prune-allowlist=networking.istio.io/v1/DestinationRule -n mojaloop -f /vault/secrets/tmp/callback.yaml 2>/dev/null || { /tools/kubectl delete secrets -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete serviceentries.networking.istio.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete destinationrules.networking.istio.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; } 2>/dev/null || true"
     }
 
     # -------------------------------------------------------------------------
@@ -315,6 +320,7 @@ data:
       namespace: mojaloop
       labels:
         app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: onboarding
     data:
       cli-add-dfsp-config.json: |
         {"logLevel":"2","mode":"outbound"}
@@ -327,12 +333,12 @@ data:
             "HOST_ORACLE_MSISDN": "http://moja-als-msisdn-oracle",
             "DFSP_CALLBACK_URL": "http://{{ .Data.fqdn }}",
             "DFSP_NAME": "{{ .Data.host }}",
-            "HUB_NAME": "hub",
+            "HUB_NAME": "${onboarding_hub_name}",
             "currency": "{{ .Data.currency_code }}",
-            "fundsIn": "100000",
+            "fundsIn": "${onboarding_funds_in}",
             "isProxy": "{{ .Data.isProxy }}",
             "hub_operator": "NOT_APPLICABLE",
-            "NET_DEBIT_CAP": "1000"
+            "NET_DEBIT_CAP": "${onboarding_net_debit_cap}"
           }
         }
     ---
@@ -343,6 +349,7 @@ data:
       namespace: mojaloop
       labels:
         app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: onboarding
     spec:
       template:
         spec:
@@ -376,7 +383,7 @@ data:
                   echo "Downloading the test collection...";
 
                   wget
-                  https://github.com/mojaloop/testing-toolkit-test-cases/archive/v17.0.4.zip
+                  https://github.com/mojaloop/testing-toolkit-test-cases/archive/v${onboarding_collection_version}.zip
                   -O /tmp/downloaded-test-collections.zip;
 
                   mkdir /tmp/test_cases;
@@ -390,7 +397,7 @@ data:
                     npm run cli -- \
                       -c cli-add-dfsp-config.json \
                       -e cli-add-dfsp-environment.json \
-                      -i /tmp/test_cases/testing-toolkit-test-cases-17.0.4/collections/hub/provisioning/new_participants/new_dfsp.json \
+                      -i /tmp/test_cases/testing-toolkit-test-cases-${onboarding_collection_version}/collections/hub/provisioning/new_participants/new_dfsp.json \
                       -u http://moja-ml-testing-toolkit-backend:5050 \
                       --report-format html \
                       --report-auto-filename-enable true \
@@ -409,7 +416,7 @@ data:
                       npm run cli -- \
                         -c cli-add-dfsp-config.json \
                         -e /tmp/fxp.json \
-                        -i /tmp/test_cases/testing-toolkit-test-cases-17.0.4/collections/hub/provisioning/new_participants/new_fxp.json \
+                        -i /tmp/test_cases/testing-toolkit-test-cases-${onboarding_collection_version}/collections/hub/provisioning/new_participants/new_fxp.json \
                         -u http://moja-ml-testing-toolkit-backend:5050 \
                         --report-format html \
                         --report-auto-filename-enable true \
@@ -459,7 +466,7 @@ data:
     {{ end }}{{ end }}
       EOH
       destination = "/vault/secrets/tmp/onboarding.yaml"
-      command     = "/tools/kubectl apply -f /vault/secrets/tmp/onboarding.yaml 2>/dev/null || true; sh /etc/vault/clean-jobs.sh"
+      command     = "/tools/kubectl apply --prune -l vault-agent/template=onboarding --prune-allowlist=/v1/ConfigMap -n mojaloop -f /vault/secrets/tmp/onboarding.yaml 2>/dev/null || /tools/kubectl delete configmap -n mojaloop -l vault-agent/template=onboarding --ignore-not-found 2>/dev/null || true; sh /etc/vault/clean-jobs.sh"
     }
 
     vault {
