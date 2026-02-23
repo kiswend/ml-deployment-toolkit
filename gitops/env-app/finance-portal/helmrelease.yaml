@@ -60,7 +60,7 @@ spec:
         realm: "hub-operators"
       rolePermOperator:
         apiSvc:
-          host: bof-security-role-perm-operator-svc.ory.svc.cluster.local
+          host: ory-bof-security-role-perm-operator-svc.ory.svc.cluster.local
           port: 80
 
     reporting-hub-bop-api-svc:
