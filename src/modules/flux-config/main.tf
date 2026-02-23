@@ -528,49 +528,6 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
   ]
 }
 
-# Kustomization: istio (Istio service mesh — control plane + DFSP-facing ext gateway)
-resource "kubectl_manifest" "kustomization_istio" {
-  count = 1
-
-  yaml_body = yamlencode({
-    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
-    kind       = "Kustomization"
-    metadata = {
-      name      = "istio"
-      namespace = var.flux_namespace
-    }
-    spec = {
-      interval = "10m"
-      timeout  = "10m"
-      path     = "./istio"
-      prune    = true
-      dependsOn = [
-        { name = "platform-config" }
-      ]
-      sourceRef = {
-        kind = "OCIRepository"
-        name = "ml-gitops"
-      }
-      postBuild = {
-        substituteFrom = [
-          {
-            kind = "ConfigMap"
-            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
-          },
-          {
-            kind = "Secret"
-            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
-          }
-        ]
-      }
-    }
-  })
-
-  depends_on = [
-    kubectl_manifest.kustomization_platform_config
-  ]
-}
-
 # Kustomization: env-data (self-hosted data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
 resource "kubectl_manifest" "kustomization_env_data" {
   count = local.is_talos && local.is_env ? 1 : 0

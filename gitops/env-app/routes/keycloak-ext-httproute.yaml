@@ -7,7 +7,7 @@ metadata:
 spec:
   parentRefs:
     - name: gw-ext
-      namespace: istio-ingress-ext
+      namespace: platform-system
   hostnames:
     - "keycloak.ext.${domain}"
   rules:

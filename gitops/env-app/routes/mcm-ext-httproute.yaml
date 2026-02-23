@@ -8,7 +8,7 @@ metadata:
 spec:
   parentRefs:
     - name: gw-ext
-      namespace: istio-ingress-ext
+      namespace: platform-system
   hostnames:
     - "mcm.ext.${domain}"
   rules:

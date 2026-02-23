@@ -20,9 +20,9 @@
       "groupName": "platform helm charts"
     },
     {
-      "description": "Networking (Cilium, Istio)",
+      "description": "Networking (Cilium)",
       "matchManagers": ["flux"],
-      "matchFileNames": ["gitops/talos/cilium/**", "gitops/istio/**"],
+      "matchFileNames": ["gitops/talos/cilium/**"],
       "groupName": "networking helm charts"
     },
     {

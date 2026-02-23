@@ -1,0 +1,16 @@
+# LoadBalancer Service that receives extapi.ext.${domain} traffic.
+# CiliumEnvoyConfig intercepts traffic to this Service and applies mTLS verification.
+apiVersion: v1
+kind: Service
+metadata:
+  name: extapi-mtls
+  namespace: mojaloop
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "extapi.ext.${domain}"
+spec:
+  type: LoadBalancer
+  ports:
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP

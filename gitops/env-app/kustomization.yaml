@@ -17,11 +17,14 @@ resources:
   - finance-portal/externalsecret-reporting-events-db.yaml
   - finance-portal/oathkeeper-rules.yaml
   - finance-portal/referencegrant.yaml
-  # gw-ext routes (DFSP-facing)
-  - routes/extapi-httproute.yaml
+  # gw-ext routes (DFSP-facing — SIMPLE TLS via Cilium Gateway)
   - routes/mcm-ext-httproute.yaml
   - routes/keycloak-ext-httproute.yaml
   - routes/referencegrant-ext.yaml
+  # extapi mTLS (DFSP-facing — mutual TLS via CiliumEnvoyConfig)
+  - routes/extapi-mtls-service.yaml
+  - routes/extapi-mtls-cert.yaml
+  - routes/extapi-mtls-cec.yaml
   # gw-int routes (internal ops)
   - routes/intapi-httproute.yaml
   - routes/ttk-httproute.yaml

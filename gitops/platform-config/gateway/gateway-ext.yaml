@@ -1,12 +1,14 @@
+# External Gateway for DFSP-facing services (MCM, Keycloak)
+# SIMPLE TLS termination — mTLS for FSPIOP APIs is handled by CiliumEnvoyConfig
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: gw-ext
-  namespace: istio-ingress-ext
+  namespace: platform-system
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  gatewayClassName: istio
+  gatewayClassName: ${gateway_class_name}
   listeners:
     - name: https
       hostname: "*.ext.${domain}"

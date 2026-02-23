@@ -3,8 +3,8 @@
 # This ConfigMap contains two HCL configs and a cleanup script consumed by the
 # vault-agent Deployment:
 #   - init-config.hcl: runs once (init container) to bootstrap default whitelist secrets
-#   - config.hcl:      runs continuously to watch Vault and create K8s/Istio resources
-#   - clean-jobs.sh:   called by config.hcl Template 3 to clean up old onboarding Jobs
+#   - config.hcl:      runs continuously to watch Vault and create K8s/Cilium resources
+#   - clean-jobs.sh:   called by config.hcl Template 2 to clean up old onboarding Jobs
 #
 # IMPORTANT — KV-v1 paths throughout:
 #   MCM API v2.x uses node-vault which writes to "secret/mcm/..." directly (KV-v1 convention).
@@ -84,20 +84,16 @@ data:
   # ---------------------------------------------------------------------------
   # config.hcl — Main agent (runs continuously in the vault-agent container)
   #
-  # Watches Vault for changes and renders three templates:
+  # Watches Vault for changes and renders two templates:
   #
   # Template 1 — DFSP callback mTLS (callback.yaml)
-  #   Iterates all DFSPs in secret/onboarding_pm4mls/ and creates per-DFSP:
-  #   - TLS Secret:        client cert bundle for Istio mTLS origination
-  #   - ServiceEntry:      registers the DFSP's external FQDN in the mesh
-  #   - DestinationRule:   configures mTLS origination for callbacks to that DFSP
+  #   Iterates all DFSPs in secret/onboarding_pm4mls/ and creates:
+  #   - Per-DFSP TLS Secret: client cert bundle for outbound mTLS origination
+  #   - Combined CA bundle Secret: concatenation of all DFSP CAs (for inbound mTLS verification)
+  #   - CiliumEnvoyConfig: outbound mTLS origination via per-DFSP Envoy clusters
+  #   - CiliumNetworkPolicy: redirects egress to DFSP FQDNs through Envoy
   #
-  # Template 2 — IP whitelist (whitelist.yaml)
-  #   Reads whitelist_fsps and whitelist_pm4mls secrets and creates an
-  #   AuthorizationPolicy that DENYs traffic to Mojaloop's external-facing
-  #   services unless the source IP is in the whitelist.
-  #
-  # Template 3 — DFSP onboarding provisioning (onboarding.yaml)
+  # Template 2 — DFSP onboarding provisioning (onboarding.yaml)
   #   Iterates all DFSPs in secret/onboarding_pm4mls/ and creates per-DFSP:
   #   - ConfigMap:   TTK CLI config with DFSP-specific provisioning parameters
   #   - Job:         runs TTK CLI to provision the DFSP in Mojaloop central-ledger
@@ -132,8 +128,10 @@ data:
     #   secret/onboarding_pm4mls/{dfsp_name}
     # with fields: host, fqdn, ca_bundle, client_key, client_cert_chain
     #
-    # This template iterates those secrets and creates the Istio resources
-    # needed for the Mojaloop switch to make mTLS callbacks to each DFSP.
+    # This template iterates those secrets and creates the Cilium resources
+    # needed for:
+    #   1. Outbound mTLS — Mojaloop callbacks to each DFSP (CEC + CNP)
+    #   2. Inbound mTLS client verification — combined CA bundle Secret
     #
     # KV-v1 path conventions:
     #   - List path:  "secret/onboarding_pm4mls/"  (trailing slash = list)
@@ -150,8 +148,8 @@ data:
     {{ range secrets "secret/onboarding_pm4mls/" }}
     {{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}
     ---
-    # TLS Secret: holds the DFSP's client certificate bundle for mTLS origination.
-    # Istio's DestinationRule references this via credentialName.
+    # TLS Secret: holds the DFSP's client certificate bundle for outbound mTLS origination.
+    # Referenced by the CiliumEnvoyConfig's per-DFSP UpstreamTlsContext via SDS.
     apiVersion: v1
     kind: Secret
     metadata:
@@ -168,127 +166,122 @@ data:
     {{ .Data.client_key | indent 4 }}
       tls.crt: |
     {{ .Data.client_cert_chain | indent 4 }}
-    ---
-    # ServiceEntry: registers the DFSP's external FQDN in the Istio mesh.
-    # Port 80 is mapped to 443 so internal services can call http://dfsp-fqdn
-    # and Istio transparently upgrades to mTLS on port 443.
-    apiVersion: networking.istio.io/v1
-    kind: ServiceEntry
-    metadata:
-      name: {{ .Data.host }}
-      namespace: mojaloop
-      labels:
-        app.kubernetes.io/managed-by: vault-agent
-        vault-agent/template: callback
-    spec:
-      hosts:
-        - '{{ .Data.fqdn }}'
-      ports:
-        - number: 80
-          name: http
-          protocol: HTTP
-          targetPort: 443
-        - number: 443
-          name: https
-          protocol: HTTPS
-      resolution: DNS
-    ---
-    # DestinationRule: configures mTLS origination for callbacks to this DFSP.
-    # When Mojaloop sends a callback to the DFSP's FQDN on port 80, Istio
-    # originates a mutual TLS connection using the certs from the TLS Secret above.
-    apiVersion: networking.istio.io/v1
-    kind: DestinationRule
-    metadata:
-      name: originate-mtls-for-{{ .Data.host }}-callback
-      namespace: mojaloop
-      labels:
-        app.kubernetes.io/managed-by: vault-agent
-        vault-agent/template: callback
-    spec:
-      host: {{ .Data.fqdn }}
-      trafficPolicy:
-        connectionPool:
-          tcp:
-            connectTimeout: 3s
-            tcpKeepalive:
-              time: 300s
-              interval: 30s
-              probes: 5
-        loadBalancer:
-          simple: ROUND_ROBIN
-        portLevelSettings:
-          - port:
-              number: 80
-            tls:
-              mode: MUTUAL
-              credentialName: {{ .Data.host }}-clientcert-tls
-              sni: {{ .Data.fqdn }}
     {{ end }}{{ end }}
+    ---
+    # Combined CA bundle: concatenation of all DFSP CA certificates.
+    # Referenced by the inbound extapi-mtls CiliumEnvoyConfig for client cert verification.
+    # When a DFSP connects, Envoy validates their client cert against this bundle.
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: dfsp-ca-bundle
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: callback
+    stringData:
+      ca.crt: |
+    {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}{{ .Data.ca_bundle }}
+    {{ end }}{{ end }}
+    ---
+    # CiliumEnvoyConfig: outbound mTLS origination for DFSP callbacks.
+    # When Mojaloop pods send HTTP to a DFSP FQDN, the CiliumNetworkPolicy below
+    # redirects egress through this CEC's Envoy listener, which originates mTLS
+    # using per-DFSP client certificates.
+    apiVersion: cilium.io/v2
+    kind: CiliumEnvoyConfig
+    metadata:
+      name: dfsp-callback-mtls
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: callback
+    spec:
+      resources:
+        - "@type": type.googleapis.com/envoy.config.listener.v3.Listener
+          name: dfsp-egress-listener
+          filter_chains:
+            - filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: dfsp_egress
+                    codec_type: AUTO
+                    http_filters:
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                    route_config:
+                      name: dfsp_routes
+                      virtual_hosts:
+    {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}
+                        - name: {{ .Data.host }}
+                          domains: ["{{ .Data.fqdn }}", "{{ .Data.fqdn }}:*"]
+                          routes:
+                            - match:
+                                prefix: "/"
+                              route:
+                                cluster: {{ .Data.host }}-cluster
+    {{ end }}{{ end }}
+    {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}
+        - "@type": type.googleapis.com/envoy.config.cluster.v3.Cluster
+          name: {{ .Data.host }}-cluster
+          type: STRICT_DNS
+          connect_timeout: 3s
+          load_assignment:
+            cluster_name: {{ .Data.host }}-cluster
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Data.fqdn }}
+                          port_value: 443
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+              sni: {{ .Data.fqdn }}
+              common_tls_params:
+                tls_certificate_sds_secret_configs:
+                  - name: "mojaloop/{{ .Data.host }}-clientcert-tls"
+                    sds_config:
+                      api_config_source:
+                        api_type: GRPC
+                        grpc_services:
+                          - envoy_grpc:
+                              cluster_name: xds-grpc-cilium
+    {{ end }}{{ end }}
+    ---
+    # CiliumNetworkPolicy: redirect DFSP-bound egress through the CEC Envoy listener.
+    # All pods in the mojaloop namespace that send traffic to enrolled DFSP FQDNs
+    # are transparently redirected to the dfsp-callback-mtls CEC for mTLS origination.
+    apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: dfsp-callback-egress
+      namespace: mojaloop
+      labels:
+        app.kubernetes.io/managed-by: vault-agent
+        vault-agent/template: callback
+    spec:
+      endpointSelector: {}
+      egress:
+        - toFQDNs:
+    {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}
+            - matchName: "{{ .Data.fqdn }}"
+    {{ end }}{{ end }}
+          listener:
+            envoyConfig:
+              kind: CiliumEnvoyConfig
+              name: dfsp-callback-mtls
       EOH
       destination = "/vault/secrets/tmp/callback.yaml"
-      command     = "/tools/kubectl apply --prune -l vault-agent/template=callback --prune-allowlist=/v1/Secret --prune-allowlist=networking.istio.io/v1/ServiceEntry --prune-allowlist=networking.istio.io/v1/DestinationRule -n mojaloop -f /vault/secrets/tmp/callback.yaml 2>/dev/null || { /tools/kubectl delete secrets -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete serviceentries.networking.istio.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete destinationrules.networking.istio.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; } 2>/dev/null || true"
+      command     = "/tools/kubectl apply --prune -l vault-agent/template=callback --prune-allowlist=/v1/Secret --prune-allowlist=cilium.io/v2/CiliumEnvoyConfig --prune-allowlist=cilium.io/v2/CiliumNetworkPolicy -n mojaloop -f /vault/secrets/tmp/callback.yaml 2>/dev/null || { /tools/kubectl delete secrets -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete ciliumenvoyconfigs.cilium.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete ciliumnetworkpolicies.cilium.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; } 2>/dev/null || true"
     }
 
     # -------------------------------------------------------------------------
-    # Template 2: DFSP IP whitelist
-    #
-    # Creates an AuthorizationPolicy that DENYs requests to Mojaloop's
-    # external-facing services (account-lookup, quoting, api-adapter,
-    # transaction-requests) unless the source IP is whitelisted.
-    #
-    # IP sources:
-    #   - secret/whitelist_fsps:    IPs of connected DFSPs
-    #   - secret/whitelist_pm4mls:  IPs of connected PM4MLs (payment managers)
-    #   - 10.0.0.0/8:              cluster-internal traffic (pods, services)
-    #
-    # The policy targets the external API host (extapi.ext.${domain}) where
-    # ${domain} is substituted by Flux postBuild at deployment time.
-    #
-    # WHY delete + apply: AuthorizationPolicy is replace-only in Istio.
-    # kubectl apply alone doesn't reliably update the spec, so we delete
-    # first (--ignore-not-found for first run) then re-apply.
-    #
-    # KV-v1 data access: .Data iterates the secret's flat key-value pairs
-    # directly (no .Data.data nesting as KV-v2 would require).
-    # -------------------------------------------------------------------------
-    template {
-      contents = <<EOH
-    apiVersion: security.istio.io/v1
-    kind: AuthorizationPolicy
-    metadata:
-      name: dfsp-whitelist-ingress-policy
-      namespace: mojaloop
-      labels:
-        app.kubernetes.io/managed-by: vault-agent
-    spec:
-      targetRefs:
-        - kind: Service
-          group: core
-          name: moja-account-lookup-service
-        - kind: Service
-          group: core
-          name: moja-quoting-service
-        - kind: Service
-          group: core
-          name: moja-ml-api-adapter-service
-        - kind: Service
-          group: core
-          name: moja-transaction-requests-service
-      action: DENY
-      rules:
-        - from:
-            - source:
-                notRemoteIpBlocks: [{{ with secret "secret/whitelist_fsps" }}{{ range $k, $v := .Data }}{{ $v }},{{ end }}{{ end }}{{ with secret "secret/whitelist_pm4mls" }}{{ range $k, $v := .Data }}{{ $v }},{{ end }}{{ end }}10.0.0.0/8]
-          to:
-            - operation:
-                hosts: ["extapi.ext.${domain}", "extapi.ext.${domain}:*"]
-      EOH
-      destination = "/vault/secrets/tmp/whitelist.yaml"
-      command     = "/tools/kubectl -n mojaloop delete authorizationpolicy dfsp-whitelist-ingress-policy --ignore-not-found; /tools/kubectl apply -f /vault/secrets/tmp/whitelist.yaml"
-    }
-
-    # -------------------------------------------------------------------------
-    # Template 3: DFSP onboarding provisioning
+    # Template 2: DFSP onboarding provisioning (previously Template 3)
     #
     # Creates a ConfigMap + Job per DFSP to run the TTK CLI and provision the
     # DFSP in Mojaloop's central-ledger (create participant, set limits, fund
@@ -476,7 +469,7 @@ data:
   # ---------------------------------------------------------------------------
   # clean-jobs.sh — Job cleanup script (mounted at /etc/vault/clean-jobs.sh)
   #
-  # Called by Template 3 after applying onboarding resources. Retains only the
+  # Called by Template 2 after applying onboarding resources. Retains only the
   # 5 most recent Jobs per DFSP prefix, deleting older ones to prevent
   # unbounded Job accumulation.
   #
