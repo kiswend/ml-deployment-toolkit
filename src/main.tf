@@ -148,6 +148,11 @@ module "flux_config" {
   mcm_oidc_client_secret  = var.mcm_oidc_client_secret
   role_assign_svc_secret  = var.role_assign_svc_secret
 
+  onboarding_hub_name           = var.onboarding_hub_name
+  onboarding_funds_in           = var.onboarding_funds_in
+  onboarding_net_debit_cap      = var.onboarding_net_debit_cap
+  onboarding_collection_version = var.onboarding_collection_version
+
   depends_on = [
     module.flux_bootstrap
   ]

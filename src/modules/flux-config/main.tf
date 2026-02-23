@@ -90,6 +90,11 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       mongodb_port = local.mongodb_port
       redis_host   = local.redis_host
       redis_port   = local.redis_port
+
+      onboarding_hub_name           = var.onboarding_hub_name
+      onboarding_funds_in           = var.onboarding_funds_in
+      onboarding_net_debit_cap      = var.onboarding_net_debit_cap
+      onboarding_collection_version = var.onboarding_collection_version
     } : {}
   )
 }
