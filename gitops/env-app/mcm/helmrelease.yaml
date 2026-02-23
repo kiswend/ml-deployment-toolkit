@@ -24,6 +24,7 @@ spec:
       interval: 12h
   releaseName: mcm
   targetNamespace: mcm
+  timeout: 10m
   install:
     createNamespace: false
     remediation:
@@ -75,7 +76,12 @@ spec:
         signExpiryHours: 43800
 
       serviceAccount:
+        name: connection-manager-api
         externallyManaged: false
+
+      keto:
+        enabled: true
+        writeUrl: http://keto-write.ory.svc.cluster.local:80
 
     ui:
       checkSessionUrl: "https://mcm.int.${domain}/kratos/sessions/whoami"
@@ -90,7 +96,8 @@ spec:
         clientSecretKey: secret
 
     migrations:
-      enabled: false
+      enabled: true
+      deletePolicy: before-hook-creation
 
     ingress:
       enabled: false

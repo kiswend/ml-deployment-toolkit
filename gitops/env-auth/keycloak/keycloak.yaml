@@ -27,7 +27,7 @@ metadata:
   namespace: keycloak
 spec:
   instances: 1
-  image: quay.io/keycloak/keycloak:22.0.2
+  image: quay.io/keycloak/keycloak:26.5.2
   db:
     vendor: mysql
     host: ${mysql_host}
@@ -43,26 +43,26 @@ spec:
     httpEnabled: true
   transaction:
     xaEnabled: false
+  ingress:
+    enabled: false
   hostname:
     hostname: "keycloak.int.${domain}"
     strict: false
     strictBackchannel: false
   additionalOptions:
-    - name: http-relative-path
-      value: /
-    - name: proxy
-      value: edge
+    - name: proxy-headers
+      value: xforwarded
   unsupported:
     podTemplate:
       spec:
         initContainers:
           - name: build-keycloak
-            image: quay.io/keycloak/keycloak:22.0.2
+            image: quay.io/keycloak/keycloak:26.5.2
             command:
               - /bin/bash
               - -c
               - |
-                /opt/keycloak/bin/kc.sh build --db=mysql --transaction-xa-enabled=false --health-enabled=true
+                /opt/keycloak/bin/kc.sh build --db=mysql --transaction-xa-enabled=false --health-enabled=true --http-relative-path=/
                 cp -r /opt/keycloak/lib/quarkus/* /quarkus-build/
             resources:
               requests:
@@ -115,7 +115,7 @@ spec:
             startupProbe:
               httpGet:
                 path: /health/live
-                port: 8080
+                port: 9000
               initialDelaySeconds: 20
               periodSeconds: 2
               failureThreshold: 300

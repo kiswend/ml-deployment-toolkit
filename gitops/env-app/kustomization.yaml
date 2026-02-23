@@ -8,6 +8,10 @@ resources:
   - mcm/secrets.yaml
   - mcm/oathkeeper-rules.yaml
   - mcm/referencegrant.yaml
+  - mcm/rbac.yaml
+  - mcm/vault-agent-configmap.yaml
+  - mcm/vault-agent-deployment.yaml
+  - mcm/vault-agent-rbac.yaml
   - finance-portal/helmrelease.yaml
   - finance-portal/externalsecret-role-assign-svc.yaml
   - finance-portal/externalsecret-reporting-events-db.yaml

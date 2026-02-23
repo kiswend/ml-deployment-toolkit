@@ -86,11 +86,20 @@ spec:
           path "secret/data/mcm/*" {
             capabilities = ["create", "read", "update", "delete", "list"]
           }
+          path "secret/metadata/mcm/*" {
+            capabilities = ["read", "list"]
+          }
           path "secret/data/whitelist*" {
             capabilities = ["create", "read", "update", "delete", "list"]
           }
+          path "secret/metadata/whitelist*" {
+            capabilities = ["read", "list"]
+          }
           path "secret/data/onboarding_pm4mls*" {
             capabilities = ["create", "read", "update", "delete", "list"]
+          }
+          path "secret/metadata/onboarding_pm4mls*" {
+            capabilities = ["read", "list"]
           }
       - name: allow_secrets
         rules: |
@@ -105,6 +114,7 @@ spec:
             bound_service_account_names:
               - mcm
               - mcm-connection-manager-api
+              - vault-agent
             bound_service_account_namespaces:
               - mcm
             policies: mcm-policy
@@ -131,7 +141,15 @@ spec:
             - name: urls
               issuing_certificates: "http://vault.vault:8200/v1/pki/ca"
               crl_distribution_points: "http://vault.vault:8200/v1/pki/crl"
-          # Root CA generated manually: vault write pki/root/generate/internal common_name="Mojaloop Hub CA"
+          root/generate:
+            - name: internal
+              common_name: "Mojaloop Hub CA"
+              key_type: rsa
+              key_bits: 4096
+              ttl: 87600h
+              organization: "Mojaloop"
+              exclude_cn_from_sans: true
+              create_only: true
           roles:
             - name: server-cert-role
               allowed_domains:

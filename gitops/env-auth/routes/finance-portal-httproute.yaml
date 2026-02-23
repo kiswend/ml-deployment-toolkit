@@ -18,13 +18,27 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /kratos
+            value: /kratos/self-service/logout/browser
       filters:
         - type: URLRewrite
           urlRewrite:
             path:
               type: ReplacePrefixMatch
-              replacePrefixMatch: /
+              replacePrefixMatch: /self-service/logout/browser
+      backendRefs:
+        - name: kratos-public
+          port: 80
+    # Sessions whoami
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /kratos/sessions/whoami
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /sessions/whoami
       backendRefs:
         - name: kratos-public
           port: 80
@@ -139,7 +153,13 @@ spec:
           port: 80
 
     # --- Shell catch-all (direct, no auth) ---
-    - backendRefs:
+    - filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Content-Security-Policy
+                value: "default-src 'self'; form-action 'self' https://auth.int.${domain}/kratos/ https://keycloak.int.${domain}/realms/hub-operators/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.int.${domain}; img-src 'self' data:"
+      backendRefs:
         - name: fin-portal-reporting-hub-bop-shell
           namespace: mojaloop
           port: 80
