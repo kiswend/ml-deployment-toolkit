@@ -12,10 +12,9 @@ spec:
       s3-backup:
         type: s3
         s3:
-          bucket: ${backup_s3_bucket}
+          bucket: ${backup_s3_bucket}/${cluster_name}/mysql
           region: ${backup_s3_region}
           endpointUrl: ${backup_s3_endpoint}
-          prefix: mysql
           credentialsSecret: backup-s3-credentials
     schedule:
       - name: daily

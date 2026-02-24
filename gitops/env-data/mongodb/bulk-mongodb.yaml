@@ -19,7 +19,7 @@ spec:
           bucket: ${backup_s3_bucket}
           region: ${backup_s3_region}
           endpointUrl: ${backup_s3_endpoint}
-          prefix: mongodb
+          prefix: ${cluster_name}/mongodb
           credentialsSecret: backup-s3-credentials
     tasks:
       - name: daily
