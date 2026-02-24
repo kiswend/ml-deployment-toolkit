@@ -51,5 +51,10 @@ spec:
     resources:
       requests:
         memory: 256Mi
+    buckets:
+      - name: harbor
+        policy: none
+      - name: backups
+        policy: none
     consoleIngress:
       enabled: false

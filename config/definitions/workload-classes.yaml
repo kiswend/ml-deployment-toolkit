@@ -27,18 +27,28 @@ classes:
     talos_type: "controlplane"
     talos_patches:
       - patch-cilium-install.yaml
-      - patch-openebs.yaml  
+      - patch-openebs.yaml
       - patch-allow-scheduling-on-cp.yaml
 
-  # Future example:
-  # worker-kafka:
-  #   talos_type: "worker"
-  #   talos_patches:
-  #     - patch-cilium-install.yaml
-  #   node_labels:
-  #     workload: "kafka"
-  #     dedicated: "true"
-  #   node_taints:
-  #     - key: "workload"
-  #       value: "kafka"
-  #       effect: "NoSchedule"
+  worker-kafka:
+    talos_type: "worker"
+    talos_patches:
+      - patch-cilium-install.yaml
+    node_labels:
+      node-role: "kafka"
+    node_taints:
+      - key: "node-role"
+        value: "kafka"
+        effect: "NoSchedule"
+
+  worker-db:
+    talos_type: "worker"
+    talos_patches:
+      - patch-cilium-install.yaml
+      - patch-openebs.yaml
+    node_labels:
+      node-role: "db"
+    node_taints:
+      - key: "node-role"
+        value: "db"
+        effect: "NoSchedule"

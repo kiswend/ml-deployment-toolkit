@@ -76,7 +76,17 @@ app:
   alert_email: "nathan@delma.me"
 
 # ------------------------------------------------------------------
-# 6. OCI CONFIGURATION
+# 6. BACKUP (env clusters only)
+# ------------------------------------------------------------------
+# backup:
+#   s3:
+#     endpoint: "https://s3.int.cc1.example.com"
+#     bucket: "backups"
+#     region: "us-east-1"  # optional — defaults to us-east-1
+#   # Credentials (BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY) live in .env
+
+# ------------------------------------------------------------------
+# 7. OCI CONFIGURATION
 # ------------------------------------------------------------------
 oci:
   # OCI-REPO: Platform team's OCI registry where the Flux gitops artifact lives

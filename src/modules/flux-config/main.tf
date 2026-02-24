@@ -95,6 +95,10 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       onboarding_funds_in           = var.onboarding_funds_in
       onboarding_net_debit_cap      = var.onboarding_net_debit_cap
       onboarding_collection_version = var.onboarding_collection_version
+
+      backup_s3_endpoint = var.backup_s3_endpoint
+      backup_s3_bucket   = var.backup_s3_bucket
+      backup_s3_region   = var.backup_s3_region
     } : {}
   )
 }
@@ -136,6 +140,8 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       kratos_secrets_cookie         = random_password.kratos_secrets_cookie[0].result
       kratos_secrets_csrf_cookie    = random_password.kratos_secrets_csrf_cookie[0].result
       kratos_secrets_default        = random_password.kratos_secrets_default[0].result
+      backup_s3_access_key          = var.backup_s3_access_key
+      backup_s3_secret_key          = var.backup_s3_secret_key
     } : {}
   )
 
