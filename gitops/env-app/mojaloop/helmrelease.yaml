@@ -18,7 +18,7 @@ spec:
   chart:
     spec:
       chart: mojaloop
-      version: "17.x"
+      version: "17.1.x"
       sourceRef:
         kind: HelmRepository
         name: mojaloop

@@ -153,6 +153,12 @@ module "flux_config" {
   onboarding_net_debit_cap      = var.onboarding_net_debit_cap
   onboarding_collection_version = var.onboarding_collection_version
 
+  backup_s3_endpoint   = try(local.config_raw.backup.s3.endpoint, "")
+  backup_s3_bucket     = try(local.config_raw.backup.s3.bucket, "backups")
+  backup_s3_region     = try(local.config_raw.backup.s3.region, "us-east-1")
+  backup_s3_access_key = var.backup_s3_access_key
+  backup_s3_secret_key = var.backup_s3_secret_key
+
   depends_on = [
     module.flux_bootstrap
   ]

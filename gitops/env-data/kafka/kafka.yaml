@@ -10,6 +10,30 @@ spec:
   roles:
     - controller
     - broker
+  template:
+    pod:
+      tolerations:
+        - key: "node-role"
+          operator: "Equal"
+          value: "kafka"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role
+                    operator: In
+                    values: ["kafka"]
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    strimzi.io/cluster: mojaloop-kafka
+                topologyKey: kubernetes.io/hostname
   storage:
     type: jbod
     volumes:

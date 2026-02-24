@@ -9,6 +9,26 @@ spec:
   allowUnsafeConfigurations: true
   secrets:
     users: bulk-mongodb-secrets
+  backup:
+    enabled: true
+    image: percona/percona-backup-mongodb:2.9.0
+    storages:
+      s3-backup:
+        type: s3
+        s3:
+          bucket: ${backup_s3_bucket}
+          region: ${backup_s3_region}
+          endpointUrl: ${backup_s3_endpoint}
+          prefix: mongodb
+          credentialsSecret: backup-s3-credentials
+    tasks:
+      - name: daily
+        enabled: true
+        schedule: "0 1 * * *"
+        keep: 7
+        storageName: s3-backup
+    pitr:
+      enabled: true
   users:
     - name: mlos
       db: mlos
@@ -37,6 +57,29 @@ spec:
   replsets:
     - name: rs0
       size: 3
+      tolerations:
+        - key: "node-role"
+          operator: "Equal"
+          value: "db"
+          effect: "NoSchedule"
+      affinity:
+        advanced:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: node-role
+                      operator: In
+                      values: ["db"]
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/component: mongod
+                  topologyKey: kubernetes.io/hostname
       resources:
         requests:
           memory: 512Mi

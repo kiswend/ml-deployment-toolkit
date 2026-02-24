@@ -166,6 +166,22 @@ variable "role_assign_svc_secret" {
   sensitive   = true
 }
 
+# --- Backup S3 Credentials (CC MinIO or cloud S3) ---
+
+variable "backup_s3_access_key" {
+  description = "S3 access key for backups"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "backup_s3_secret_key" {
+  description = "S3 secret key for backups"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # --- DFSP Onboarding Parameters ---
 
 variable "onboarding_hub_name" {

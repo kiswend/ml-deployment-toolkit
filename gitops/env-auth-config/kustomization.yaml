@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - keycloak/realm-hub-operators.yaml
   - keycloak/realm-dfsps.yaml
+  - ory/ory-blank-rule.yaml
