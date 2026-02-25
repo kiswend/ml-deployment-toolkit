@@ -5,3 +5,4 @@ resources:
   - gateway/gateway-ext.yaml
   - flux-httproute.yaml
   - flux-networkpolicy.yaml
+  - goldilocks-httproute.yaml

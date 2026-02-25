@@ -6,3 +6,5 @@ resources:
   - cert-manager/helmrelease.yaml
   - external-dns/helmrelease.yaml
   - external-secrets/helmrelease.yaml
+  - vpa/helmrelease.yaml
+  - goldilocks/helmrelease.yaml
