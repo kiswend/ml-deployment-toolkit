@@ -49,7 +49,7 @@ metadata:
   name: vault
   namespace: vault
 spec:
-  size: 1
+  size: 3
   image: hashicorp/vault:1.18.4
   bankVaultsImage: ghcr.io/bank-vaults/bank-vaults:v1.31.3
 
@@ -66,14 +66,16 @@ spec:
   # Vault server configuration
   config:
     storage:
-      file:
+      raft:
         path: "/vault/file"
     listener:
       tcp:
         address: "0.0.0.0:8200"
         tls_disable: true
     api_addr: http://vault.vault:8200
+    cluster_addr: "http://$${.Env.POD_NAME}:8201"
     ui: true
+    serviceRegistrationEnabled: true
 
   # Declarative Vault configuration (applied by bank-vaults sidecar after unseal)
   externalConfig:
@@ -103,10 +105,22 @@ spec:
           path "secret/*" {
             capabilities = ["create", "read", "update", "delete", "list"]
           }
+      - name: raft-snapshot
+        rules: |
+          path "sys/storage/raft/snapshot" {
+            capabilities = ["read"]
+          }
 
     auth:
       - type: kubernetes
         roles:
+          - name: vault-backup
+            bound_service_account_names:
+              - vault-backup
+            bound_service_account_namespaces:
+              - vault
+            policies: raft-snapshot
+            ttl: 15m
           - name: mcm
             bound_service_account_names:
               - mcm
@@ -193,19 +207,14 @@ spec:
             role_assign_svc_secret: "${role_assign_svc_secret}"
             mongodb_app_password: "${mongodb_app_password}"
 
-  # Persistent storage for Vault data
+  # Persistent storage for Vault data (Raft integrated storage)
   volumeMounts:
-    - name: vault-file
+    - name: vault-raft
       mountPath: /vault/file
-
-  volumes:
-    - name: vault-file
-      persistentVolumeClaim:
-        claimName: vault-file
 
   volumeClaimTemplates:
     - metadata:
-        name: vault-file
+        name: vault-raft
       spec:
         accessModes:
           - ReadWriteOnce
