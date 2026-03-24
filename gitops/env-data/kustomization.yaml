@@ -3,8 +3,13 @@ kind: Kustomization
 resources:
   - backup-s3-credentials.yaml
   - mysql/secrets.yaml
+  - mysql/mysql-metrics-service.yaml
   - mysql/mojaloop-db.yaml
+  - kafka/kafka-metrics-configmap.yaml
+  - kafka/kafka-metrics-service.yaml
   - kafka/kafka.yaml
   - mongodb/secrets.yaml
+  - mongodb/mongodb-metrics-service.yaml
   - mongodb/bulk-mongodb.yaml
+  - redis/redis-metrics-service.yaml
   - redis/redis.yaml
