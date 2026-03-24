@@ -80,6 +80,34 @@ spec:
                     matchLabels:
                       app.kubernetes.io/component: mongod
                   topologyKey: kubernetes.io/hostname
+      sidecars:
+        - name: mongodb-exporter
+          image: percona/mongodb_exporter:0.43.1
+          args:
+            - --compatible-mode
+            - --discovering-mode
+          env:
+            - name: MONGODB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bulk-mongodb-secrets
+                  key: MONGODB_CLUSTER_MONITOR_USER
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bulk-mongodb-secrets
+                  key: MONGODB_CLUSTER_MONITOR_PASSWORD
+            - name: MONGODB_URI
+              value: "mongodb://$(MONGODB_USER):$(MONGODB_PASSWORD)@localhost:27017/admin?ssl=false"
+          ports:
+            - containerPort: 9216
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
       resources:
         requests:
           memory: 512Mi

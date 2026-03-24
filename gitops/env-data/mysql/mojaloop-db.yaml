@@ -119,6 +119,29 @@ spec:
         resources:
           requests:
             storage: 8Gi
+    sidecars:
+      - name: mysqld-exporter
+        image: prom/mysqld-exporter:v0.16.0
+        args:
+          - --mysqld.address=localhost:3306
+          - --mysqld.username=monitor
+        env:
+          - name: MYSQLD_EXPORTER_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mojaloop-db-secrets
+                key: monitor
+        ports:
+          - containerPort: 9104
+            name: metrics
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+    sidecarVolumes: []
+    sidecarPVCs: []
     configuration: |
       [mysqld]
       pxc_strict_mode=PERMISSIVE
