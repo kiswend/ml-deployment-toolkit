@@ -104,27 +104,89 @@ spec:
 
           /********************************************
            * METRICS COLLECTION CONFIGURATION
-           * Scrapes Prometheus metrics from services
-           * and forwards to Mimir in ml-cc cluster
+           * Scrapes Prometheus metrics from annotated
+           * pods and services, forwards to Thanos
            ********************************************/
 
-          // Discover Kubernetes services with prometheus.io annotations
-          discovery.kubernetes "services" {
-            role = "service"
+          // --- Pod-based discovery (Mojaloop app services, etc.) ---
+          // Discovers pods with prometheus.io/scrape=true annotation
+          discovery.kubernetes "annotated_pods" {
+            role = "pod"
           }
 
-          // Relabel services for scraping
-          discovery.relabel "services" {
-            targets = discovery.kubernetes.services.targets
+          discovery.relabel "annotated_pods" {
+            targets = discovery.kubernetes.annotated_pods.targets
 
-            // Only scrape services with prometheus.io/scrape annotation
+            // Only scrape pods with prometheus.io/scrape annotation
+            rule {
+              source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+              action        = "keep"
+              regex         = "true"
+            }
+
+            // Set scrape path from annotation (default: /metrics)
+            rule {
+              source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+              action        = "replace"
+              target_label  = "__metrics_path__"
+              regex         = "(.+)"
+            }
+
+            // Set scrape port from annotation
+            rule {
+              source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+              action        = "replace"
+              target_label  = "__address__"
+              regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+              replacement   = "$1:$2"
+            }
+
+            // Add useful metadata labels
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+              target_label  = "service"
+            }
+          }
+
+          prometheus.scrape "annotated_pods" {
+            targets    = discovery.relabel.annotated_pods.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+          }
+
+          // --- Endpoint discovery (data layer, kube-state-metrics, etc.) ---
+          // Discovers individual pod endpoints behind annotated services
+          // Each pod gets its own instance label for per-pod visibility
+          discovery.kubernetes "endpoints" {
+            role = "endpoints"
+          }
+
+          discovery.relabel "endpoints" {
+            targets = discovery.kubernetes.endpoints.targets
+
+            // Only scrape endpoints whose service has prometheus.io/scrape annotation
             rule {
               source_labels = ["__meta_kubernetes_service_annotation_prometheus_io_scrape"]
               action        = "keep"
               regex         = "true"
             }
 
-            // Set scrape path from annotation (default: /metrics)
+            // Set scrape path from service annotation (default: /metrics)
             rule {
               source_labels = ["__meta_kubernetes_service_annotation_prometheus_io_path"]
               action        = "replace"
@@ -132,7 +194,7 @@ spec:
               regex         = "(.+)"
             }
 
-            // Set scrape port from annotation
+            // Set scrape port from service annotation
             rule {
               source_labels = ["__address__", "__meta_kubernetes_service_annotation_prometheus_io_port"]
               action        = "replace"
@@ -151,50 +213,15 @@ spec:
               source_labels = ["__meta_kubernetes_service_name"]
               target_label  = "service"
             }
-          }
-
-          // Scrape metrics from discovered services (clustered across Alloy pods)
-          prometheus.scrape "services" {
-            targets    = discovery.relabel.services.output
-            clustering {
-              enabled = true
-            }
-            forward_to = [prometheus.remote_write.mimir.receiver]
-
-            scrape_interval = "30s"
-            scrape_timeout  = "10s"
-          }
-
-          // Discover kube-state-metrics and other endpoints
-          discovery.kubernetes "endpoints" {
-            role = "endpoints"
-          }
-
-          // Relabel endpoints for kube-state-metrics
-          discovery.relabel "kube_state_metrics" {
-            targets = discovery.kubernetes.endpoints.targets
-
-            // Only scrape kube-state-metrics service
-            rule {
-              source_labels = ["__meta_kubernetes_service_name"]
-              action        = "keep"
-              regex         = "kube-state-metrics"
-            }
 
             rule {
-              source_labels = ["__meta_kubernetes_namespace"]
-              target_label  = "namespace"
-            }
-
-            rule {
-              source_labels = ["__meta_kubernetes_service_name"]
-              target_label  = "service"
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
             }
           }
 
-          // Scrape kube-state-metrics (clustered across Alloy pods)
-          prometheus.scrape "kube_state_metrics" {
-            targets    = discovery.relabel.kube_state_metrics.output
+          prometheus.scrape "endpoints" {
+            targets    = discovery.relabel.endpoints.output
             clustering {
               enabled = true
             }
