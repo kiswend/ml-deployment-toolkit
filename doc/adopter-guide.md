@@ -467,6 +467,79 @@ The URL pattern is `harbor.$DOMAIN/v2/<project>/<image-path>/tags/list`, where `
 | `quay.io/cilium/cilium:v1.16` | `harbor.$DOMAIN/quay/cilium/cilium:v1.16` |
 | `registry.k8s.io/metrics-server:v0.7` | `harbor.$DOMAIN/k8s/metrics-server:v0.7` |
 
+### Observability Stack
+
+The Control Center includes a modern observability stack based on Grafana Labs' LGTM stack (Loki, Grafana, Tempo, Mimir):
+
+| Component | Purpose | Storage | Access |
+|-----------|---------|---------|--------|
+| **Mimir** | Prometheus-compatible metrics storage | MinIO S3 (`mimir` bucket) | `https://mimir.int.${domain}` |
+| **Loki** | Log aggregation and querying | MinIO S3 (`loki` bucket) | `https://loki.int.${domain}` |
+| **Tempo** | Distributed tracing backend | MinIO S3 (`tempo` bucket) | `https://tempo.int.${domain}` |
+| **Grafana** | Unified observability UI | PVC (1Gi) | `https://grafana.int.${domain}` |
+
+All services are exposed via the internal Gateway (`gw-int`) and are automatically configured as datasources in Grafana with cross-linking (traces → logs → metrics).
+
+**Default retention (7 days):**
+- **Mimir**: 168 hours (~60 MB for typical ml-test workload)
+- **Loki**: 168 hours (~700 MB for typical ml-test workload)
+- **Tempo**: 168 hours (~280 MB for typical ml-test workload)
+- **Total**: ~1.2 GB
+
+**Access Grafana:**
+
+```bash
+export KUBECONFIG=$(pwd)/artifacts/ml-cc/kubernetes/kubeconfig
+
+# Get admin password from cluster-secrets
+kubectl get secret cluster-secrets -n flux-system \
+  -o jsonpath='{.data.grafana_admin_password}' | base64 -d
+
+# Or check Vault directly
+kubectl exec -n vault vault-0 -- vault kv get -format=json secret/observability \
+  | jq -r '.data.data.grafanaAdminPassword'
+```
+
+Then navigate to `https://grafana.int.${domain}` and login with username `admin` and the password retrieved above.
+
+**Extending retention:**
+
+To increase retention beyond 7 days, edit the HelmRelease values in `gitops/cc-observability/`:
+
+**Mimir** ([gitops/cc-observability/mimir/helmrelease.yaml](gitops/cc-observability/mimir/helmrelease.yaml:68-69)):
+```yaml
+limits_config:
+  compactor_blocks_retention_period: 720h  # 30 days (was 168h)
+```
+
+**Loki** ([gitops/cc-observability/loki/helmrelease.yaml](gitops/cc-observability/loki/helmrelease.yaml:56-57)):
+```yaml
+limits_config:
+  retention_period: 720h  # 30 days (was 168h)
+```
+
+**Tempo** ([gitops/cc-observability/tempo/helmrelease.yaml](gitops/cc-observability/tempo/helmrelease.yaml:58)):
+```yaml
+retention: 720h  # 30 days (was 168h)
+```
+
+After editing, push the updated artifact and Flux will reconcile:
+
+```bash
+make push-gitops ENV=ml-cc
+```
+
+**Storage estimates:**
+
+| Retention | Mimir | Loki | Tempo | Total |
+|-----------|-------|------|-------|-------|
+| 7 days    | ~60 MB | ~700 MB | ~280 MB | ~1.2 GB |
+| 14 days   | ~120 MB | ~1.4 GB | ~560 MB | ~2 GB |
+| 30 days   | ~260 MB | ~3 GB | ~1.2 GB | ~4.5 GB |
+| 90 days   | ~780 MB | ~9 GB | ~3.6 GB | ~13.4 GB |
+
+Estimates assume a typical ml-test workload (~30 pods, ~100 req/sec peak, ~1500 active metric series). Adjust based on your actual workload and available MinIO storage capacity.
+
 ### Outputs
 
 | Artifact | Path | Provider |
@@ -557,6 +630,71 @@ make destroy-fast ENV=cc     # Skip refresh (3-second safety delay)
 | Kustomization stuck on `dependency not ready` | Platform kustomization has errors | Run `kubectl get kustomizations -n flux-system` — fix platform errors first |
 | Proxmox VMs not getting IP | DHCP or network misconfiguration | Check Proxmox VM console, verify bridge network settings |
 | EKS node group unhealthy | IAM or subnet issues | Check `aws eks describe-nodegroup`, verify IAM policies |
+
+### Known Issues
+
+#### Mojaloop migration job fails with "BackoffLimitExceeded" on fresh deployments
+
+**Symptom:**
+
+```bash
+kubectl get helmrelease mojaloop -n flux-system
+# Status: False - InstallFailed
+# Message: "failed pre-install: job moja-centralledger-service-migration failed: BackoffLimitExceeded"
+
+kubectl get kustomization env-app -n flux-system
+# Status: False - HealthCheckFailed
+# Message: "failed early due to stalled resources: [HelmRelease/flux-system/mojaloop status: 'Failed']"
+```
+
+**Root Cause:**
+
+Race condition between PXC operator user creation and Helm pre-install migration jobs. When deploying a fresh environment:
+
+1. PXC cluster reports `state: initializing` for ~7-10 minutes after pod creation
+2. During this window, the PXC operator is creating databases and users declaratively from `spec.users[]`
+3. If Helm pre-install migration jobs (Mojaloop, Kratos, Keto, Oathkeeper) start before user creation completes, they fail with "Access denied for user"
+4. Migration jobs have `backoffLimit: 1` (only 1 retry allowed), so they hit `BackoffLimitExceeded` and never recover
+5. Flux HelmRelease `install.remediation.retries: 3` exhausts retries, enters `Stalled` state
+
+**Timeline observed:**
+- `T+0`: PXC cluster created
+- `T+0 to T+7min`: PXC state = `initializing`, users being created
+- `T+7min`: PXC operator completes user creation (central_ledger, account_lookup, kratos, keto, etc.)
+- `T+7min+`: Migration jobs that start now succeed
+
+**Workaround:**
+
+If the HelmRelease fails, simply retry it:
+
+```bash
+export KUBECONFIG=artifacts/<env>/kubernetes/kubeconfig
+
+# Check which HelmRelease failed
+kubectl get helmrelease -n flux-system | grep False
+
+# Suspend and resume to trigger retry
+flux suspend helmrelease mojaloop -n flux-system
+flux resume helmrelease mojaloop -n flux-system
+
+# Monitor progress
+kubectl get helmrelease mojaloop -n flux-system --watch
+```
+
+The retry will succeed because database users now exist.
+
+**Prevention:**
+
+This issue is timing-dependent. If your deployment starts slowly enough (e.g., pulling large images on first deploy), the migration jobs may start after the 7-minute window and succeed automatically. Future deployments (with cached images) are more likely to hit the race condition.
+
+To avoid manual intervention:
+- Wait ~10 minutes after `make apply` before checking HelmRelease statuses
+- If you see migration failures early in deployment, wait for PXC to reach `state: ready` before retrying
+- Check PXC status: `kubectl get pxc mojaloop-db -n mojaloop -o jsonpath='{.status.state}'`
+
+**Permanent fix (future):**
+
+This will be addressed in a future release by increasing the Helm job `backoffLimit` to allow retries during the PXC initialization window.
 
 ### Useful commands
 

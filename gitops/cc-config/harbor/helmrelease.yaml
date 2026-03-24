@@ -66,3 +66,12 @@ spec:
         regionendpoint: http://minio.minio:9000
         encrypt: false
         secure: false
+
+    # Reduce Trivy scanner memory (scans on-demand, not continuous)
+    trivy:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          memory: 512Mi

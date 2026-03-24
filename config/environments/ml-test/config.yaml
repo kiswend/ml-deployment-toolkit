@@ -87,6 +87,14 @@ backup:
   # Credentials (BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY) live in .env
 
 # ------------------------------------------------------------------
+# 6.5. OBSERVABILITY
+# ------------------------------------------------------------------
+observability:
+  loki_url: "https://loki.int.cc1.pj1.moja-do.example.com/loki/api/v1/push"
+  mimir_url: "https://thanos.int.cc1.pj1.moja-do.example.com/api/v1/receive"
+  # tempo_url: "https://tempo.int.cc1.pj1.moja-do.example.com:4318"         # For Phase 3
+
+# ------------------------------------------------------------------
 # 7. OCI CONFIGURATION
 # ------------------------------------------------------------------
 oci:

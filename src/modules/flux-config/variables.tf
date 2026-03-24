@@ -124,6 +124,13 @@ variable "harbor_admin_password" {
   sensitive   = true
 }
 
+variable "grafana_admin_password" {
+  description = "Grafana admin password for observability stack"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # --- App Environment Data Layer ---
 
 variable "mysql_root_password" {
@@ -308,6 +315,20 @@ variable "backup_s3_secret_key" {
   type        = string
   default     = ""
   sensitive   = true
+}
+
+# --- Observability Parameters ---
+
+variable "loki_url" {
+  description = "Loki push endpoint URL for log aggregation (cross-cluster)"
+  type        = string
+  default     = ""
+}
+
+variable "mimir_url" {
+  description = "Mimir remote write endpoint URL for metrics aggregation (cross-cluster)"
+  type        = string
+  default     = ""
 }
 
 # --- DFSP Onboarding Parameters ---

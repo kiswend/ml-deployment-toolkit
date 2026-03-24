@@ -56,5 +56,11 @@ spec:
         policy: none
       - name: backups
         policy: none
+      - name: thanos
+        policy: none
+      - name: loki
+        policy: none
+      - name: tempo
+        policy: none
     consoleIngress:
       enabled: false

@@ -33,6 +33,12 @@ spec:
   values:
     recommender:
       enabled: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 100Mi
+        limits:
+          memory: 256Mi
     updater:
       enabled: false
     admissionController:

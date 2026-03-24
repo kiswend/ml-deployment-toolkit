@@ -1,0 +1,337 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: alloy
+      version: "0.9.2"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+      interval: 12h
+  releaseName: alloy
+  targetNamespace: observability
+  install:
+    createNamespace: true
+    timeout: 10m
+    remediation:
+      retries: 3
+  upgrade:
+    timeout: 10m
+    remediation:
+      retries: 3
+  values:
+    # Deploy as DaemonSet (one pod per node for log collection)
+    controller:
+      type: daemonset
+
+    # Alloy configuration using River syntax
+    alloy:
+      # Enable clustering so DaemonSet pods shard scrape targets
+      # instead of all pods scraping all targets (avoids duplicate metrics)
+      clustering:
+        enabled: true
+      configMap:
+        content: |
+          /********************************************
+           * LOG COLLECTION CONFIGURATION
+           * Collects logs from all Kubernetes pods
+           * and forwards to Loki in ml-cc cluster
+           ********************************************/
+
+          // Discover all Kubernetes pods across all namespaces
+          discovery.kubernetes "pods" {
+            role = "pod"
+          }
+
+          // Add useful metadata labels to logs
+          discovery.relabel "pods" {
+            targets = discovery.kubernetes.pods.targets
+
+            // Namespace label
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+
+            // Pod name label
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+
+            // Container name label
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+
+            // Node name label (useful for debugging)
+            rule {
+              source_labels = ["__meta_kubernetes_pod_node_name"]
+              target_label  = "node"
+            }
+          }
+
+          // Collect logs from discovered pods
+          loki.source.kubernetes "pods" {
+            targets    = discovery.relabel.pods.output
+            forward_to = [loki.write.default.receiver]
+          }
+
+          // Remote write logs to Loki in ml-cc cluster
+          loki.write "default" {
+            endpoint {
+              url = "${loki_url}"
+
+              // Skip TLS verification (both clusters in same network)
+              // TODO: Remove insecure_skip_verify when proper CA trust is configured
+              tls_config {
+                insecure_skip_verify = true
+              }
+            }
+
+            // Add cluster identifier label to all logs
+            external_labels = {
+              cluster_name = "${cluster_name}",
+            }
+          }
+
+          /********************************************
+           * METRICS COLLECTION CONFIGURATION
+           * Scrapes Prometheus metrics from services
+           * and forwards to Mimir in ml-cc cluster
+           ********************************************/
+
+          // Discover Kubernetes services with prometheus.io annotations
+          discovery.kubernetes "services" {
+            role = "service"
+          }
+
+          // Relabel services for scraping
+          discovery.relabel "services" {
+            targets = discovery.kubernetes.services.targets
+
+            // Only scrape services with prometheus.io/scrape annotation
+            rule {
+              source_labels = ["__meta_kubernetes_service_annotation_prometheus_io_scrape"]
+              action        = "keep"
+              regex         = "true"
+            }
+
+            // Set scrape path from annotation (default: /metrics)
+            rule {
+              source_labels = ["__meta_kubernetes_service_annotation_prometheus_io_path"]
+              action        = "replace"
+              target_label  = "__metrics_path__"
+              regex         = "(.+)"
+            }
+
+            // Set scrape port from annotation
+            rule {
+              source_labels = ["__address__", "__meta_kubernetes_service_annotation_prometheus_io_port"]
+              action        = "replace"
+              target_label  = "__address__"
+              regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+              replacement   = "$1:$2"
+            }
+
+            // Add useful metadata labels
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_service_name"]
+              target_label  = "service"
+            }
+          }
+
+          // Scrape metrics from discovered services (clustered across Alloy pods)
+          prometheus.scrape "services" {
+            targets    = discovery.relabel.services.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+          }
+
+          // Discover kube-state-metrics and other endpoints
+          discovery.kubernetes "endpoints" {
+            role = "endpoints"
+          }
+
+          // Relabel endpoints for kube-state-metrics
+          discovery.relabel "kube_state_metrics" {
+            targets = discovery.kubernetes.endpoints.targets
+
+            // Only scrape kube-state-metrics service
+            rule {
+              source_labels = ["__meta_kubernetes_service_name"]
+              action        = "keep"
+              regex         = "kube-state-metrics"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_service_name"]
+              target_label  = "service"
+            }
+          }
+
+          // Scrape kube-state-metrics (clustered across Alloy pods)
+          prometheus.scrape "kube_state_metrics" {
+            targets    = discovery.relabel.kube_state_metrics.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+          }
+
+          /********************************************
+           * INFRASTRUCTURE METRICS CONFIGURATION
+           * Scrapes kubelet, cAdvisor, and node-exporter
+           * for node and container resource metrics
+           ********************************************/
+
+          // Discover all cluster nodes (shared by kubelet + node-exporter scraping)
+          discovery.kubernetes "nodes" {
+            role = "node"
+          }
+
+          // Relabel nodes for kubelet scraping (port 10250)
+          discovery.relabel "kubelet" {
+            targets = discovery.kubernetes.nodes.targets
+
+            // Use the node's InternalIP for scraping
+            rule {
+              source_labels = ["__address__"]
+              action        = "replace"
+              target_label  = "__address__"
+              regex         = "(.+?)(?::\\d+)?"
+              replacement   = "$1:10250"
+            }
+
+            // Add node name label
+            rule {
+              source_labels = ["__meta_kubernetes_node_name"]
+              target_label  = "node"
+            }
+          }
+
+          // Scrape kubelet own metrics (/metrics) (clustered across Alloy pods)
+          prometheus.scrape "kubelet" {
+            targets    = discovery.relabel.kubelet.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scheme          = "https"
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+            metrics_path    = "/metrics"
+
+            bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+            tls_config {
+              insecure_skip_verify = true
+            }
+          }
+
+          // Scrape cAdvisor metrics from kubelet (/metrics/cadvisor) (clustered across Alloy pods)
+          prometheus.scrape "cadvisor" {
+            targets    = discovery.relabel.kubelet.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scheme          = "https"
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+            metrics_path    = "/metrics/cadvisor"
+
+            bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+            tls_config {
+              insecure_skip_verify = true
+            }
+          }
+
+          // Relabel nodes for node-exporter scraping (port 9100)
+          discovery.relabel "node_exporter" {
+            targets = discovery.kubernetes.nodes.targets
+
+            // Use the node's InternalIP with node-exporter port
+            rule {
+              source_labels = ["__address__"]
+              action        = "replace"
+              target_label  = "__address__"
+              regex         = "(.+?)(?::\\d+)?"
+              replacement   = "$1:9100"
+            }
+
+            // Add node name label
+            rule {
+              source_labels = ["__meta_kubernetes_node_name"]
+              target_label  = "node"
+            }
+          }
+
+          // Scrape node-exporter metrics (clustered across Alloy pods)
+          prometheus.scrape "node_exporter" {
+            targets    = discovery.relabel.node_exporter.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+          }
+
+          // Remote write metrics to Mimir in ml-cc cluster
+          prometheus.remote_write "mimir" {
+            endpoint {
+              url = "${mimir_url}"
+
+              tls_config {
+                insecure_skip_verify = true
+              }
+            }
+
+            // Add cluster identifier label to all metrics
+            external_labels = {
+              cluster_name = "${cluster_name}",
+            }
+          }
+
+    # Resource requests and limits
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Disable ServiceMonitor (no Prometheus in ml-test)
+    serviceMonitor:
+      enabled: false
