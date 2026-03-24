@@ -119,6 +119,11 @@ spec:
         data:
           data:
             credentials: "${dns_provider_credentials}"
+      - type: kv
+        path: secret/data/observability
+        data:
+          data:
+            grafanaAdminPassword: "${grafana_admin_password}"
 
   # Persistent storage for Vault data
   volumeMounts:

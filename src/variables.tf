@@ -64,6 +64,13 @@ variable "harbor_admin_password" {
   sensitive   = true
 }
 
+variable "grafana_admin_password" {
+  description = "Grafana admin password for observability stack"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # --- App Environment Data Layer Credentials ---
 
 variable "mysql_root_password" {

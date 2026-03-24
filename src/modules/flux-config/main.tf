@@ -80,6 +80,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       lb_ipam_range      = var.lb_ipam_range
       lb_ipam_start      = split("-", var.lb_ipam_range)[0]
       lb_ipam_stop       = split("-", var.lb_ipam_range)[1]
+      loki_url           = var.loki_url
+      mimir_url          = var.mimir_url
     },
     local.is_env ? {
       mysql_host   = local.mysql_host
@@ -113,13 +115,14 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
   data = merge(
     var.dns_credentials,
     {
-      oci_repo_username     = var.oci_repo_username
-      oci_repo_password     = var.oci_repo_password
-      oci_proxy_username    = var.oci_proxy_username
-      oci_proxy_password    = var.oci_proxy_password
-      minio_root_user       = var.minio_root_user
-      minio_root_password   = var.minio_root_password
-      harbor_admin_password = var.harbor_admin_password
+      oci_repo_username                = var.oci_repo_username
+      oci_repo_password                = var.oci_repo_password
+      oci_proxy_username               = var.oci_proxy_username
+      oci_proxy_password               = var.oci_proxy_password
+      minio_root_user                  = var.minio_root_user
+      minio_root_password              = var.minio_root_password
+      harbor_admin_password            = var.harbor_admin_password
+      grafana_admin_password           = var.grafana_admin_password
     },
     local.is_env ? {
       mysql_root_password           = var.mysql_root_password
@@ -534,6 +537,123 @@ resource "kubectl_manifest" "kustomization_cc_routes" {
   ]
 }
 
+# Kustomization: cc-observability (Observability stack: Thanos, Loki, Tempo, Grafana — depends on cc-config for MinIO buckets)
+resource "kubectl_manifest" "kustomization_cc_observability" {
+  count = var.cluster_role == "cc" ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "cc-observability"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "20m"
+      path     = "./cc-observability"
+      prune    = true
+      dependsOn = [
+        { name = "cc-config" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      healthChecks = [
+        {
+          apiVersion = "apps/v1"
+          kind       = "StatefulSet"
+          name       = "thanos-receive"
+          namespace  = "observability"
+        },
+        {
+          apiVersion = "apps/v1"
+          kind       = "Deployment"
+          name       = "thanos-query"
+          namespace  = "observability"
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "loki"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "tempo"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "grafana"
+          namespace  = var.flux_namespace
+        }
+      ]
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_cc_config
+  ]
+}
+
+# Kustomization: cc-observability-routes (HTTPRoutes for observability services — depends on cc-observability)
+resource "kubectl_manifest" "kustomization_cc_observability_routes" {
+  count = var.cluster_role == "cc" ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "cc-observability-routes"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      path     = "./cc-observability-routes"
+      prune    = true
+      dependsOn = [
+        { name = "cc-observability" }
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.kustomization_cc_observability
+  ]
+}
+
 # Kustomization: env-data (self-hosted data layer — operators deploy CRs for MySQL, Kafka, MongoDB, Redis)
 resource "kubectl_manifest" "kustomization_env_data" {
   count = local.is_talos && local.is_env ? 1 : 0
@@ -790,5 +910,50 @@ resource "kubectl_manifest" "kustomization_env_app" {
     kubectl_manifest.kustomization_env_auth,
     kubectl_manifest.kustomization_env_auth_config,
     kubectl_manifest.kustomization_vendor
+  ]
+}
+
+# Kustomization: env-observability-agent (Grafana Alloy for log collection — only deployed to env clusters)
+resource "kubectl_manifest" "kustomization_env_observability_agent" {
+  count = local.is_env ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "env-observability-agent"
+      namespace = var.flux_namespace
+    }
+    spec = {
+      interval = "10m"
+      timeout  = "5m"
+      path     = "./env-observability-agent"
+      prune    = true
+      wait     = true
+      dependsOn = [
+        { name = "platform-config" }  # Needs Gateway/DNS for remote write
+      ]
+      sourceRef = {
+        kind = "OCIRepository"
+        name = "ml-gitops"
+      }
+      postBuild = {
+        substituteFrom = [
+          {
+            kind = "ConfigMap"
+            name = kubernetes_config_map_v1.cluster_config.metadata[0].name
+          },
+          {
+            kind = "Secret"
+            name = kubernetes_secret_v1.cluster_secrets.metadata[0].name
+          }
+        ]
+      }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.oci_repository,
+    kubectl_manifest.kustomization_platform_config
   ]
 }

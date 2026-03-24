@@ -131,6 +131,7 @@ module "flux_config" {
   minio_root_user       = var.minio_root_user
   minio_root_password   = var.minio_root_password
   harbor_admin_password = var.harbor_admin_password
+  grafana_admin_password         = var.grafana_admin_password
 
   mysql_root_password           = var.mysql_root_password
   mysql_central_ledger_password = var.mysql_central_ledger_password
@@ -158,6 +159,9 @@ module "flux_config" {
   backup_s3_region     = try(local.config_raw.backup.s3.region, "us-east-1")
   backup_s3_access_key = var.backup_s3_access_key
   backup_s3_secret_key = var.backup_s3_secret_key
+
+  loki_url  = try(local.config_raw.observability.loki_url, "")
+  mimir_url = try(local.config_raw.observability.mimir_url, "")
 
   depends_on = [
     module.flux_bootstrap

@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tempo
+  namespace: observability
+spec:
+  parentRefs:
+    - name: gw-int
+      namespace: platform-system
+  hostnames:
+    - "tempo.int.${domain}"
+  rules:
+    - backendRefs:
+        - name: tempo
+          port: 3100

@@ -36,6 +36,7 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_minio_root_user=$${MINIO_ROOT_USER:-} \
 	       TF_VAR_minio_root_password=$${MINIO_ROOT_PASSWORD:-} \
 	       TF_VAR_harbor_admin_password=$${HARBOR_ADMIN_PASSWORD:-} \
+	       TF_VAR_grafana_admin_password=$${GRAFANA_ADMIN_PASSWORD:-} \
 	       TF_VAR_mysql_root_password=$${MYSQL_ROOT_PASSWORD:-} \
 	       TF_VAR_mysql_central_ledger_password=$${MYSQL_CENTRAL_LEDGER_PASSWORD:-} \
 	       TF_VAR_mysql_account_lookup_password=$${MYSQL_ACCOUNT_LOOKUP_PASSWORD:-} \
@@ -68,7 +69,7 @@ OCI_REPO := $(shell grep -A4 'repo:' $(ENV_DIR)/config.yaml | grep 'url:' | head
 GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest")
 
 # Phony targets (not files)
-.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list push-gitops tag-gitops list-artifacts
+.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list render render-thanos push-gitops tag-gitops list-artifacts
 
 # Help target - displays available commands
 help:
@@ -90,6 +91,10 @@ help:
 	@echo "Destroy Commands:"
 	@echo "  make destroy      - Destroy all Terraform-managed infrastructure"
 	@echo "  make destroy-fast - Fast destroy without refresh (when resources already gone)"
+	@echo ""
+	@echo "Rendering Commands:"
+	@echo "  make render               - Render all pre-rendered manifests (Jsonnet → YAML)"
+	@echo "  make render-thanos        - Render Thanos manifests only"
 	@echo ""
 	@echo "GitOps Commands:"
 	@echo "  make push-gitops          - Push gitops/ as OCI artifact (version=git SHA)"
@@ -187,6 +192,22 @@ show:
 # List Terraform resources
 list:
 	@cd $(TF_DIR) && $(LOAD_ENV) && terraform state list
+
+# --------------------------------------------------------------------------
+# Manifest Rendering (Jsonnet → YAML)
+# --------------------------------------------------------------------------
+
+# Render all components that need pre-rendering
+render: render-thanos
+
+# Render Thanos manifests from kube-thanos Jsonnet
+render-thanos:
+	@echo "Rendering Thanos manifests..."
+	@cd rendering/thanos && jb install && \
+	jsonnet -J vendor -m ../../gitops/cc-observability/thanos/ thanos.jsonnet && \
+	cd ../../gitops/cc-observability/thanos && \
+	for f in thanos-*; do [ -f "$$f" ] && [ "$${f##*.}" != "yaml" ] && yq -p json -o yaml "$$f" > "$$f.yaml" && rm "$$f"; done || true
+	@echo "Thanos manifests rendered to gitops/cc-observability/thanos/"
 
 # --------------------------------------------------------------------------
 # GitOps OCI Artifact Management

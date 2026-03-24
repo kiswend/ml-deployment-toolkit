@@ -20,6 +20,10 @@ artifacts/
 recovery-kit/
 config/environments/*/.env
 
+# Rendering (Jsonnet vendor dependencies, downloaded by jb install)
+rendering/*/vendor/
+rendering/*/jsonnetfile.lock.json
+
 # IDEs
 .vscode/
 .idea/
