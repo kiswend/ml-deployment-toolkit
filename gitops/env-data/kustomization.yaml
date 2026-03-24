@@ -7,6 +7,7 @@ resources:
   - mysql/mojaloop-db.yaml
   - kafka/kafka-metrics-configmap.yaml
   - kafka/kafka-metrics-service.yaml
+  - kafka/kafka-exporter-metrics-service.yaml
   - kafka/kafka.yaml
   - mongodb/secrets.yaml
   - mongodb/mongodb-metrics-service.yaml

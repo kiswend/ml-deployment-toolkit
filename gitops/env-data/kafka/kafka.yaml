@@ -80,3 +80,12 @@ spec:
       num.partitions: 6
   entityOperator:
     topicOperator: {}
+  kafkaExporter:
+    groupRegex: ".*"
+    topicRegex: ".*"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi

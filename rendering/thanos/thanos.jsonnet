@@ -23,8 +23,8 @@ local receive = t.receive(commonConfig {
   replicaLabels: ['replica'],
   retention: '6h',
   resources: {
-    requests: { cpu: '100m', memory: '256Mi' },
-    limits: { memory: '512Mi' },
+    requests: { cpu: '271m', memory: '443Mi' },
+    limits: { memory: '1Gi' },
   },
   volumeClaimTemplate: {
     spec: {
