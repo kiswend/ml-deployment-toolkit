@@ -351,34 +351,88 @@ data:
           ]
         },
         {
-          "title": "KRaft Controller Latency",
+          "title": "Request Handler / Network Processor Idle",
           "type": "timeseries",
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
           "datasource": { "uid": "thanos" },
-          "description": "KRaft commit latency and record rates. Requires JMX rule additions (task #1) — panels will show 'No data' until then.",
-          "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
+          "description": "Request handler idle shows broker processing capacity. Network processor idle shows network thread headroom. Values <0.7 indicate saturation.",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "custom": { "fillOpacity": 10 },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 0.3 },
+                  { "color": "green", "value": 0.7 }
+                ]
+              }
+            }
+          },
           "targets": [
             {
-              "expr": "kafka_server_raftmetrics_commit_latency_avg{cluster_name=\"$cluster_name\"}",
-              "legendFormat": "{{pod}} commit latency avg"
+              "expr": "kafka_server_kafkarequesthandlerpool_requesthandleravgidle_percent{cluster_name=\"$cluster_name\"}",
+              "legendFormat": "{{pod}} request handler idle"
+            },
+            {
+              "expr": "kafka_network_socketserver_networkprocessoravgidle_percent{cluster_name=\"$cluster_name\"}",
+              "legendFormat": "{{pod}} network processor idle"
+            }
+          ]
+        },
+        {
+          "title": "KRaft Controller",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+          "datasource": { "uid": "thanos" },
+          "description": "KRaft raft channel metrics — connection count, incoming/outgoing bytes",
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
+          "targets": [
+            {
+              "expr": "kafka_server_raftchannelmetrics_connection_count{cluster_name=\"$cluster_name\"}",
+              "legendFormat": "{{pod}} connections"
+            },
+            {
+              "expr": "rate(kafka_server_raftchannelmetrics_incoming_byte_total{cluster_name=\"$cluster_name\"}[$__rate_interval])",
+              "legendFormat": "{{pod}} incoming bytes/s"
+            },
+            {
+              "expr": "rate(kafka_server_raftchannelmetrics_outgoing_byte_total{cluster_name=\"$cluster_name\"}[$__rate_interval])",
+              "legendFormat": "{{pod}} outgoing bytes/s"
             }
           ]
         },
         {
           "title": "JVM Heap (Brokers)",
           "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
           "datasource": { "uid": "thanos" },
-          "description": "JVM heap usage per broker. Requires JMX rule additions (task #1) — panels will show 'No data' until then.",
           "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } } },
           "targets": [
             {
-              "expr": "jvm_memory_bytes_used{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", area=\"heap\"}",
+              "expr": "jvm_memory_used_bytes{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", service=\"mojaloop-kafka-metrics\", area=\"heap\"}",
               "legendFormat": "{{pod}} heap used"
             },
             {
-              "expr": "java_lang_memory_heapmemoryusage_used{cluster_name=\"$cluster_name\", namespace=\"mojaloop\"}",
-              "legendFormat": "{{pod}} heap used (alt)"
+              "expr": "jvm_memory_max_bytes{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", service=\"mojaloop-kafka-metrics\", area=\"heap\"}",
+              "legendFormat": "{{pod}} heap max"
+            }
+          ]
+        },
+        {
+          "title": "JVM GC (Brokers)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+          "datasource": { "uid": "thanos" },
+          "description": "GC pause time rate — high values indicate GC pressure affecting broker latency",
+          "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
+          "targets": [
+            {
+              "expr": "rate(jvm_gc_collection_seconds_sum{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", service=\"mojaloop-kafka-metrics\"}[$__rate_interval])",
+              "legendFormat": "{{pod}} {{gc}} time/s"
             }
           ]
         }
