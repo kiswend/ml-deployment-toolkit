@@ -116,23 +116,16 @@ spec:
               nodeGraph:
                 enabled: true
 
-    # Dashboards providers
-    dashboardProviders:
-      dashboardproviders.yaml:
-        apiVersion: 1
-        providers:
-          - name: default
-            orgId: 1
-            folder: ''
-            type: file
-            disableDeletion: false
-            editable: true
-            options:
-              path: /var/lib/grafana/dashboards/default
-
-    # Pre-installed dashboards (optional - can be added later)
-    dashboards:
-      default: {}
+    # Dashboard sidecar — watches ConfigMaps with label grafana_dashboard=1
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        folderAnnotation: grafana_folder
+        searchNamespace: observability
+        provider:
+          foldersFromFilesStructure: false
 
     # Plugins to install (grafana-piechart-panel removed — Angular plugins unsupported in Grafana 11.x)
     plugins: []
