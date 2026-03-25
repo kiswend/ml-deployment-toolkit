@@ -77,13 +77,37 @@ spec:
     l2announcements:
       enabled: true
 
-    # Hubble observability
+    # Cilium agent Prometheus metrics (port 9962)
+    prometheus:
+      enabled: true
+
+    # Agent pod annotations for Alloy scraping
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9962"
+      prometheus.io/path: "/metrics"
+
+    # Hubble observability and metrics
     hubble:
       enabled: true
       relay:
         enabled: true
       ui:
         enabled: true
+      metrics:
+        enabled:
+          - dns
+          - drop
+          - tcp
+          - flow
+          - icmp
+          - httpV2:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction
+        serviceAnnotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9965"
+          prometheus.io/path: "/metrics"
+        dashboards:
+          enabled: false
 
     # Envoy proxy (external)
     envoy:
