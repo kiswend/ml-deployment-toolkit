@@ -152,39 +152,9 @@ data:
         type: GAUGE
 
       # =============================================================
-      # JVM metrics (heap, GC, threads, OS)
+      # JVM metrics — NOT needed as custom rules.
+      # The JMX Prometheus Exporter has a built-in JVM collector that
+      # automatically exposes jvm_memory_*, jvm_gc_*, jvm_threads_*,
+      # jvm_classes_*, jvm_buffer_pool_* metrics. Custom java.lang:*
+      # rules would create duplicate metric names and crash the exporter.
       # =============================================================
-      - pattern: java.lang<type=Memory><HeapMemoryUsage>(\w+)
-        name: jvm_memory_heap_$1
-        type: GAUGE
-      - pattern: java.lang<type=Memory><NonHeapMemoryUsage>(\w+)
-        name: jvm_memory_nonheap_$1
-        type: GAUGE
-      - pattern: java.lang<type=GarbageCollector, name=(.+)><>CollectionCount
-        name: jvm_gc_collection_count
-        type: COUNTER
-        labels:
-          gc: "$1"
-      - pattern: java.lang<type=GarbageCollector, name=(.+)><>CollectionTime
-        name: jvm_gc_collection_time_ms
-        type: COUNTER
-        labels:
-          gc: "$1"
-      - pattern: java.lang<type=Threading><>ThreadCount
-        name: jvm_threads_current
-        type: GAUGE
-      - pattern: java.lang<type=Threading><>DaemonThreadCount
-        name: jvm_threads_daemon
-        type: GAUGE
-      - pattern: java.lang<type=OperatingSystem><>SystemCpuLoad
-        name: jvm_os_system_cpu_load
-        type: GAUGE
-      - pattern: java.lang<type=OperatingSystem><>ProcessCpuLoad
-        name: jvm_os_process_cpu_load
-        type: GAUGE
-      - pattern: java.lang<type=OperatingSystem><>FreePhysicalMemorySize
-        name: jvm_os_free_physical_memory_bytes
-        type: GAUGE
-      - pattern: java.lang<type=Runtime><>Uptime
-        name: jvm_runtime_uptime_ms
-        type: GAUGE
