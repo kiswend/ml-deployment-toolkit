@@ -334,6 +334,33 @@ spec:
             scrape_timeout  = "10s"
           }
 
+          /********************************************
+           * KUBERNETES API SERVER METRICS
+           * Static target — apiserver is a Talos static
+           * pod, not discoverable via annotations.
+           ********************************************/
+
+          prometheus.scrape "apiserver" {
+            targets = [{
+              __address__ = "kubernetes.default.svc:443",
+            }]
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scheme          = "https"
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+            metrics_path    = "/metrics"
+
+            bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+            tls_config {
+              insecure_skip_verify = true
+            }
+          }
+
           // Remote write metrics to Mimir in ml-cc cluster
           prometheus.remote_write "mimir" {
             endpoint {
