@@ -13,7 +13,7 @@ data:
       # first-match, and generic rules below would swallow the topic
       # label if they matched first)
       # =============================================================
-      - pattern: kafka.server<type=BrokerTopicMetrics, name=(.+), topic=(.+)><>Count
+      - pattern: kafka.server<type=BrokerTopicMetrics, name=(.+)PerSec, topic=(.+)><>Count
         name: kafka_server_brokertopicmetrics_$1_total
         type: COUNTER
         labels:
