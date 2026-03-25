@@ -41,6 +41,46 @@ spec:
     courier:
       enabled: false
 
+    deployment:
+      extraInitContainers: |
+        - name: wait-for-db
+          image: percona/percona-xtradb-cluster:8.0.44-35.1
+          command: [sh, -c]
+          args:
+            - |
+              # Extract host, port, user, password from DSN
+              # DSN format: mysql://user:pass@tcp(host:port)/db?params
+              DB_USER=$(echo "$DSN" | sed 's|mysql://\([^:]*\):.*|\1|')
+              DB_PASS=$(echo "$DSN" | sed 's|mysql://[^:]*:\([^@]*\)@.*|\1|')
+              HOST=$(echo "$DSN" | sed 's|.*tcp(\([^:]*\):.*|\1|')
+              PORT=$(echo "$DSN" | sed 's|.*tcp([^:]*:\([^)]*\)).*|\1|')
+              DB=$(echo "$DSN" | sed 's|.*/\([^?]*\).*|\1|')
+              echo "Waiting for MySQL connectivity to $DB..."
+              until mysql -h "$HOST" -P "$PORT" -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1" "$DB" 2>/dev/null; do
+                echo "Waiting for $DB database..."
+                sleep 5
+              done
+              echo "MySQL reachable. Verifying DDL readiness..."
+              STABLE=0
+              while [ $STABLE -lt 3 ]; do
+                if mysql -h "$HOST" -P "$PORT" -u "$DB_USER" -p"$DB_PASS" "$DB" \
+                  -e "CREATE TABLE IF NOT EXISTS __init_check (id INT PRIMARY KEY) ENGINE=InnoDB; DROP TABLE IF EXISTS __init_check;" 2>/dev/null; then
+                  STABLE=$((STABLE + 1))
+                  echo "DDL check passed ($STABLE/3)"
+                else
+                  STABLE=0
+                  echo "DDL not ready, retrying..."
+                fi
+                sleep 2
+              done
+              echo "Database ready!"
+          env:
+            - name: DSN
+              valueFrom:
+                secretKeyRef:
+                  name: kratos-secret
+                  key: dsn
+
     kratos:
       automigration:
         enabled: true

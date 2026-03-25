@@ -79,32 +79,87 @@ Kubernetes (observability namespace)
 
 ```
 App Environment (ml-test)                 Control Center (ml-cc)
-┌─────────────────────┐                   ┌─────────────────────────────┐
-│ Alloy (DaemonSet)   │                   │ observability namespace      │
-│ ├─ kubelet/cAdvisor  │   HTTPS           │                             │
-│ ├─ node-exporter    │──remote_write────→│ Thanos Receive (:19291)     │
-│ ├─ kube-state-metrics│                   │   ↓ writes TSDB blocks      │
-│ └─ service scraping │                   │ MinIO S3 (thanos bucket)    │
-└─────────────────────┘                   │   ↑ reads blocks             │
-                                          │ Thanos Store Gateway        │
-                                          │   ↑                         │
-                                          │ Thanos Query (:9090) ←─ Grafana
-                                          │ Thanos Compactor (background)│
-                                          └─────────────────────────────┘
+┌──────────────────────────┐              ┌─────────────────────────────┐
+│ Alloy (DaemonSet x4)    │              │ observability namespace      │
+│ ├─ Pod discovery:        │  HTTPS       │                             │
+│ │  ├─ Mojaloop apps (20) │──remote────→│ Thanos Receive (:19291)     │
+│ │  └─ Finance Portal     │  write       │   ↓ writes TSDB blocks      │
+│ ├─ Endpoint discovery:   │              │ MinIO S3 (thanos bucket)    │
+│ │  ├─ Kafka JMX (3)     │              │   ↑ reads blocks             │
+│ │  ├─ Kafka Exporter (1) │              │ Thanos Store Gateway        │
+│ │  ├─ MySQL exporter (3) │              │   ↑                         │
+│ │  ├─ MongoDB exporter(3)│              │ Thanos Query (:9090) ←─ Grafana
+│ │  ├─ Redis exporter (1) │              │ Thanos Compactor (background)│
+│ │  └─ kube-state-metrics │              │                             │
+│ ├─ Node discovery:       │              │ Loki ← logs                 │
+│ │  ├─ kubelet (5)        │              │ Tempo ← traces (Phase 3)    │
+│ │  ├─ cAdvisor (5)       │              │ Grafana ← dashboards        │
+│ │  └─ node-exporter (5)  │              └─────────────────────────────┘
+│ └─ Log collection:       │
+│    └─ All pod logs ──────│──push──────→ Loki
+└──────────────────────────┘
 ```
 
-### Env Agents (Alloy)
+## Metrics Collection
 
-Alloy runs as a DaemonSet with **clustering enabled** — pods shard scrape targets via gossip protocol to avoid duplicate metrics.
+### Scraping Architecture
 
-Scrape targets:
-- **kubelet** `/metrics` — kubelet own metrics (HTTPS, bearer token auth)
-- **cAdvisor** `/metrics/cadvisor` — container CPU/memory/network/disk
-- **node-exporter** port 9100 — host-level metrics (requires `privileged` PSA on namespace)
-- **kube-state-metrics** — Kubernetes object metrics (pods, deployments, nodes, PVCs)
-- **Services** with `prometheus.io/scrape=true` annotation
+Alloy uses **two discovery mechanisms** to avoid duplication while covering all targets:
 
-### S3 Storage Layout
+| Discovery | Targets | Labels | Use case |
+|-----------|---------|--------|----------|
+| **Pod discovery** | Pods with `prometheus.io/scrape=true` annotation | `pod`, `service`, `namespace` | Mojaloop app services, Finance Portal |
+| **Endpoint discovery** | Individual pod endpoints behind services with `prometheus.io/scrape=true` | `pod`, `service`, `namespace`, unique `instance` per pod | Data layer exporters (Kafka, MySQL, MongoDB, Redis), kube-state-metrics |
+
+Pod discovery scrapes each pod directly. Endpoint discovery resolves headless services to individual pod IPs, giving per-instance granularity for clustered data services.
+
+**Clustering**: All scrape jobs use Alloy clustering (`clustering.enabled = true`) so the 4 DaemonSet pods shard targets among themselves — no duplicate scrapes.
+
+### Infrastructure Metrics
+
+| Source | Method | Port | Metrics |
+|--------|--------|------|---------|
+| **kubelet** | Node discovery, HTTPS + bearer token | 10250 | Kubelet internals |
+| **cAdvisor** | Node discovery, HTTPS + bearer token | 10250 `/metrics/cadvisor` | Container CPU, memory, network, disk |
+| **node-exporter** | Node discovery, DaemonSet | 9100 | Host CPU, RAM, disk, network |
+| **kube-state-metrics** | Endpoint discovery | 8080 | K8s object state (pods, deployments, PVCs, nodes) |
+
+### Data Layer Metrics
+
+| Service | Exporter | Method | Port | Key metrics |
+|---------|----------|--------|------|-------------|
+| **Kafka (brokers)** | JMX Prometheus Exporter (Strimzi built-in) | Endpoint discovery via `mojaloop-kafka-metrics` service | 9404 | Request rate, connections, under-replicated partitions, ISR, leader count |
+| **Kafka (consumers)** | Kafka Exporter (`spec.kafkaExporter` in Kafka CR) | Endpoint discovery via `mojaloop-kafka-exporter-metrics` service | 9404 | Consumer group lag, topic offsets, partition count |
+| **MySQL (PXC)** | mysqld-exporter v0.16 sidecar | Endpoint discovery via `mojaloop-db-metrics` service | 9104 | Connections, queries/sec, InnoDB, replication, wsrep status |
+| **MongoDB (PSMDB)** | mongodb_exporter v0.43 sidecar | Endpoint discovery via `bulk-mongodb-metrics` service | 9216 | Connections, operations/sec, replication lag, oplog window |
+| **Redis** | redis-exporter v1.44 (operator-managed) | Endpoint discovery via `ttk-redis-metrics` service | 9121 | Connected clients, memory, commands/sec |
+
+All data layer exporters provide **per-pod instance labels** for drill-down (e.g., `pod="mojaloop-db-pxc-0"`, `instance="10.244.0.181:9104"`).
+
+### Mojaloop App Metrics
+
+Mojaloop Node.js services natively expose Prometheus metrics on their HTTP port via `/metrics`. Controlled by `metrics.enabled: true` in Helm values.
+
+| Metric prefix | Services |
+|--------------|----------|
+| `moja_ml_*` | ml-api-adapter-service, ml-api-adapter-handler-notification |
+| `moja_cl_*` | centralledger-service, all centralledger handlers (prepare, position, get, fulfil, timeout, admin), handler-pos-batch |
+| `moja_qs_*` | quoting-service, quoting-service-handler |
+| `moja_cs_*` | centralsettlement-service, centralsettlement handlers |
+| `moja_als_*` | account-lookup-service, account-lookup-service-admin, als-msisdn-oracle |
+
+Scraped via Alloy **pod discovery** — each pod with `prometheus.io/scrape=true` is scraped individually.
+
+### JMX Exporter Configuration
+
+Kafka JMX metrics are configured via a ConfigMap (`kafka-metrics`) with JMX exporter rules. The ConfigMap is referenced in the Kafka CR's `spec.kafka.metricsConfig`. Key metric categories:
+- Broker topic metrics (bytes in/out, messages/sec)
+- Replica manager (under-replicated partitions, ISR)
+- Controller (active controller, offline partitions)
+- Log size per topic/partition
+- Consumer lag per topic
+
+## S3 Storage Layout
 
 | Bucket | Used by | Content |
 |--------|---------|---------|
@@ -113,6 +168,8 @@ Scrape targets:
 | `tempo` | Tempo | Trace data |
 
 All buckets in MinIO (`minio.minio:9000`), credentials from Vault via ExternalSecrets.
+
+Thanos Receive writes TSDB blocks to S3 every ~2 hours (Prometheus TSDB block cycle). Until a block is completed, data is in Receive's local WAL. Thanos Query merges real-time data (from Receive) with historical data (from Store Gateway/S3) transparently.
 
 ## Configuration
 
@@ -129,9 +186,34 @@ observability:
 
 These are injected into Alloy via Flux postBuild substitution from the `cluster-config` ConfigMap.
 
+### HTTPRoute (path-based routing)
+
+A single HTTPRoute on `thanos.int.${domain}` handles both write and read traffic:
+- `/api/v1/receive` → Thanos Receive (:19291) — Alloy remote_write
+- Everything else → Thanos Query (:9090) — Grafana queries
+
 ## Retention
 
 All signals: **7 days (168h)**
 - Thanos: compactor `--retention.resolution-raw=168h`, downsampling disabled
 - Loki: `limits_config.retention_period: 168h`
 - Tempo: `retention: 168h`
+
+## Rendering Framework
+
+Components that need pre-rendering (Jsonnet → YAML) live in `rendering/` at the repo root. Rendered output is committed to `gitops/` and deployed by FluxCD.
+
+```bash
+make render          # render all components
+make render-thanos   # render Thanos manifests only
+```
+
+The `rendering/*/vendor/` directories (Jsonnet dependencies) are git-ignored — downloaded by `jb install` during rendering.
+
+## Known Constraints
+
+- **CC node memory**: The single-node CC cluster (7GB RAM) is tight with the full observability stack. Thanos Receive is the largest consumer during write bursts and WAL replay. Consider increasing VM RAM for production CC deployments.
+- **Thanos block shipping**: TSDB blocks are shipped to S3 every ~2 hours. Data loss window on Receive pod crash is up to 2 hours of metrics (mitigated by WAL replay on restart).
+- **No CC self-monitoring**: The CC cluster does not scrape its own metrics (Thanos, Loki, Tempo, Grafana, Vault, Harbor, MinIO). Future work.
+- **No alerting**: No alert rules configured. Future work via Thanos Ruler or external alerting.
+- **No pre-built dashboards**: Grafana has datasources but no imported dashboards. Future work.
