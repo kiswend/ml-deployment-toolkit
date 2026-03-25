@@ -15,3 +15,8 @@ resources:
   - loki/helmrelease.yaml
   - tempo/helmrelease.yaml
   - grafana/helmrelease.yaml
+
+  # Grafana Dashboards — Infrastructure
+  - grafana/dashboards/infrastructure/node-overview.yaml
+  - grafana/dashboards/infrastructure/kubernetes-cluster.yaml
+  - grafana/dashboards/infrastructure/pod-resources.yaml
