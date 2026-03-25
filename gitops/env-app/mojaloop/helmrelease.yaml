@@ -202,6 +202,9 @@ spec:
     # Event SDK: produces audit events to Kafka for Finance Portal reporting
     quoting-service:
       quoting-service:
+        podAnnotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "3002"
         metrics:
           enabled: true
         config:
@@ -216,6 +219,9 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       quoting-service-handler:
+        podAnnotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "3003"
         metrics:
           enabled: true
         config:
