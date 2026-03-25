@@ -26,3 +26,8 @@ resources:
   - grafana/dashboards/data-layer/pxc-galera-cluster.yaml
   - grafana/dashboards/data-layer/redis-overview.yaml
   - grafana/dashboards/data-layer/kafka-overview.yaml
+
+  # Grafana Dashboards — Mojaloop
+  - grafana/dashboards/mojaloop/transfer-pipeline.yaml
+  - grafana/dashboards/mojaloop/account-lookup-service.yaml
+  - grafana/dashboards/mojaloop/nodejs-runtime.yaml
