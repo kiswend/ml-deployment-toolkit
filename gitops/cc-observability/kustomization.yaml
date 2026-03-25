@@ -20,3 +20,7 @@ resources:
   - grafana/dashboards/infrastructure/node-overview.yaml
   - grafana/dashboards/infrastructure/kubernetes-cluster.yaml
   - grafana/dashboards/infrastructure/pod-resources.yaml
+
+  # Grafana Dashboards — Data Layer
+  - grafana/dashboards/data-layer/mysql-overview.yaml
+  - grafana/dashboards/data-layer/pxc-galera-cluster.yaml
