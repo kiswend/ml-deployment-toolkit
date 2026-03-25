@@ -460,3 +460,72 @@ kubectl events -n flux-system --for=kustomization/platform
 | `OCIRepository not ready` | Bad URL or auth | Verify `config.yaml` URL matches the pushed artifact. Check `oci-credentials` secret exists. |
 | `Kustomization failed` | Invalid YAML or missing variable | Run `kustomize build gitops/platform/` locally. Check all `${variables}` are defined in `cluster-config` ConfigMap. |
 | `dependency not ready` | Platform kustomization unhealthy | Fix platform errors first — the role-specific kustomization waits for platform. |
+
+## Emergency Operations
+
+Operational commands for incident response. These do **not** modify gitops state — Flux restores everything when resumed.
+
+### Temporarily suspend workloads (free memory/CPU)
+
+Use when the cluster is under resource pressure (e.g. host crash recovery, cascading OOM kills).
+
+```bash
+# 1. List HelmReleases to identify what to suspend
+export KUBECONFIG=artifacts/<env>/kubernetes/kubeconfig
+flux get helmreleases -n flux-system
+
+# 2. Suspend Flux reconciliation (prevents Flux from fighting your changes)
+flux suspend helmrelease <name> -n flux-system
+
+# 3. Scale down deployments to free memory
+kubectl scale deploy --all -n mojaloop --replicas=0
+
+# 4. For StatefulSets (data layer), scale down carefully
+kubectl scale statefulset <name> -n mojaloop --replicas=0
+```
+
+### Resume workloads
+
+Reverse order — bring workloads up first, then let Flux manage again.
+
+```bash
+# 1. Scale deployments back (Flux will correct replica counts on resume)
+kubectl scale deploy --all -n mojaloop --replicas=1
+
+# 2. Resume Flux reconciliation (restores original replica counts)
+flux resume helmrelease <name> -n flux-system
+
+# 3. Verify
+flux get helmreleases -n flux-system
+kubectl get pods -n mojaloop
+```
+
+### Suspend/resume a full Kustomization chain
+
+For broader control (e.g. suspend all env workloads):
+
+```bash
+# Suspend — stops Flux from reconciling this kustomization and its resources
+flux suspend kustomization env-app -n flux-system
+flux suspend kustomization env-data -n flux-system
+
+# Resume
+flux resume kustomization env-data -n flux-system
+flux resume kustomization env-app -n flux-system
+```
+
+### Force re-reconcile after manual changes
+
+If you made manual fixes during an incident and want Flux to re-assert desired state:
+
+```bash
+flux reconcile kustomization <name> -n flux-system --force
+flux reconcile helmrelease <name> -n flux-system --force
+```
+
+### Key principles
+
+- **Suspend before scaling** — otherwise Flux immediately reverts your scale-down
+- **Resume in dependency order** — data layer before app layer
+- **No gitops changes needed** — these are purely runtime operations
+- **Flux restores state on resume** — replica counts, resource specs, everything returns to what's declared in gitops
