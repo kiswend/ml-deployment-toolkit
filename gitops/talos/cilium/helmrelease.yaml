@@ -81,11 +81,8 @@ spec:
     prometheus:
       enabled: true
 
-    # Agent pod annotations for Alloy scraping
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "9962"
-      prometheus.io/path: "/metrics"
+    # Note: prometheus.enabled=true already adds prometheus.io/scrape and
+    # prometheus.io/port annotations to agent pods — no podAnnotations needed
 
     # Hubble observability and metrics
     hubble:
