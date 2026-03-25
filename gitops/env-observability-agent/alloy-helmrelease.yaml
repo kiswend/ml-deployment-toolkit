@@ -17,7 +17,7 @@ spec:
   releaseName: alloy
   targetNamespace: observability
   install:
-    createNamespace: true
+    createNamespace: false
     timeout: 10m
     remediation:
       retries: 3
