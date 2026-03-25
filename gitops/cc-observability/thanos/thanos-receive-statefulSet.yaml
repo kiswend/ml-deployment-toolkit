@@ -117,7 +117,7 @@ spec:
             periodSeconds: 5
           resources:
             limits:
-              memory: 1Gi
+              memory: 1536Mi
             requests:
               cpu: 271m
               memory: 443Mi
