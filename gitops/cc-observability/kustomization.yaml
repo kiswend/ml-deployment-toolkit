@@ -24,3 +24,4 @@ resources:
   # Grafana Dashboards — Data Layer
   - grafana/dashboards/data-layer/mysql-overview.yaml
   - grafana/dashboards/data-layer/pxc-galera-cluster.yaml
+  - grafana/dashboards/data-layer/redis-overview.yaml
