@@ -287,86 +287,180 @@ The PSMDB exporter is not exposing operational metrics. This needs investigation
 
 **Source: Mojaloop Node.js services (prom-client, scraped via pod annotations)**
 
-**IMPORTANT: Metric naming has changed from legacy.** The old service-specific prefixes (`moja_cl_`, `moja_als_`, `moja_qs_`, `moja_sim_`) are gone. Current metrics use a flat `moja_` prefix. The `moja_ml_` prefix still exists for ML API Adapter. Legacy dashboards will not work without query rewrites.
+#### Metric Naming — Legacy vs Current
 
-Transfer pipeline (Central Ledger):
+The old service-specific prefixes (`moja_cl_`, `moja_als_`, `moja_qs_`, `moja_sim_`) are gone. **This is a Mojaloop application change, not a collection artifact.** Current Mojaloop versions use a flat `moja_` prefix for most services. The `moja_ml_` prefix still exists for ML API Adapter. Legacy dashboards will not work without query rewrites.
+
+Verified by querying Thanos: Alloy does not rename metrics — it only adds labels (`namespace`, `pod`, `service`, `cluster_name`). The flat prefix comes directly from the application's prom-client instrumentation.
+
+#### Service → Metric Mapping (via `service` label)
+
+The `service` label is derived from `app.kubernetes.io/name` pod label by Alloy. It is the **critical dimension** for all Mojaloop dashboards — it identifies which microservice emitted the metric.
+
+**13 services emit `moja_*` metrics:**
+
+| `service` label | Pod prefix | Replicas | Role |
+|-----------------|-----------|----------|------|
+| `centralledger-handler-transfer-prepare` | `moja-centralledger-handler-transfer-prepare-*` | 2 | Transfer prepare handler |
+| `centralledger-handler-transfer-fulfil` | `moja-centralledger-handler-transfer-fulfil-*` | 2 | Transfer fulfil handler |
+| `centralledger-handler-transfer-position` | `moja-centralledger-handler-transfer-position-*` | 2 | Position handler |
+| `handler-pos-batch` | `moja-handler-pos-batch-*` | 2 | Batch position handler |
+| `centralledger-handler-transfer-get` | `moja-centralledger-handler-transfer-get-*` | 2 | Transfer get handler |
+| `centralledger-handler-timeout` | `moja-centralledger-handler-timeout-*` | 2 | Timeout handler |
+| `centralledger-handler-admin-transfer` | `moja-centralledger-handler-admin-transfer-*` | 2 | Admin transfer handler |
+| `centralledger-service` | `moja-centralledger-service-*` | 3 | Central Ledger API |
+| `account-lookup-service` | `moja-account-lookup-service-*` | 2 | Account Lookup Service |
+| `ml-api-adapter-service` | `moja-ml-api-adapter-service-*` | 2 | ML API Adapter (inbound) |
+| `ml-api-adapter-handler-notification` | `moja-ml-api-adapter-handler-notification-*` | 2 | Notification handler (E2E, outbound) |
+| `role-assignment-service` | `fin-portal-role-assignment-service-*` | 2 | Finance Portal role assignment |
+| `simulator` | `moja-simulator-*` | 2 | Test simulator |
+
+All pods run in the `mojaloop` namespace. All services expose metrics on annotated ports (mostly 3001, some on 3000, 3008, 4002, 8444).
+
+#### Metrics by Service
+
+**CL Handler Prepare** (`centralledger-handler-transfer-prepare`) — 81 metrics:
 
 | Metric | Type | Use |
 |--------|------|-----|
 | `moja_transfer_prepare_*` | histogram | Transfer prepare latency and count |
-| `moja_transfer_fulfil_*` | histogram | Transfer fulfil latency and count |
-| `moja_transfer_position_*` | histogram | Position processing latency |
-| `moja_transfer_position_batch_*` | histogram | Batch position processing (new) |
-| `moja_transfer_get_*` | histogram | Transfer lookup |
-| `moja_handler_transfers_*` | histogram | Transfer handler total |
+| `moja_handler_transfers_*` | histogram | Handler-level transfer processing |
 | `moja_handlers_transfer_validator_*` | histogram | Transfer validation |
 | `moja_domain_transfer_*` | histogram | Domain layer transfer processing |
-| `moja_domain_position_*` | histogram | Domain layer position processing |
 | `moja_model_transfer_*` | histogram | DB model layer transfer |
 | `moja_model_participant_*` | histogram | DB model layer participant lookup |
-| `moja_model_position_*` | histogram | DB model layer position |
-| `moja_model_settlementModel_*` | histogram | Settlement model lookup (new) |
+| `moja_model_participant_batch_*` | histogram | Batch participant lookup |
+| `moja_model_externalParticipant_*` | histogram | External participant model |
+| `moja_fx_transfer_prepare_*` | histogram | FX transfer prepare |
+| `moja_fx_domain_cyril_getParticipantAndCurrency*` | histogram | FX Cyril participant/currency resolution |
+| + Node.js runtime (`moja_nodejs_*`, `moja_process_*`) | | |
 
-FX transfer pipeline (new — not in legacy dashboards):
+**CL Handler Fulfil** (`centralledger-handler-transfer-fulfil`) — 99 metrics:
 
 | Metric | Type | Use |
 |--------|------|-----|
-| `moja_fx_transfer_prepare_*` | histogram | FX transfer prepare |
+| `moja_transfer_fulfil_*` | histogram | Transfer fulfil latency and count |
+| `moja_handler_transfers_*` | histogram | Handler-level transfer processing |
+| `moja_domain_transfer_*` | histogram | Domain layer transfer processing |
+| `moja_model_transfer_*` | histogram | DB model layer transfer |
+| `moja_model_participant_*` | histogram | DB model layer participant lookup |
 | `moja_fx_transfer_fulfil_*` | histogram | FX transfer fulfil |
 | `moja_fx_handler_transfers_*` | histogram | FX handler total |
 | `moja_fx_model_transfer_*` | histogram | FX DB model layer |
-| `moja_fx_domain_cyril_*` | histogram | FX Cyril domain processing (6 operations) |
+| `moja_fx_domain_cyril_processFulfilMessage_*` | histogram | FX fulfil domain processing |
+| `moja_fx_domain_cyril_processAbortMessage_*` | histogram | FX abort domain processing |
+| `moja_fx_domain_cyril_processFx*` | histogram | FX-specific fulfil/abort |
+| + Node.js runtime | | |
 
-ML API Adapter:
+**CL Handler Position** (`centralledger-handler-transfer-position`) — 52 metrics:
 
 | Metric | Type | Use |
 |--------|------|-----|
-| `moja_ml_transfer_prepare_*` | histogram | API adapter prepare |
-| `moja_ml_transfer_fulfil_*` | histogram | API adapter fulfil |
-| `moja_ml_transfer_fulfil_error_*` | histogram | API adapter fulfil errors (new) |
-| `moja_ml_transfer_get_*` | histogram | API adapter get |
-| `moja_ml_fx_transfer_prepare_*` | histogram | FX API adapter prepare (new) |
-| `moja_ml_fx_transfer_fulfil_*` | histogram | FX API adapter fulfil (new) |
-| `moja_ml_fx_transfer_get_*` | histogram | FX API adapter get (new) |
-| `moja_tx_transfer_*` | histogram | End-to-end transaction |
-| `moja_tx_transfer_prepare_*` | histogram | E2E prepare phase |
-| `moja_tx_transfer_fulfil_*` | histogram | E2E fulfil phase |
-| `moja_notification_event_*` | histogram | Notification processing |
-| `moja_notification_event_delivery_*` | histogram | Notification delivery |
-| `moja_notification_event_getEndpoint_*` | histogram | Endpoint resolution |
-| `moja_notification_event_process_msg_*` | histogram | Message processing |
-| `moja_notification_event_getEndpoint_fx_*` | histogram | FX endpoint resolution (new) |
+| `moja_transfer_position_*` | histogram | Position processing latency |
+| `moja_domain_position_*` | histogram | Domain layer position processing |
+| `moja_model_position_*` | histogram | DB model layer position |
+| `moja_model_participant_*` | histogram | Participant lookup |
+| + Node.js runtime | | |
 
-Account Lookup Service:
+**CL Handler Pos-Batch** (`handler-pos-batch`) — 54 metrics:
+
+| Metric | Type | Use |
+|--------|------|-----|
+| `moja_transfer_position_*` | histogram | Position processing |
+| `moja_transfer_position_batch_*` | histogram | Batch position processing |
+| `moja_model_settlementModel_*` | histogram | Settlement model lookup |
+| `moja_model_participant_*` | histogram | Participant lookup |
+| + Node.js runtime | | |
+
+**CL Service API** (`centralledger-service`) — 45 metrics:
+
+| Metric | Type | Use |
+|--------|------|-----|
+| `moja_model_participant_*` | histogram | Participant model |
+| `moja_model_externalParticipant_*` | histogram | External participant model |
+| `moja_model_participant_batch_*` | histogram | Batch participant model |
+| + Node.js runtime | | |
+
+Note: CL Service is the REST API — it does not emit transfer pipeline metrics. Those come from the handlers.
+
+**CL Handler Timeout** and **CL Handler Admin** — Runtime metrics only (`moja_nodejs_*`, `moja_process_*`).
+
+**Account Lookup Service** (`account-lookup-service`) — 159 metrics:
 
 | Metric | Type | Use |
 |--------|------|-----|
 | `moja_ing_getPartiesByTypeAndID_*` | histogram | Ingress: GET parties |
 | `moja_ing_putPartiesByTypeAndID_*` | histogram | Ingress: PUT parties |
+| `moja_ing_getPartiesByTypeIDAndSubID_*` | histogram | Ingress: GET parties (sub ID) |
+| `moja_ing_putPartiesByTypeIDAndSubID_*` | histogram | Ingress: PUT parties (sub ID) |
 | `moja_ing_putPartiesErrorByTypeIDAndSubID_*` | histogram | Ingress: parties error callback |
 | `moja_ing_getParticipantsByTypeAndID_*` | histogram | Ingress: GET participants |
+| `moja_ing_getParticipantsByTypeIdAndSubID_*` | histogram | Ingress: GET participants (sub ID) |
 | `moja_ing_postParticipantsbyTypeAndID_*` | histogram | Ingress: POST participants |
+| `moja_ing_postParticipantsByTypeIDAndSubID_*` | histogram | Ingress: POST participants (sub ID) |
 | `moja_ing_deleteParticipantsByTypeAndID_*` | histogram | Ingress: DELETE participants |
 | `moja_ing_putParticipantsByTypeIDAndSubID_*` | histogram | Ingress: PUT participants |
 | `moja_ing_putParticipantsErrorByTypeAndID_*` | histogram | Ingress: participants error callback |
+| `moja_ing_putParticipantsErrorByTypeIDAndSubID_*` | histogram | Ingress: participants error (sub ID) |
 | `moja_getPartiesByTypeAndID_*` | histogram | Domain: parties lookup |
 | `moja_putPartiesByTypeAndID_*` | histogram | Domain: parties callback |
+| `moja_putPartiesErrorByTypeAndID_*` | histogram | Domain: parties error |
 | `moja_getParticipantsByTypeAndID_*` | histogram | Domain: participants lookup |
 | `moja_postParticipants_*` | histogram | Domain: register participant |
 | `moja_deleteParticipants_*` | histogram | Domain: deregister participant |
+| `moja_putParticipantsByTypeAndID_*` | histogram | Domain: PUT participants |
+| `moja_putParticipantsErrorByTypeAndID_*` | histogram | Domain: participants error |
 | `moja_fetchParticipant_*`, `moja_fetchParticipants_*` | histogram | Participant fetch operations |
-| `moja_egress_sendRequestToParticipant_*` | histogram | Egress: outbound request |
+| `moja_egress_sendRequestToParticipant_*` | histogram | Egress: outbound FSPIOP request |
 | `moja_egress_getParticipantEndpoint_*` | histogram | Egress: endpoint resolution |
 | `moja_egress_validateParticipant_*` | histogram | Egress: participant validation |
 | `moja_egress_oracleRequest_*` | histogram | Egress: oracle lookup |
-| `moja_model_externalParticipant_*` | histogram | External participant model (new) |
-| `moja_model_oracleEndpoints_*` | histogram | Oracle endpoints model (new) |
-| `moja_model_participant_batch_*` | histogram | Batch participant model (new) |
+| `moja_model_oracleEndpoints_*` | histogram | Oracle endpoints model |
 | `moja_getEndpoint_*` | histogram | Generic endpoint resolution |
 | `moja_getParticipant_*` | histogram | Generic participant fetch |
 | `moja_sendRequest_*` | histogram | Generic outbound request |
+| + Node.js runtime | | |
 
-Node.js runtime (all services):
+**ML API Adapter Service** (`ml-api-adapter-service`) — 56 metrics:
+
+| Metric | Type | Use |
+|--------|------|-----|
+| `moja_ml_transfer_prepare_*` | histogram | API adapter prepare (inbound) |
+| `moja_ml_transfer_fulfil_*` | histogram | API adapter fulfil |
+| `moja_ml_transfer_fulfil_error_*` | histogram | API adapter fulfil errors |
+| `moja_ml_transfer_get_*` | histogram | API adapter get |
+| `moja_ml_fx_transfer_prepare_*` | histogram | FX prepare (inbound) |
+| `moja_ml_fx_transfer_fulfil_*` | histogram | FX fulfil |
+| `moja_ml_fx_transfer_fulfil_error_*` | histogram | FX fulfil errors |
+| `moja_ml_fx_transfer_get_*` | histogram | FX get |
+| + Node.js runtime | | |
+
+**ML API Adapter Notification Handler** (`ml-api-adapter-handler-notification`) — 69 metrics:
+
+| Metric | Type | Use |
+|--------|------|-----|
+| `moja_tx_transfer_*` | histogram | End-to-end transaction latency |
+| `moja_tx_transfer_prepare_*` | histogram | E2E prepare phase |
+| `moja_tx_transfer_fulfil_*` | histogram | E2E fulfil phase |
+| `moja_notification_event_*` | histogram | Notification event processing |
+| `moja_notification_event_delivery_*` | histogram | Notification delivery to DFSP |
+| `moja_notification_event_getEndpoint_*` | histogram | Endpoint resolution |
+| `moja_notification_event_getEndpoint_fx_*` | histogram | FX endpoint resolution |
+| `moja_notification_event_process_msg_*` | histogram | Message processing |
+| `moja_sendRequest_*` | histogram | Outbound HTTP request |
+| `moja_getEndpoint_*` | histogram | Endpoint lookup |
+| `moja_fetchParticipants_*` | histogram | Participant fetch |
+| + Node.js runtime | | |
+
+**Role Assignment Service** (`role-assignment-service`) — Runtime only (`moja_ra_api*` prefix):
+
+Note: the `moja_ra_api` prefix is a concatenation artifact (`moja_` + service prefix `ra_api` + metric name). These follow the same Node.js runtime schema as other services.
+
+**Simulator** (`simulator`) — Runtime metrics only. No business metrics (`moja_sim_*` from legacy is gone).
+
+#### Node.js Runtime (shared by all services)
+
+All 13 services emit identical runtime metrics, differentiated by the `service` label:
 
 | Metric | Use |
 |--------|-----|
@@ -384,14 +478,56 @@ Node.js runtime (all services):
 | `moja_process_open_fds`, `moja_process_max_fds` | File descriptor usage |
 | `moja_nodejs_version_info` | Node.js version |
 
-Reporting API runtime (`moja_ra_api*` prefix):
+#### Transfer Pipeline Flow (metric → service mapping)
 
-| Metric | Use |
-|--------|-----|
-| `moja_ra_apinodejs_heap_size_*`, `moja_ra_apinodejs_eventloop_lag_*` | Same Node.js runtime metrics, different prefix |
-| `moja_ra_apiprocess_cpu_seconds_total`, `moja_ra_apiprocess_resident_memory_bytes` | Process metrics |
+This shows how a transfer flows through the system and which service emits metrics at each stage:
 
-Note: the `moja_ra_api` prefix appears to be a concatenation artifact (`moja_` + service prefix `ra_api` + metric name). These follow the same Node.js runtime schema.
+```
+DFSP → ML API Adapter Service (moja_ml_transfer_prepare)
+     → Kafka topic
+     → CL Handler Prepare (moja_transfer_prepare, moja_handler_transfers,
+                           moja_handlers_transfer_validator,
+                           moja_domain_transfer, moja_model_transfer,
+                           moja_model_participant)
+     → Kafka topic
+     → CL Handler Position (moja_transfer_position, moja_domain_position,
+                            moja_model_position)
+       OR Handler Pos-Batch (moja_transfer_position_batch,
+                             moja_model_settlementModel)
+     → Kafka topic
+     → ML API Adapter Notification (moja_notification_event,
+                                     moja_notification_event_delivery,
+                                     moja_tx_transfer — E2E latency)
+     → DFSP callback
+
+Fulfil path:
+DFSP → ML API Adapter Service (moja_ml_transfer_fulfil)
+     → Kafka topic
+     → CL Handler Fulfil (moja_transfer_fulfil, moja_domain_transfer,
+                          moja_model_transfer)
+     → Kafka topic
+     → CL Handler Position (moja_transfer_position)
+     → Kafka topic
+     → ML API Adapter Notification (moja_tx_transfer_fulfil — E2E)
+     → DFSP callback
+
+Party lookup:
+DFSP → ALS (moja_ing_getPartiesByTypeAndID)
+     → ALS domain (moja_getPartiesByTypeAndID,
+                    moja_egress_oracleRequest,
+                    moja_egress_sendRequestToParticipant)
+     → DFSP callback (moja_ing_putPartiesByTypeAndID)
+```
+
+#### Services Not Observed
+
+The following services from legacy are not present in ml-test metric data:
+
+| Service | Legacy prefix | Status |
+|---------|--------------|--------|
+| Quoting Service | `moja_qs_*` | Not deployed on ml-test (or no annotations) |
+| Mojaloop Connector | `moja_mc_*` | Not deployed |
+| Bulk API Adapter | — | Not deployed |
 
 ### Additional Runtime Metrics (from Go services on the cluster)
 
