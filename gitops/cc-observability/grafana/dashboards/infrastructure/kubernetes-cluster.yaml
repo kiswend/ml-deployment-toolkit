@@ -138,7 +138,7 @@ data:
           "options": { "colorMode": "background", "graphMode": "none" }
         },
         {
-          "title": "OOM Events (24h)",
+          "title": "OOMKilled Containers",
           "type": "stat",
           "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
           "datasource": { "uid": "thanos" },
@@ -156,8 +156,8 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(increase(container_oom_events_total{cluster_name=\"$cluster_name\"}[24h])) or vector(0)",
-              "legendFormat": "OOMs"
+              "expr": "count(kube_pod_container_status_last_terminated_reason{cluster_name=\"$cluster_name\", reason=\"OOMKilled\"} == 1) or vector(0)",
+              "legendFormat": "OOMKilled"
             }
           ],
           "options": { "colorMode": "background", "graphMode": "none" }

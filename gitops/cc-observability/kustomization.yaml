@@ -37,3 +37,4 @@ resources:
   - grafana/dashboards/mojaloop/transfer-pipeline.yaml
   - grafana/dashboards/mojaloop/account-lookup-service.yaml
   - grafana/dashboards/mojaloop/nodejs-runtime.yaml
+  - grafana/dashboards/mojaloop/quoting-service.yaml
