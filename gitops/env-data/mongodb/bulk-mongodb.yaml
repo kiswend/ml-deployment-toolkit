@@ -86,6 +86,7 @@ spec:
           args:
             - --compatible-mode
             - --discovering-mode
+            - --collect-all
           env:
             - name: MONGODB_URI
               value: "mongodb://clusterMonitor:${mongodb_root_password}@localhost:27017/admin?ssl=false"
