@@ -22,6 +22,10 @@ resources:
   - grafana/dashboards/infrastructure/pod-resources.yaml
   - grafana/dashboards/infrastructure/coredns.yaml
   - grafana/dashboards/infrastructure/cilium-network.yaml
+  - grafana/dashboards/infrastructure/kube-apiserver.yaml
+  - grafana/dashboards/infrastructure/kubelet.yaml
+  - grafana/dashboards/infrastructure/persistent-volumes.yaml
+  - grafana/dashboards/infrastructure/namespace-resources.yaml
 
   # Grafana Dashboards — Data Layer
   - grafana/dashboards/data-layer/mysql-overview.yaml

@@ -40,7 +40,7 @@ h2c1w3:
     - name: w-0
       placement_group: placement-group-1
       cores: 8
-      memory: 9216
+      memory: 10240
       workload_class: worker-general
       storage:
         - storage_pool: local-lvm
@@ -56,7 +56,7 @@ h2c1w3:
     - name: w-1
       placement_group: placement-group-2
       cores: 8
-      memory: 9216
+      memory: 10240
       workload_class: worker-general
       storage:
         - storage_pool: local-lvm
@@ -72,7 +72,7 @@ h2c1w3:
     - name: w-2
       placement_group: placement-group-2
       cores: 8
-      memory: 9216
+      memory: 10240
       workload_class: worker-general
       storage:
         - storage_pool: local-lvm
