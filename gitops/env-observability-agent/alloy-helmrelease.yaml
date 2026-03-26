@@ -28,7 +28,7 @@ spec:
   values:
     # Deploy as DaemonSet (one pod per node for log collection)
     controller:
-      type: daemonset
+      type: deployment
 
     # Alloy configuration using River syntax
     alloy:
