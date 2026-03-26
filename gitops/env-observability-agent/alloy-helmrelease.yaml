@@ -26,6 +26,15 @@ spec:
     remediation:
       retries: 3
   values:
+    # Alloy resource limits — Goldilocks target ~1.48Gi
+    alloy:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          memory: 1536Mi
+
     # Deploy as DaemonSet (one pod per node for log collection)
     controller:
       type: daemonset
