@@ -491,18 +491,9 @@ spec:
     thirdparty:
       enabled: false
 
-    # --- Simulator ---
+    # --- Simulator (disabled — frees ~3.5Gi on memory-constrained cluster) ---
     mojaloop-simulator:
-      enabled: true
-      defaults:
-        config:
-          schemeAdapter:
-            resources:
-              requests:
-                cpu: 50m
-                memory: 256Mi
-              limits:
-                memory: 512Mi
+      enabled: false
 
     # --- Feature Flags ---
     forensicloggingsidecar:
