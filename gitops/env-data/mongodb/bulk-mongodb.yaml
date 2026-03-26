@@ -110,10 +110,10 @@ spec:
               memory: 64Mi
       resources:
         requests:
-          memory: 512Mi
-          cpu: 250m
+          memory: 128Mi
+          cpu: 100m
         limits:
-          memory: 1Gi
+          memory: 256Mi
           cpu: 500m
       volumeSpec:
         persistentVolumeClaim:

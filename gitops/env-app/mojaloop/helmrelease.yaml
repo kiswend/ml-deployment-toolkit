@@ -494,6 +494,15 @@ spec:
     # --- Simulator ---
     mojaloop-simulator:
       enabled: true
+      defaults:
+        config:
+          schemeAdapter:
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 512Mi
 
     # --- Feature Flags ---
     forensicloggingsidecar:
