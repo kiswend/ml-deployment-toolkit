@@ -163,7 +163,7 @@ spec:
               enabled: true
               config:
                 providers:
-                  - id: keycloak
+                  - id: hub-operators
                     provider: generic
                     client_id: hub-op
                     client_secret: "${hubop_oidc_secret}"
@@ -173,6 +173,16 @@ spec:
                       - email
                     mapper_url: "base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7Cgp7CiAgaWRlbnRpdHk6IHsKICAgIHRyYWl0czogewogICAgICBlbWFpbDogY2xhaW1zLmVtYWlsLAogICAgICBuYW1lOiBjbGFpbXMubmFtZSwKICAgICAgc3ViamVjdDogY2xhaW1zLnN1YgogICAgfSwKICB9LAp9Cg=="
                     issuer_url: "https://keycloak.int.${domain}/realms/hub-operators"
+                  - id: dfsps
+                    provider: generic
+                    client_id: dfsp-oidc
+                    client_secret: "${dfsp_oidc_client_secret}"
+                    scope:
+                      - openid
+                      - profile
+                      - email
+                    mapper_url: "base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7Cgp7CiAgaWRlbnRpdHk6IHsKICAgIHRyYWl0czogewogICAgICBlbWFpbDogY2xhaW1zLmVtYWlsLAogICAgICBuYW1lOiBjbGFpbXMubmFtZSwKICAgICAgc3ViamVjdDogY2xhaW1zLnN1YgogICAgfSwKICB9LAp9Cg=="
+                    issuer_url: "https://keycloak.int.${domain}/realms/dfsps"
 
           flows:
             login:
@@ -195,6 +205,25 @@ spec:
                             name: Authorization
                             value: Bearer kratos-webhook-token
                             in: header
+
+            registration:
+              after:
+                oidc:
+                  hooks:
+                    - hook: web_hook
+                      config:
+                        url: http://kratos-role-webhook.ory.svc.cluster.local/inject-roles
+                        method: POST
+                        body: file:///etc/config/role-injection-body.jsonnet
+                        response:
+                          parse: false
+                        auth:
+                          type: api_key
+                          config:
+                            name: Authorization
+                            value: Bearer kratos-webhook-token
+                            in: header
+                    - hook: session
 
             logout:
               after:

@@ -1,13 +1,18 @@
 # cert-manager Certificate for the mTLS listener's server identity
+# Issued by Vault PKI (scheme CA) via server-cert-role, NOT Let's Encrypt.
+# DFSPs validate this cert against the scheme CA.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: extapi-mtls-tls
+  name: extapi-tls
   namespace: mojaloop
 spec:
-  secretName: extapi-mtls-tls
+  secretName: extapi-tls
+  duration: 720h      # 30 days
+  renewBefore: 360h   # renew 15 days before expiry
   issuerRef:
-    name: letsencrypt-prod
+    name: vault-pki-issuer
     kind: ClusterIssuer
+  commonName: "extapi.${domain}"
   dnsNames:
-    - "extapi.ext.${domain}"
+    - "extapi.${domain}"

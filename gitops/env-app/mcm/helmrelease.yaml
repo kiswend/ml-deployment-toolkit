@@ -1,12 +1,3 @@
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: HelmRepository
-metadata:
-  name: pm4ml
-  namespace: flux-system
-spec:
-  interval: 24h
-  url: https://pm4ml.github.io/helm
----
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -17,10 +8,10 @@ spec:
   chart:
     spec:
       chart: connection-manager
-      version: "1.3.x"
+      version: "1.4.0"
       sourceRef:
         kind: HelmRepository
-        name: pm4ml
+        name: mojaloop
       interval: 12h
   releaseName: mcm
   targetNamespace: mcm
@@ -44,8 +35,15 @@ spec:
 
     api:
       url: "https://mcm.int.${domain}"
+      clientUrl: "https://mcm.int.${domain}"
       switchFQDN: "${domain}"
       switchId: "hub-${domain}"
+
+      openid:
+        enabled: true
+        clientId: mcm-portal
+        clientSecretName: mcm-oidc-client-secret
+        clientSecretKey: secret
 
       keycloak:
         enabled: true
@@ -56,6 +54,11 @@ spec:
         adminClientSecretKey: secret
         dfspsRealm: dfsps
         autoCreateAccounts: true
+
+      certManager:
+        enabled: true
+        serverCertSecretName: extapi-tls
+        serverCertSecretNamespace: mojaloop
 
       vault:
         auth:
@@ -87,7 +90,7 @@ spec:
       checkSessionUrl: "https://mcm.int.${domain}/kratos/sessions/whoami"
       loginUrl: "https://auth.int.${domain}/kratos/self-service/login/browser"
       loginProvider: keycloak
-      logoutUrl: "/kratos/self-service/logout/browser"
+      logoutUrl: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Fkeycloak.int.${domain}%2Frealms%2Fdfsps%2Fprotocol%2Fopenid-connect%2Flogout"
       oauth:
         enabled: true
         hubOidcProviderUrl: "https://keycloak.int.${domain}/realms/dfsps/protocol/openid-connect"

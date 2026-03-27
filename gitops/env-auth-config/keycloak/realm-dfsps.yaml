@@ -26,6 +26,9 @@ spec:
         - name: operator
           description: "DFSP operator"
 
+    groups:
+      - name: Application
+
     clients:
       - clientId: mcm-portal
         name: MCM Portal
@@ -33,7 +36,8 @@ spec:
         publicClient: false
         standardFlowEnabled: true
         directAccessGrantsEnabled: true
-        serviceAccountsEnabled: false
+        serviceAccountsEnabled: true
+        clientAuthenticatorType: client-secret
         protocol: openid-connect
         rootUrl: "https://mcm.int.${domain}"
         baseUrl: /
@@ -57,6 +61,50 @@ spec:
               multivalued: "true"
               id.token.claim: "true"
               access.token.claim: "true"
+              userinfo.token.claim: "true"
+
+      - clientId: dfsp-oidc
+        name: DFSP Portal Login
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        implicitFlowEnabled: false
+        clientAuthenticatorType: client-secret
+        protocol: openid-connect
+        secret: "${dfsp_oidc_client_secret}"
+        defaultClientScopes:
+          - web-origins
+          - profile
+          - roles
+          - email
+        redirectUris:
+          - "https://mcm.int.${domain}/*"
+          - "https://auth.int.${domain}/*"
+        webOrigins:
+          - "https://mcm.int.${domain}"
+          - "https://auth.int.${domain}"
+        protocolMappers:
+          - name: groups
+            protocol: openid-connect
+            protocolMapper: oidc-group-membership-mapper
+            consentRequired: false
+            config:
+              full.path: "true"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              claim.name: groups
+              userinfo.token.claim: "true"
+          - name: realm roles
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-realm-role-mapper
+            consentRequired: false
+            config:
+              multivalued: "true"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              claim.name: realm_roles
               userinfo.token.claim: "true"
 
     clientScopes:
@@ -156,3 +204,22 @@ spec:
               id.token.claim: "true"
               access.token.claim: "true"
               userinfo.token.claim: "true"
+
+    smtpServer:
+      host: "${smtp_host}"
+      port: "${smtp_port}"
+      from: "noreply@${domain}"
+      fromDisplayName: "Mojaloop"
+      auth: "true"
+      user: "${smtp_user}"
+      password: "${smtp_password}"
+      ssl: "false"
+      starttls: "true"
+
+    users:
+      - username: service-account-mcm-portal
+        enabled: true
+        serviceAccountClientId: mcm-portal
+        clientRoles:
+          realm-management:
+            - realm-admin

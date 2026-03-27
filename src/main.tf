@@ -148,6 +148,12 @@ module "flux_config" {
   hubop_oidc_secret       = var.hubop_oidc_secret
   mcm_oidc_client_secret  = var.mcm_oidc_client_secret
   role_assign_svc_secret  = var.role_assign_svc_secret
+  dfsp_oidc_client_secret = var.dfsp_oidc_client_secret
+
+  smtp_host     = var.smtp_host
+  smtp_port     = var.smtp_port
+  smtp_user     = var.smtp_user
+  smtp_password = var.smtp_password
 
   onboarding_hub_name           = var.onboarding_hub_name
   onboarding_funds_in           = var.onboarding_funds_in

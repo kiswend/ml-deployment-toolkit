@@ -169,7 +169,7 @@ data:
     {{ end }}{{ end }}
     ---
     # Combined CA bundle: concatenation of all DFSP CA certificates.
-    # Referenced by the inbound extapi-mtls CiliumEnvoyConfig for client cert verification.
+    # Referenced by the inbound cilium-gateway-gw-extapi CiliumEnvoyConfig for client cert verification.
     # When a DFSP connects, Envoy validates their client cert against this bundle.
     apiVersion: v1
     kind: Secret
