@@ -16,7 +16,7 @@ Dashboards are provisioned via **Grafana sidecar + ConfigMaps** (not CRDs, not i
 |----------------|-----------|---------|
 | Infrastructure | `gitops/cc-observability/grafana/dashboards/infrastructure/` | Node, cluster, namespace, pod-level resource monitoring |
 | Data Layer | `gitops/cc-observability/grafana/dashboards/data-layer/` | MySQL/PXC, Kafka, Redis, MongoDB |
-| Mojaloop | `gitops/cc-observability/grafana/dashboards/mojaloop/` | Application-level transfer, ALS, notification metrics |
+| Mojaloop | `gitops/cc-observability/grafana/dashboards/mojaloop/` | Application-level transfer, quoting, ALS, notification metrics |
 | Platform | `gitops/cc-observability/grafana/dashboards/platform/` | Loki, Thanos, Flux, Cilium (deferred — requires ml-cc self-scrape) |
 
 ### ConfigMap Format
@@ -115,7 +115,8 @@ Key metrics for dashboards:
 | `container_memory_working_set_bytes` | Container memory (OOM killer basis) |
 | `container_memory_rss`, `container_memory_cache` | Memory breakdown |
 | `container_memory_usage_bytes` | Total container memory |
-| `container_oom_events_total` | OOM kills |
+| `container_oom_events_total` | OOM kills (unreliable — always 0 in practice, resets on pod restart) |
+| `kube_pod_container_status_last_terminated_reason` | OOM detection (use `reason="OOMKilled"`, reliable — used in kubernetes-cluster dashboard) |
 | `container_network_receive_bytes_total`, `container_network_transmit_bytes_total` | Container network |
 | `container_fs_usage_bytes`, `container_fs_limit_bytes` | Container filesystem |
 | `container_spec_cpu_quota`, `container_spec_cpu_period` | CPU limits (for limit % calculation) |
@@ -273,15 +274,24 @@ PXC / Galera cluster metrics:
 | `redis_allocator_frag_ratio`, `redis_allocator_rss_ratio` | Allocator health |
 | `redis_latency_percentiles_usec` | Command latency percentiles |
 
-### MongoDB Metrics
+### MongoDB Metrics (3,593 metrics)
 
-**Source: PSMDB operator built-in exporter (port 9216)**
+**Source: PSMDB operator built-in exporter (port 9216, `--collect-all` flag)**
 
-| Metric | Status |
-|--------|--------|
-| `mongodb_up` | Only metric collected |
-
-The PSMDB exporter is not exposing operational metrics. This needs investigation — see Known Gaps.
+| Metric | Use |
+|--------|-----|
+| `mongodb_up` | Instance availability |
+| `mongodb_ss_connections` | Current connections by state |
+| `mongodb_ss_opcounters` | Operation counters (insert, query, update, delete, command) |
+| `mongodb_ss_mem_resident`, `mongodb_ss_mem_virtual` | Memory usage |
+| `mongodb_ss_network_bytesIn`, `mongodb_ss_network_bytesOut` | Network throughput |
+| `mongodb_ss_wt_cache_bytes_currently_in_the_cache` | WiredTiger cache usage |
+| `mongodb_ss_wt_cache_maximum_bytes_configured` | WiredTiger cache limit |
+| `mongodb_ss_globalLock_currentQueue_*` | Lock queue depth |
+| `mongodb_ss_globalLock_activeClients_*` | Active client connections |
+| `mongodb_collstats_latencyStats_*` | Per-collection operation latency |
+| `mongodb_replset_*` | Replica set status and member health |
+| `mongodb_asserts_total` | Assert counters |
 
 ### Mojaloop Application Metrics (396 metrics)
 
@@ -313,6 +323,8 @@ The `service` label is derived from `app.kubernetes.io/name` pod label by Alloy.
 | `ml-api-adapter-service` | `moja-ml-api-adapter-service-*` | 2 | ML API Adapter (inbound) |
 | `ml-api-adapter-handler-notification` | `moja-ml-api-adapter-handler-notification-*` | 2 | Notification handler (E2E, outbound) |
 | `role-assignment-service` | `fin-portal-role-assignment-service-*` | 2 | Finance Portal role assignment |
+| `quoting-service` | `moja-quoting-service-*` | 1 | Quoting Service (port 3002) |
+| `quoting-service-handler` | `moja-quoting-service-handler-*` | 1 | Quoting Service Handler (port 3003) |
 | `simulator` | `moja-simulator-*` | 2 | Test simulator |
 
 All pods run in the `mojaloop` namespace. All services expose metrics on annotated ports (mostly 3001, some on 3000, 3008, 4002, 8444).
@@ -456,6 +468,20 @@ Note: CL Service is the REST API — it does not emit transfer pipeline metrics.
 
 Note: the `moja_ra_api` prefix is a concatenation artifact (`moja_` + service prefix `ra_api` + metric name). These follow the same Node.js runtime schema as other services.
 
+**Quoting Service** (`quoting-service`, `quoting-service-handler`) — 50 metrics per pod:
+
+| Metric | Type | Use |
+|--------|------|-----|
+| `moja_quotes_post_*` | histogram | POST /quotes handler latency and count |
+| `moja_quotes_id_get_*` | histogram | GET /quotes/{id} handler |
+| `moja_quotes_id_put_*` | histogram | PUT /quotes/{id} handler (callback) |
+| `moja_quotes_id_put_error_*` | histogram | PUT /quotes/{id}/error handler |
+| `moja_model_quote_*` | histogram | Quote model layer processing |
+| `moja_database_get_cache_value_*` | histogram | DB cache hit/miss by queryName (shared metric, filter by `pod=~".*quoting.*"`) |
+| + Node.js runtime (`moja_nodejs_*`, `moja_process_*`) | | |
+
+All metrics have a `success` label (true/false) for error breakdown. Enabled via prometheus scrape annotations added in commit e507dbd.
+
 **Simulator** (`simulator`) — Runtime metrics only. No business metrics (`moja_sim_*` from legacy is gone).
 
 #### Node.js Runtime (shared by all services)
@@ -525,7 +551,6 @@ The following services from legacy are not present in ml-test metric data:
 
 | Service | Legacy prefix | Status |
 |---------|--------------|--------|
-| Quoting Service | `moja_qs_*` | Not deployed on ml-test (or no annotations) |
 | Mojaloop Connector | `moja_mc_*` | Not deployed |
 | Bulk API Adapter | — | Not deployed |
 
@@ -564,14 +589,9 @@ The Strimzi operator pod needs Prometheus scrape annotations to expose `strimzi_
 
 ### 3. MongoDB Exporter
 
-**Status:** Needs investigation
+**Status:** Fixed (commits b69af50, 7640e2b)
 
-Only `mongodb_up` is being collected from the PSMDB operator's built-in exporter. Expected metrics (`mongodb_ss_*`, `mongodb_mongod_*`) are absent. Possible causes:
-- Exporter not enabled in PSMDB CR
-- Exporter running but metrics path/port mismatch
-- Service annotations missing or incorrect
-
-**File to check:** `gitops/env-data/mongodb/` (PSMDB CR and metrics service)
+Fixed by correcting auth URI (Flux substitution) and adding `--collect-all` flag. Now collecting 3593 metrics (`mongodb_*`) including `mongodb_ss_*`, `mongodb_collstats_*`, `mongodb_replset_*`.
 
 ### 4. ml-cc Self-Scrape
 
