@@ -8,8 +8,8 @@ Hub-and-spoke model: centralized backend on the Control Center (CC) cluster, lig
 
 | Signal | CC Backend | Env Agent | License | CNCF |
 |--------|-----------|-----------|---------|------|
-| **Metrics** | Thanos (Receive + Query + Store Gateway + Compactor) | Grafana Alloy (DaemonSet with clustering) | Apache 2.0 | Incubating |
-| **Logs** | Loki (SingleBinary) | Grafana Alloy (DaemonSet) | AGPL 3.0 | — |
+| **Metrics** | Thanos (Receive + Query + Store Gateway + Compactor) | Grafana Alloy (Deployment, single instance) | Apache 2.0 | Incubating |
+| **Logs** | Loki (SingleBinary) | Grafana Alloy (Deployment, single instance) | AGPL 3.0 | — |
 | **Traces** | Tempo (SingleBinary) | (Phase 3 — not yet active) | AGPL 3.0 | — |
 | **Dashboards** | Grafana | — | AGPL 3.0 | — |
 
@@ -80,7 +80,7 @@ Kubernetes (observability namespace)
 ```
 App Environment (ml-test)                 Control Center (ml-cc)
 ┌──────────────────────────┐              ┌─────────────────────────────┐
-│ Alloy (DaemonSet x4)    │              │ observability namespace      │
+│ Alloy (Deployment x1)   │              │ observability namespace      │
 │ ├─ Pod discovery:        │  HTTPS       │                             │
 │ │  ├─ Mojaloop apps (20) │──remote────→│ Thanos Receive (:19291)     │
 │ │  └─ Finance Portal     │  write       │   ↓ writes TSDB blocks      │
@@ -113,7 +113,7 @@ Alloy uses **two discovery mechanisms** to avoid duplication while covering all 
 
 Pod discovery scrapes each pod directly. Endpoint discovery resolves headless services to individual pod IPs, giving per-instance granularity for clustered data services.
 
-**Clustering**: All scrape jobs use Alloy clustering (`clustering.enabled = true`) so the 4 DaemonSet pods shard targets among themselves — no duplicate scrapes.
+**Single instance**: Alloy runs as a single-replica Deployment (not DaemonSet). All scrape targets and log collection are handled by one pod. Log collection uses `loki.source.kubernetes` (Kubernetes API-based, not filesystem-based), so it works from any node without requiring a per-node DaemonSet.
 
 ### Infrastructure Metrics
 
@@ -143,10 +143,9 @@ Mojaloop Node.js services natively expose Prometheus metrics on their HTTP port 
 | Metric prefix | Services |
 |--------------|----------|
 | `moja_ml_*` | ml-api-adapter-service, ml-api-adapter-handler-notification |
-| `moja_cl_*` | centralledger-service, all centralledger handlers (prepare, position, get, fulfil, timeout, admin), handler-pos-batch |
-| `moja_qs_*` | quoting-service, quoting-service-handler |
-| `moja_cs_*` | centralsettlement-service, centralsettlement handlers |
-| `moja_als_*` | account-lookup-service, account-lookup-service-admin, als-msisdn-oracle |
+| `moja_*` | All other services: centralledger handlers, quoting-service, account-lookup-service, etc. |
+
+Note: Legacy docs reference service-specific prefixes (`moja_cl_*`, `moja_qs_*`, `moja_als_*`, `moja_cs_*`) — these no longer exist. Current Mojaloop versions use a flat `moja_` prefix. Only `moja_ml_*` retains a service-specific prefix. See `doc/grafana-dashboards.md` for the full metric mapping.
 
 Scraped via Alloy **pod discovery** — each pod with `prometheus.io/scrape=true` is scraped individually.
 
@@ -216,4 +215,8 @@ The `rendering/*/vendor/` directories (Jsonnet dependencies) are git-ignored —
 - **Thanos block shipping**: TSDB blocks are shipped to S3 every ~2 hours. Data loss window on Receive pod crash is up to 2 hours of metrics (mitigated by WAL replay on restart).
 - **No CC self-monitoring**: The CC cluster does not scrape its own metrics (Thanos, Loki, Tempo, Grafana, Vault, Harbor, MinIO). Future work.
 - **No alerting**: No alert rules configured. Future work via Thanos Ruler or external alerting.
-- **No pre-built dashboards**: Grafana has datasources but no imported dashboards. Future work.
+- **16 Grafana dashboards** provisioned via ConfigMap sidecar across 3 folders:
+  - **Infrastructure** (8): Kubernetes Cluster, Node Overview, Pod Resources, CoreDNS, Cilium Network, Kube API Server, Kubelet, Persistent Volumes, Namespace Resources
+  - **Data Layer** (4): MySQL Overview, PXC/Galera Cluster, Kafka Overview, Redis Overview
+  - **Mojaloop** (4): Transfer Pipeline, Account Lookup Service, Quoting Service, Node.js Runtime
+  - See `doc/grafana-dashboards.md` for details.
