@@ -94,3 +94,87 @@ The upgrade must be done in **two pushes**:
 - Cilium 1.19 requires Gateway API CRDs v1.4.1 (current bootstrap uses v1.4.0, which works but should be bumped)
 - Cilium 1.19 tested matrix covers K8s 1.31–1.34; K8s 1.35 is untested but uses stable APIs
 - Never use semver ranges (e.g. `"1.19.x"`) — always pin exact versions to avoid surprise patch regressions
+
+---
+
+## MCM Vault Token Expiry — HTTP 500 on All Vault-Backed Operations
+
+**Date:** 2026-03-27
+**Affected component:** MCM (Connection Manager) API — `mojaloop/connection-manager-api`
+**Affected chart:** `mojaloop/connection-manager` v1.4.0 (image v3.1.2)
+**Status:** Mitigated — Vault role TTL increased to 768h in `gitops/env-auth/vault/vault.yaml`
+
+### Symptoms
+
+- MCM UI shows "There was an internal error. Please try again later" on PM4ML Credentials, TLS certificates, hub server certs, JWS certs, and any page that reads/writes Vault secrets
+- MCM API returns HTTP 500 on all Vault-backed endpoints (`/api/dfsps/*/credentials`, `/api/dfsps/*/enrollments/*`, `/api/hub/servercerts`, `/api/dfsps/jwscerts`)
+- Errors appear **after the MCM pod has been running for longer than the Vault token TTL** (default: 1 hour)
+- A pod restart immediately fixes the issue (until the token expires again)
+
+### Error
+
+```
+Error: 2 errors occurred:
+	* permission denied
+	* invalid token
+```
+
+```
+Error retrieving API credentials:
+  dfspId: "test-dfsp-107"
+  error: "2 errors occurred: * permission denied * invalid token"
+```
+
+### Root Cause
+
+MCM uses `node-vault` (a Node.js Vault HTTP client) which has **no token renewal logic**. The full library is 248 lines (`node_modules/node-vault/src/index.js`) with zero timers, renewal, or re-authentication:
+
+1. At startup, MCM calls `vault.kubernetesLogin({role: "mcm", jwt: <SA token>})`
+2. `node-vault` stores the returned `client_token` in `client.token` (a plain string property)
+3. Every subsequent Vault request uses this cached token via `X-Vault-Token` header
+4. After the Vault token TTL expires (configured on the `mcm` Kubernetes auth role), **all requests fail**
+5. `node-vault` has no mechanism to detect expiry or re-authenticate
+
+The Vault Kubernetes auth role `mcm` was configured with `ttl: 1h`, meaning every MCM pod became non-functional after 1 hour of uptime.
+
+### Mitigation
+
+Increased the Vault role TTL from `1h` to `768h` (32 days, Vault's default max lease TTL) in `gitops/env-auth/vault/vault.yaml`:
+
+```yaml
+auth:
+  - type: kubernetes
+    roles:
+      - name: mcm
+        ...
+        ttl: 768h   # was: 1h
+```
+
+This is safe because:
+- The token is bound to a K8s service account — if the pod dies, the token is orphaned and auto-revoked by Vault's periodic GC
+- No pod realistically runs 32 days without a deploy/restart cycle
+- Other Vault clients (cert-manager, ESO, vault-agent) handle token renewal internally; MCM is the only client affected
+
+### Workaround (immediate)
+
+If the error occurs before the TTL fix is deployed, restart the MCM API pod:
+
+```bash
+kubectl rollout restart deploy/mcm-connection-manager-api -n mcm
+```
+
+### Bug Report for MCM Dev Team
+
+**Repository:** `mojaloop/connection-manager-api`
+**Summary:** Vault token expires after TTL, causing all Vault operations to fail with `permission denied` + `invalid token`
+
+**Problem:** The `node-vault` library used by MCM (`node_modules/node-vault/src/index.js`) stores the Vault token as a plain string after `kubernetesLogin()` and never renews it. After the token's TTL expires, every Vault call fails. The library has no renewal, expiry detection, or re-authentication logic.
+
+**Impact:** All PKI operations (cert signing, enrollment, credentials) and KV operations (DFSP secrets) stop working. The MCM UI shows internal errors on most pages.
+
+**Suggested fix:** Either:
+1. Wrap `node-vault` calls with a token-refresh middleware that re-authenticates via `kubernetesLogin()` when a 403 is received
+2. Set up a periodic timer to call `vault.tokenRenewSelf()` before TTL expiry (node-vault exposes this method via its auto-generated commands)
+3. Replace `node-vault` with `@hashicorp/vault-client` or similar library that handles token lifecycle
+
+**Evidence:** `node-vault/src/index.js` line 80 sets `client.token` once; lines 222-227 update it only during login. No timer or renewal exists in the 248-line source.

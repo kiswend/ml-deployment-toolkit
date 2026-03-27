@@ -283,6 +283,40 @@ variable "role_assign_svc_secret" {
   sensitive   = true
 }
 
+variable "dfsp_oidc_client_secret" {
+  description = "DFSP OIDC client secret (dfsps realm, for Kratos DFSP login)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# --- SMTP Credentials ---
+
+variable "smtp_host" {
+  description = "SMTP server hostname for Keycloak invitation emails"
+  type        = string
+  default     = ""
+}
+
+variable "smtp_port" {
+  description = "SMTP server port"
+  type        = string
+  default     = "587"
+}
+
+variable "smtp_user" {
+  description = "SMTP authentication username"
+  type        = string
+  default     = ""
+}
+
+variable "smtp_password" {
+  description = "SMTP authentication password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # --- Backup S3 (CC MinIO or cloud S3) ---
 
 variable "backup_s3_endpoint" {

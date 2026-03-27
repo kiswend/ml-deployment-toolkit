@@ -80,6 +80,11 @@ spec:
   # Declarative Vault configuration (applied by bank-vaults sidecar after unseal)
   externalConfig:
     policies:
+      - name: pki-sign-server
+        rules: |
+          path "pki/sign/server-cert-role" {
+            capabilities = ["create", "update"]
+          }
       - name: mcm-policy
         # WHY KV-v1 paths (secret/X) instead of KV-v2 (secret/data/X):
         # MCM API v2.x uses node-vault which writes directly to secret/mcm/... paths.
@@ -124,11 +129,19 @@ spec:
           - name: mcm
             bound_service_account_names:
               - mcm
+              - connection-manager-api
               - mcm-connection-manager-api
               - vault-agent
             bound_service_account_namespaces:
               - mcm
             policies: mcm-policy
+            ttl: 768h
+          - name: cert-manager-vault-issuer
+            bound_service_account_names:
+              - vault-pki-issuer
+            bound_service_account_namespaces:
+              - cert-manager
+            policies: pki-sign-server
             ttl: 1h
           - name: external-secrets
             bound_service_account_names:

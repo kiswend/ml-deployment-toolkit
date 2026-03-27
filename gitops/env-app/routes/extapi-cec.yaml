@@ -2,23 +2,23 @@
 #
 # Runs on Cilium's existing Envoy DaemonSet (zero additional pods).
 # Terminates TLS with mutual authentication:
-#   - Server cert: extapi-mtls-tls (cert-manager, Let's Encrypt)
+#   - Server cert: extapi-tls (cert-manager, Let's Encrypt)
 #   - Client verification: dfsp-ca-bundle (vault-agent rendered, combined DFSP CAs)
 #
 # Routes requests by path prefix to Mojaloop backend services.
 apiVersion: cilium.io/v2
 kind: CiliumEnvoyConfig
 metadata:
-  name: extapi-mtls
+  name: cilium-gateway-gw-extapi
   namespace: mojaloop
 spec:
   services:
-    - name: extapi-mtls
+    - name: cilium-gateway-gw-extapi
       namespace: mojaloop
   resources:
     # --- Envoy Listener: TLS with mutual authentication ---
     - "@type": type.googleapis.com/envoy.config.listener.v3.Listener
-      name: extapi-mtls-listener
+      name: extapi-listener
       filter_chains:
         - transport_socket:
             name: envoy.transport_sockets.tls
@@ -27,7 +27,7 @@ spec:
               require_client_certificate: true
               common_tls_params:
                 tls_certificate_sds_secret_configs:
-                  - name: "mojaloop/extapi-mtls-tls"
+                  - name: "mojaloop/extapi-tls"
                     sds_config:
                       api_config_source:
                         api_type: GRPC

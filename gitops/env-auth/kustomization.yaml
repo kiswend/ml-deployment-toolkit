@@ -5,6 +5,7 @@ resources:
   - vault/vault-backup.yaml
   - vault/backup-s3-credentials.yaml
   - vault/secretstore.yaml
+  - vault/vault-pki-issuer.yaml
   - keycloak/operator.yaml
   - keycloak/keycloak.yaml
   - ory/externalsecret-kratos.yaml

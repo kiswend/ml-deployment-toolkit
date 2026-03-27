@@ -21,9 +21,9 @@ resources:
   - routes/keycloak-ext-httproute.yaml
   - routes/referencegrant-ext.yaml
   # extapi mTLS (DFSP-facing — mutual TLS via CiliumEnvoyConfig)
-  - routes/extapi-mtls-service.yaml
-  - routes/extapi-mtls-cert.yaml
-  - routes/extapi-mtls-cec.yaml
+  - routes/extapi-service.yaml
+  - routes/extapi-cert.yaml
+  - routes/extapi-cec.yaml
   # gw-int routes (internal ops)
   - routes/intapi-httproute.yaml
   - routes/ttk-httproute.yaml

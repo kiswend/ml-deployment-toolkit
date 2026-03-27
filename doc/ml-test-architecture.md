@@ -340,7 +340,7 @@ VAULT_CONFIG_PATH=mcm-agent/dfsp-101/config
 ml-test cluster:
 ├── platform-system/             # Gateway namespace
 │   ├── gw-test                  # Gateway (*.test.${domain})
-│   └── extapi-mtls-test         # CiliumEnvoyConfig (optional, if testing mTLS)
+│   └── extapi-test              # CiliumEnvoyConfig (optional, if testing mTLS)
 │
 ├── dfsp-101/                    # First test DFSP
 │   ├── sdk-scheme-adapter       # Pod with SDK + mcm-agent sidecar
@@ -543,7 +543,7 @@ Lifecycle:
 #### 4. With Mojaloop Core (ml cluster)
 ```
 Outbound (DFSP → Hub):
-SDK → CiliumEnvoyConfig (extapi-mtls) → Mojaloop Services
+SDK → CiliumEnvoyConfig (cilium-gateway-gw-extapi) → Mojaloop Services
 ├─ SDK uses client-cert.pem from mcm-agent
 └─ CEC validates against dfsp-ca-bundle (from MCM Vault Agent)
 
