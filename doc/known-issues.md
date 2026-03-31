@@ -178,3 +178,77 @@ kubectl rollout restart deploy/mcm-connection-manager-api -n mcm
 3. Replace `node-vault` with `@hashicorp/vault-client` or similar library that handles token lifecycle
 
 **Evidence:** `node-vault/src/index.js` line 80 sets `client.token` once; lines 222-227 update it only during login. No timer or renewal exists in the 248-line source.
+
+---
+
+## Database Migration Corruption on Fresh Deployments — Duplicate Key Name (Error 1061)
+
+**Date:** 2026-03-30
+**Affected components:** Any service using MySQL schema migrations — Kratos v1.3.1 (chart 0.55.0), Keto (chart 0.55.0), Keycloak (Liquibase)
+**Affected database:** Percona XtraDB Cluster 8.0.44
+**Status:** Fixed — increased HelmRelease timeout from default 5m to 15m
+
+### Symptoms
+
+- Pods stuck in `Init:Error` / `CrashLoopBackOff` on automigrate init containers
+- Keycloak stuck in `CrashLoopBackOff` during Liquibase migration
+- MySQL `Error 1061 (42000): Duplicate key name '<index_name>'` in migration logs
+- Observed index names: `identity_credential_identifiers_identifier_nid_uq_idx` (Kratos), `sessions_identity_id_nid_idx` (Kratos), `IDX_OFFLINE_CSS_PRELOAD` (Keycloak)
+- The error persists across pod restarts — every retry hits the same duplicate key
+
+### Root Cause
+
+A race condition between Flux HelmRelease remediation and database migrations during fresh deployments:
+
+1. Flux installs HelmReleases → Deployments created → pods start
+2. Init containers fail because secrets (from Vault via ESO) don't exist yet — Vault is still initializing
+3. After the default **5m Helm timeout**, Flux considers the install failed → triggers remediation → **uninstalls the entire release**, killing all pods — including any pod that may have started running migrations
+4. Flux retries (unlimited retries) → reinstalls → same cycle
+5. If a pod was mid-migration when killed, MySQL DDL statements (`CREATE INDEX`, `CREATE TABLE`) are **auto-committed immediately** by MySQL, but the migration tracking record (which marks the migration as complete) is rolled back because the process was terminated
+6. All subsequent migration attempts fail because the schema object (index/table) exists but the migration framework doesn't know it was already applied
+
+This affects any service that runs schema migrations against PXC during initial deployment, not just Kratos. Keycloak (Liquibase) and Keto are equally vulnerable.
+
+### Fix
+
+Increased `spec.timeout` from default 5m to **15m** on affected HelmReleases (`helmrelease-kratos.yaml`, `helmrelease-keto.yaml`). This gives dependencies (Vault, ESO, PXC) time to come online before Flux triggers remediation and kills pods mid-migration.
+
+```yaml
+spec:
+  timeout: 15m
+```
+
+Keycloak is managed by the Keycloak operator (not a direct HelmRelease with automigrate), so its migration runs inside the main container. The 15m timeout on the parent kustomization provides sufficient time.
+
+### Recovery (if corruption already occurred)
+
+On **fresh deployments with no user data**, drop and recreate the affected databases:
+
+```bash
+# Get the MySQL root password
+MYSQL_ROOT_PWD=$(kubectl get secret -n mojaloop mojaloop-db-secrets -o jsonpath='{.data.root}' | base64 -d)
+
+# Drop and recreate all affected databases in one command
+kubectl exec -n mojaloop mojaloop-db-pxc-0 -- mysql -u root -p"$MYSQL_ROOT_PWD" -e "
+  DROP DATABASE IF EXISTS kratos;   CREATE DATABASE kratos;
+  DROP DATABASE IF EXISTS keto;     CREATE DATABASE keto;
+  DROP DATABASE IF EXISTS keycloak; CREATE DATABASE keycloak;
+"
+
+# Restart affected pods to re-run migrations
+kubectl delete pod -n ory -l app.kubernetes.io/name=kratos
+kubectl delete pod -n ory -l app.kubernetes.io/name=keto
+kubectl delete pod -n keycloak keycloak-0
+```
+
+On **existing environments with user data**, do NOT drop databases. Instead, manually insert the missing migration record:
+
+```sql
+-- For Kratos: check which migration is failing in the logs, then insert it
+INSERT INTO kratos.schema_migration (version, version_self) VALUES (<missing_version>, 0);
+
+-- For Keycloak: mark the Liquibase changeset as executed
+INSERT INTO keycloak.DATABASECHANGELOG (ID, AUTHOR, FILENAME, DATEEXECUTED, ORDEREXECUTED, EXECTYPE, MD5SUM, DESCRIPTION)
+  SELECT '<changeset_id>', '<author>', '<filename>', NOW(), COALESCE(MAX(ORDEREXECUTED),0)+1, 'MARK_RAN', '', ''
+  FROM keycloak.DATABASECHANGELOG;
+```

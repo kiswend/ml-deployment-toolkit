@@ -36,3 +36,5 @@ spec:
     installCRDs: true
     config:
       enableGatewayAPI: true
+    prometheus:
+      enabled: true

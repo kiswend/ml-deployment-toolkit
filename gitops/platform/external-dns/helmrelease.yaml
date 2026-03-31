@@ -31,6 +31,9 @@ spec:
     remediation:
       retries: 3
   values:
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "7979"
     sources:
       - service
       - gateway-httproute

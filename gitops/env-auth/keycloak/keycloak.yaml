@@ -54,6 +54,11 @@ spec:
       value: xforwarded
   unsupported:
     podTemplate:
+      metadata:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9000"
+          prometheus.io/path: "/metrics"
       spec:
         initContainers:
           - name: build-keycloak
@@ -62,7 +67,7 @@ spec:
               - /bin/bash
               - -c
               - |
-                /opt/keycloak/bin/kc.sh build --db=mysql --transaction-xa-enabled=false --health-enabled=true --http-relative-path=/
+                /opt/keycloak/bin/kc.sh build --db=mysql --transaction-xa-enabled=false --health-enabled=true --metrics-enabled=true --event-metrics-user-enabled=true --http-relative-path=/
                 cp -r /opt/keycloak/lib/quarkus/* /quarkus-build/
             resources:
               requests:

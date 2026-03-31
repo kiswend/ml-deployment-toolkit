@@ -1,5 +1,5 @@
-# LoadBalancer Service that receives extapi.${domain} traffic.
-# CiliumEnvoyConfig intercepts traffic to this Service and applies mTLS verification.
+# LoadBalancer Service for extapi mTLS gateway.
+# Routes to the standalone Envoy Deployment that handles mTLS termination.
 apiVersion: v1
 kind: Service
 metadata:
@@ -9,8 +9,10 @@ metadata:
     external-dns.alpha.kubernetes.io/hostname: "extapi.${domain}"
 spec:
   type: LoadBalancer
+  selector:
+    app: extapi-envoy
   ports:
     - name: https
       port: 443
-      targetPort: 443
+      targetPort: 8443
       protocol: TCP

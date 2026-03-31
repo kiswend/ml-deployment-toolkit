@@ -8,11 +8,13 @@ resources:
   - vault/vault-pki-issuer.yaml
   - keycloak/operator.yaml
   - keycloak/keycloak.yaml
+  - keycloak/keycloak-metrics-service.yaml
   - ory/externalsecret-kratos.yaml
   - ory/externalsecret-keto.yaml
   - ory/helmrelease-kratos.yaml
   - ory/helmrelease-oathkeeper.yaml
   - ory/helmrelease-keto.yaml
+  - ory/keto-metrics-service.yaml
   - ory/helmrelease-selfservice-ui.yaml
   - ory/helmrelease-bof.yaml
   - ory/kratos-role-webhook.yaml

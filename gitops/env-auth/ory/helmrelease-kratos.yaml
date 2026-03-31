@@ -23,6 +23,7 @@ spec:
         name: ory
       interval: 12h
   targetNamespace: ory
+  timeout: 15m
   install:
     createNamespace: false
     remediation:
@@ -80,6 +81,13 @@ spec:
                 secretKeyRef:
                   name: kratos-secret
                   key: dsn
+
+    service:
+      admin:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "4434"
+          prometheus.io/path: "/metrics/prometheus"
 
     kratos:
       automigration:
