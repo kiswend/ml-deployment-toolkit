@@ -38,7 +38,7 @@ h2c1w3:
         - ml-master
 
     - name: w-0
-      placement_group: placement-group-1
+      placement_group: placement-group-2
       cores: 8
       memory: 10240
       workload_class: worker-general
@@ -70,7 +70,7 @@ h2c1w3:
         - ml-worker
 
     - name: w-2
-      placement_group: placement-group-2
+      placement_group: placement-group-1
       cores: 8
       memory: 10240
       workload_class: worker-general
@@ -508,3 +508,21 @@ h2c1w3k3d3:
       tags:
         - ml
         - ml-db
+
+h1m1-dfsp:
+  instances:
+    - name: m-0
+      placement_group: placement-group-1
+      cores: 8
+      memory: 4096
+      workload_class: mixed-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-mixed

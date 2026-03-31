@@ -36,13 +36,13 @@ infra:
 # ------------------------------------------------------------------
 # 2. DEPLOYMENT TOPOLOGY
 # ------------------------------------------------------------------
-template: "h2c1w4"  # h1m1 | h2c1w4 | h2c3w3 | h3c3w3
+template: "h1m1-dfsp"  # h1m1 | h2c1w4 | h2c3w3 | h3c3w3
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
 # ------------------------------------------------------------------
 cluster:
-  name: "test"
+  name: "ml-dfsp"
   role: "base"                        # cc | env — determines which gitops paths are deployed
 
   # Kubernetes API endpoint
@@ -57,7 +57,7 @@ cluster:
 # ------------------------------------------------------------------
 dns:
   provider: "digitalocean"
-  domain: "test.ml.delma.me"
+  domain: "dfsp.pj1.moja-do.delma.me"
 
   # For Cloudflare:
   # cloudflare:
@@ -72,7 +72,7 @@ dns:
 # ------------------------------------------------------------------
 app:
   lb_ipam:
-    range: "192.168.88.8-192.168.88.9"
+    range: "192.168.88.8-192.168.88.11"
   alert_email: "nathan@delma.me"
 
 # ------------------------------------------------------------------
@@ -99,4 +99,4 @@ oci:
   # Configured at Talos level (machine.registries.mirrors) so containerd routes pulls through Harbor
   proxy:
     active: true                   # Enable container image proxy through Harbor
-    url: "harbor.ml-cc.ml.delma.me"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+    url: "harbor.int.cc1.pj1.moja-do.delma.me"    # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)

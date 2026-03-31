@@ -493,7 +493,7 @@ spec:
 
     # --- Simulator (disabled — frees ~3.5Gi on memory-constrained cluster) ---
     mojaloop-simulator:
-      enabled: true
+      enabled: false
 
     # --- Feature Flags ---
     forensicloggingsidecar:

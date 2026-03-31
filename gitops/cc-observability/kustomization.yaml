@@ -33,6 +33,13 @@ resources:
   - grafana/dashboards/data-layer/redis-overview.yaml
   - grafana/dashboards/data-layer/kafka-overview.yaml
 
+  # Grafana Dashboards — Platform
+  - grafana/dashboards/platform/cert-manager.yaml
+  - grafana/dashboards/platform/external-dns.yaml
+  - grafana/dashboards/platform/vault.yaml
+  - grafana/dashboards/platform/keycloak.yaml
+  - grafana/dashboards/platform/ory-auth.yaml
+
   # Grafana Dashboards — Mojaloop
   - grafana/dashboards/mojaloop/transfer-pipeline.yaml
   - grafana/dashboards/mojaloop/account-lookup-service.yaml

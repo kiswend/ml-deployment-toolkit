@@ -36,7 +36,7 @@ This document describes the deployment architecture for Mojaloop infrastructure 
 | Certificates | cert-manager + Let's Encrypt | TLS automation, ACME DNS-01 issuers (supports Route53, Cloud DNS, DigitalOcean, Cloudflare, RFC-2136, and more) |
 | Ingress | Gateway API | Kubernetes-native ingress (replaces deprecated Ingress resource) |
 | Secrets | External Secrets Operator (ESO) | Vault/external secret store integration |
-| DFSP mTLS | CiliumEnvoyConfig | Inbound mTLS verification + outbound mTLS origination via Cilium's Envoy DaemonSet |
+| DFSP mTLS | Standalone Envoy (inbound) + CiliumEnvoyConfig (outbound) | Inbound mTLS verification via dedicated Envoy Deployment; outbound mTLS origination via Cilium's Envoy DaemonSet |
 
 **Vendor-specific services (deployed by per-provider GitOps kustomizations):**
 
@@ -474,16 +474,17 @@ Each App Environment uses three LoadBalancer IPs with distinct security profiles
   ┌──────────────────────────────────────────────────────────────────────────┐
   │                                                                          │
   │   gw-int (operators)        gw-ext (DFSPs — no mTLS)     gw-extapi     │
-  │   *.int.${domain} :443      *.ext.${domain} :443          (CEC — mTLS) │
-  │   TLS termination           TLS termination               extapi.      │
-  │   IP: A (LB-IPAM)          IP: B (LB-IPAM)               ${domain}:443│
-  │     │                        │                            IP: C (LB-IPAM)
-  │     ├── ttk.int.            ├── mcm.ext.                    │          │
-  │     ├── settlement.int.      ├── keycloak.ext.               │          │
-  │     ├── intapi.int.          │                               │          │
-  │     └── simulator.int.       │                      ┌────────┼────────┐ │
-  │           │                  │                      ▼        ▼        ▼ │
-  │     Oathkeeper → services    │                  account-  quoting  ml-api│
+  │   *.int.${domain} :443      *.ext.${domain} :443          (Envoy       │
+  │   TLS termination           TLS termination               Deployment   │
+  │   IP: A (LB-IPAM)          IP: B (LB-IPAM)               — mTLS)      │
+  │     │                        │                            extapi.      │
+  │     ├── ttk.int.            ├── mcm.ext.                  ${domain}:443│
+  │     ├── settlement.int.      ├── keycloak.ext.            IP: C        │
+  │     ├── intapi.int.          │                            (LB-IPAM)    │
+  │     └── simulator.int.       │                               │         │
+  │           │                  │                      ┌────────┼────────┐ │
+  │     Oathkeeper → services    │                      ▼        ▼        ▼ │
+  │                              │                  account-  quoting  ml-api│
   │                              │                  lookup    service  adapter│
   │                              │                  service           (inbound)
   │                              │                                          │
@@ -506,11 +507,11 @@ Each App Environment uses three LoadBalancer IPs with distinct security profiles
 |-------------|----------|-----------------|----------|---------|
 | `gw-int` | Hub operators, admin UIs | `*.int.${domain}` | TLS termination (SIMPLE) | Oathkeeper → internal services |
 | `gw-ext` | DFSPs (non-mTLS services) | `*.ext.${domain}` | TLS termination (SIMPLE) | MCM pm4mlapi, Keycloak OIDC |
-| `cilium-gateway-gw-extapi` | DFSPs (FSPIOP APIs) | `extapi.${domain}` | **mTLS** (client cert required) | CEC path routing → account-lookup, quoting, ml-api-adapter, transaction-requests |
+| `cilium-gateway-gw-extapi` | DFSPs (FSPIOP APIs) | `extapi.${domain}` | **mTLS** (client cert required) | Standalone Envoy Deployment → account-lookup, quoting, ml-api-adapter, transaction-requests |
 
-**Why three LBs instead of two?** Gateway API does not support `tls.mode: Mutual` — the HTTPS listener only supports `Terminate` (SIMPLE TLS). CiliumEnvoyConfig (CEC) provides native Envoy `DownstreamTlsContext` with `require_client_certificate: true`, but CEC requires its own LoadBalancer Service to intercept traffic. Sharing an IP between a Gateway (SIMPLE TLS) and a CEC (mTLS) on the same port 443 is not possible because Gateway API's TLSRoute Passthrough (the only mechanism for mixed TLS modes) is experimental (v1alpha2), has known bugs in Cilium, and is not spec-compliant when mixed with HTTPS Terminate listeners.
+**Why three LBs instead of two?** Gateway API does not support `tls.mode: Mutual` — the HTTPS listener only supports `Terminate` (SIMPLE TLS). The extapi endpoint requires mTLS with Vault PKI certificates (not Let's Encrypt), so it cannot share a Gateway with gw-int or gw-ext. A standalone Envoy Deployment handles mTLS termination behind its own LoadBalancer Service.
 
-Both `gw-int` and `gw-ext` Gateways are defined in `platform-config/` (deployed on all clusters). The `cilium-gateway-gw-extapi` CEC and its supporting resources are defined in `env-app/routes/` (deployed only on env clusters).
+Both `gw-int` and `gw-ext` Gateways are defined in `platform-config/` (deployed on all clusters). The extapi Envoy Deployment and its supporting resources are defined in `env-app/routes/` (deployed only on env clusters).
 
 ### Mojaloop PKI Model
 
@@ -559,7 +560,7 @@ Phase 4: Cleanup
   - Old CA decommissioned
 ```
 
-The critical invariant: **trust bundles are updated before certs are re-issued**. The cert swap itself is instantaneous (K8s Secret update → Cilium SDS hot-reload), but it never breaks a handshake because the other side already trusts both CAs.
+The critical invariant: **trust bundles are updated before certs are re-issued**. The cert swap itself is instantaneous (K8s Secret update → Envoy `watched_directory` hot-reload for inbound, Cilium SDS hot-reload for outbound), but it never breaks a handshake because the other side already trusts both CAs.
 
 ### Security Layers
 
@@ -577,15 +578,15 @@ JWS provides **end-to-end integrity** — even the Hub cannot modify a message b
 
 ### Inbound Flow (DFSP → Hub)
 
-Inbound mTLS is handled by a **CiliumEnvoyConfig** (CEC) attached to a dedicated LoadBalancer Service. This is static infrastructure — configured via GitOps, not per-DFSP. The CEC runs on Cilium's existing Envoy DaemonSet (zero additional pods).
+Inbound mTLS is handled by a **standalone Envoy Deployment** (2 replicas) behind a dedicated LoadBalancer Service. This is static infrastructure — configured via GitOps, not per-DFSP.
 
 ```
 DFSP ──mTLS──▶ cilium-gateway-gw-extapi Service (LB IP C, port 443)
                 │
-                │  CEC intercepts traffic to this Service
+                │  Normal K8s service routing (selector: app=extapi-envoy)
                 │
                 ▼
-              CiliumEnvoyConfig: cilium-gateway-gw-extapi (Cilium Envoy DaemonSet)
+              Envoy Deployment: extapi-envoy (2 replicas, port 8443)
                 │
                 │  DownstreamTlsContext:
                 │  1. Hub presents extapi-tls cert (cert-manager, Vault PKI scheme CA)
@@ -596,25 +597,30 @@ DFSP ──mTLS──▶ cilium-gateway-gw-extapi Service (LB IP C, port 443)
                 ▼
               HTTP Connection Manager — path-based routing:
                 │
-                ├── /participants     → mojaloop/moja-account-lookup-service:80  (Discovery)
-                ├── /parties          → mojaloop/moja-account-lookup-service:80  (Discovery)
-                ├── /quotes           → mojaloop/moja-quoting-service:80         (Agreement)
-                ├── /fxQuotes         → mojaloop/moja-quoting-service:80         (Agreement)
-                ├── /transfers        → mojaloop/moja-ml-api-adapter-service:80  (Transfer)
-                ├── /fxTransfers      → mojaloop/moja-ml-api-adapter-service:80  (Transfer)
-                ├── /transactionRequests → mojaloop/moja-transaction-requests-service:80
-                └── /authorizations   → mojaloop/moja-transaction-requests-service:80
+                ├── /participants        → moja-account-lookup-service:80        (Discovery)
+                ├── /parties             → moja-account-lookup-service:80        (Discovery)
+                ├── /quotes              → moja-quoting-service:80               (Agreement)
+                ├── /fxQuotes            → moja-quoting-service:80               (Agreement)
+                ├── /transfers           → moja-ml-api-adapter-service:80        (Transfer)
+                ├── /fxTransfers         → moja-ml-api-adapter-service:80        (Transfer)
+                ├── /transactionRequests → moja-transaction-requests-service:80
+                └── /authorizations      → moja-transaction-requests-service:80
 ```
 
-All FSPIOP endpoints share the **same mTLS handshake** — one `dfsp-ca-bundle`, one hub server cert, one CEC listener. Per-DFSP identity is established at the TLS layer (client cert CN/SAN), not per-service.
+All FSPIOP endpoints share the **same mTLS handshake** — one `dfsp-ca-bundle`, one hub server cert, one Envoy listener. Per-DFSP identity is established at the TLS layer (client cert CN/SAN), not per-service.
 
-**CiliumEnvoyConfig resources** (`env-app/routes/extapi-cec.yaml`):
+**Why standalone Envoy instead of CiliumEnvoyConfig?** Cilium v1.18's CEC classifies all `spec.services` listeners as "east/west L7 LB" in the BPF data plane. External traffic (from DFSPs outside the cluster) has no Cilium pod identity, causing Cilium's mandatory `cilium.l7policy` filter to reject requests with HTTP 500. Gateway API resources use a separate "north/south" BPF path that handles external traffic correctly, but Gateway API does not support `tls.mode: Mutual`. A standalone Envoy Deployment bypasses Cilium's BPF L7 redirect entirely — traffic flows through normal K8s service routing to real pod endpoints.
 
-The CEC defines an Envoy listener with `DownstreamTlsContext`:
-- **Server cert**: `mojaloop/extapi-tls` Secret via Cilium SDS (cert-manager managed, Vault PKI scheme CA)
-- **Client verification**: `mojaloop/dfsp-ca-bundle` Secret via Cilium SDS (vault-agent rendered, combined DFSP CAs)
-- **HTTP connection manager** with `route_config` for path-based routing to backend Cilium service clusters (`mojaloop/{service}:{port}` format)
-- `spec.services` references the `cilium-gateway-gw-extapi` LoadBalancer Service — Cilium intercepts all traffic to this Service and routes it through the CEC's Envoy listener
+**Envoy resources** (`env-app/routes/`):
+
+- **`extapi-envoy-config.yaml`** — ConfigMap with Envoy bootstrap config: listener on `0.0.0.0:8443`, `DownstreamTlsContext` with `require_client_certificate: true`, path-based routing, `STRICT_DNS` clusters pointing to K8s service DNS names
+- **`extapi-envoy-deployment.yaml`** — Deployment (2 replicas, `envoyproxy/envoy`), mounts `extapi-tls` and `dfsp-ca-bundle` Secrets as volumes
+- **`extapi-service.yaml`** — LoadBalancer Service with `selector: {app: extapi-envoy}`, port 443 → targetPort 8443
+- **`extapi-cert.yaml`** — cert-manager Certificate (Vault PKI scheme CA), unchanged
+
+Secrets are mounted as volumes (not Cilium SDS). Envoy watches the filesystem via `watched_directory` and hot-reloads certificates when K8s updates the mounted Secret volumes — zero-downtime cert and CA bundle rotation.
+
+**Outbound mTLS (Hub → DFSP) continues to use CiliumEnvoyConfig** — the `dfsp-callback-mtls` CEC handles pod-to-pod traffic where Cilium's east/west path is correct.
 
 ### Outbound Flow (Hub → DFSP)
 
@@ -689,7 +695,7 @@ Template 1 — callback.yaml:
     │
     ├──▶ K8s Secret: dfsp-ca-bundle (mojaloop namespace)
     │      Concatenation of all DFSP ca_bundle fields
-    │      Referenced by inbound cilium-gateway-gw-extapi CEC for client verification
+    │      Referenced by inbound extapi-envoy Deployment for client verification
     │
     ├──▶ CiliumEnvoyConfig: dfsp-callback-mtls (mojaloop namespace)
     │      Listener: accepts redirected egress traffic
@@ -725,9 +731,9 @@ ESO is **not used** for per-DFSP secrets — ESO requires static `ExternalSecret
 
 | Certificate | Issued by | Stored in | Synced to K8s via | Consumed by | Rotation |
 |-------------|-----------|-----------|-------------------|-------------|----------|
-| Hub server cert (`extapi-tls`) | cert-manager → Vault PKI (`server-cert-role`) | K8s Secret (cert-manager managed) | cert-manager (auto-renewal) | `cilium-gateway-gw-extapi` CEC listener (Cilium SDS) | Automatic (cert-manager) |
+| Hub server cert (`extapi-tls`) | cert-manager → Vault PKI (`server-cert-role`) | K8s Secret (cert-manager managed) | cert-manager (auto-renewal) | `extapi-envoy` Deployment (volume mount + `watched_directory`) | Automatic (cert-manager) |
 | Hub client cert per-DFSP (`{host}-clientcert-tls`) | MCM → Vault PKI → Vault KV | Vault KV at `secret/onboarding_pm4mls/{dfsp}` | Vault Agent template (`kubectl apply`) | `dfsp-callback-mtls` CEC (Cilium SDS) | Vault Agent re-renders on KV change |
-| DFSP CA bundle (`dfsp-ca-bundle`) | Concatenation of per-DFSP `ca_bundle` fields | Vault KV (per-DFSP) → combined by Vault Agent | Vault Agent template (`kubectl apply`) | `cilium-gateway-gw-extapi` CEC client verification (Cilium SDS) | Vault Agent re-renders on DFSP change |
+| DFSP CA bundle (`dfsp-ca-bundle`) | Concatenation of per-DFSP `ca_bundle` fields | Vault KV (per-DFSP) → combined by Vault Agent | Vault Agent template (`kubectl apply`) | `extapi-envoy` Deployment (volume mount + `watched_directory`) | Vault Agent re-renders on DFSP change |
 | DFSP JWS public keys | Provided by DFSPs during onboarding | Vault KV at `secret/mcm/{dfsp}` | Vault Agent template or application config | ml-api-adapter (JWS verification) | On DFSP key rotation via MCM |
 
 ### Components
@@ -739,7 +745,7 @@ ESO is **not used** for per-DFSP secrets — ESO requires static `ExternalSecret
 | **Vault Agent** (Deployment) | `env-app/` | mcm | Watches Vault KV, generates per-DFSP K8s/Cilium resources via template + `kubectl apply` |
 | **cert-manager** | `platform/` | cert-manager | Issues wildcard certs (Let's Encrypt) for gw-int/gw-ext; issues `extapi-tls` server cert from Vault PKI scheme CA with auto-renewal |
 | **gw-ext** (Gateway) | `platform-config/` | platform-system | SIMPLE TLS for DFSP-facing non-mTLS services (MCM pm4mlapi, Keycloak OIDC) |
-| **cilium-gateway-gw-extapi** (CEC + Service) | `env-app/routes/` | mojaloop | Inbound mTLS: CiliumEnvoyConfig + LoadBalancer Service + Certificate |
+| **extapi-envoy** (Deployment + Service) | `env-app/routes/` | mojaloop | Inbound mTLS: standalone Envoy Deployment + LoadBalancer Service + Certificate |
 | **dfsp-callback-mtls** (CEC) | Dynamic (Vault Agent) | mojaloop | Outbound mTLS: per-DFSP upstream clusters with mTLS origination |
 | **dfsp-callback-egress** (CNP) | Dynamic (Vault Agent) | mojaloop | Redirects egress to DFSP FQDNs through CEC for mTLS origination |
 
@@ -755,9 +761,10 @@ gitops/
       gateway-ext.yaml                     # gw-ext: *.ext.${domain} (DFSP non-mTLS)
   env-app/
     routes/
-      extapi-service.yaml                  # LoadBalancer Service for mTLS inbound
+      extapi-service.yaml                  # LoadBalancer Service for mTLS inbound (selector: extapi-envoy)
       extapi-cert.yaml                     # cert-manager Certificate (Vault PKI scheme CA)
-      extapi-cec.yaml                      # CEC: inbound mTLS listener + path routing
+      extapi-envoy-config.yaml             # ConfigMap: Envoy bootstrap config (mTLS + routing)
+      extapi-envoy-deployment.yaml         # Deployment: standalone Envoy (2 replicas)
       mcm-ext-httproute.yaml               # MCM → gw-ext (SIMPLE TLS)
       keycloak-ext-httproute.yaml          # Keycloak → gw-ext (SIMPLE TLS)
       referencegrant-ext.yaml              # ReferenceGrant for gw-ext cross-namespace
@@ -767,14 +774,14 @@ gitops/
       vault-agent-rbac.yaml                # RBAC: vault-agent SA → mojaloop namespace
 ```
 
-Dynamic resources (K8s Secrets, CiliumEnvoyConfig, CiliumNetworkPolicy, onboarding Jobs) are generated at runtime by the Vault Agent, not at artifact build time.
+Dynamic resources (K8s Secrets, CiliumEnvoyConfig, CiliumNetworkPolicy, onboarding Jobs) are generated at runtime by the Vault Agent, not at artifact build time. The `dfsp-ca-bundle` Secret is also consumed by the static `extapi-envoy` Deployment via volume mount.
 
 **Dependency chain for env clusters:**
 
 ```
 platform → platform-config → vendor → env → env-data → env-auth → env-auth-config → env-app
                                                                                         │
-                                                          cilium-gateway-gw-extapi CEC (needs cert-manager)
+                                                          extapi-envoy Deployment (needs cert-manager + dfsp-ca-bundle)
                                                           gw-ext Gateway (needs cert-manager)
                                                           Vault Agent (needs Vault from env-auth)
                                                           Vault Agent generates dynamic resources
@@ -787,7 +794,7 @@ platform → platform-config → vendor → env → env-data → env-auth → en
 | `gw-ext` Gateway | Static | GitOps (`platform-config/`) | Deployed once, updated via artifact |
 | `cilium-gateway-gw-extapi` Service | Static | GitOps (`env-app/routes/`) | Deployed once |
 | `extapi-tls` Certificate | Static | GitOps (`env-app/routes/`) + cert-manager | Auto-renewed |
-| `cilium-gateway-gw-extapi` CEC (inbound) | Static | GitOps (`env-app/routes/`) | Deployed once |
+| `extapi-envoy` Deployment + ConfigMap (inbound) | Static | GitOps (`env-app/routes/`) | Deployed once |
 | `mcm-ext` HTTPRoute | Static | GitOps (`env-app/routes/`) | Deployed once |
 | `keycloak-ext` HTTPRoute | Static | GitOps (`env-app/routes/`) | Deployed once |
 | Per-DFSP TLS Secrets | **Dynamic** | Vault Agent template | Created/updated on DFSP onboarding |
@@ -799,14 +806,14 @@ platform → platform-config → vendor → env → env-data → env-auth → en
 
 ### What Is NOT Deployed
 
-- **No Istio / service mesh** — removed entirely; Cilium provides all needed L7 features natively
-- **No standalone Envoy** — Cilium's existing Envoy DaemonSet handles both Gateways and CiliumEnvoyConfigs (zero additional pods)
-- **No Envoy Gateway controller** — Gateway API + CiliumEnvoyConfig covers all use cases
-- **No custom xDS control plane** — Cilium acts as the xDS control plane; K8s Secrets + SDS replace custom SDS servers
-- **No per-DFSP Gateway listeners** — single `cilium-gateway-gw-extapi` CEC listener with combined CA bundle validates all DFSPs; per-DFSP routing is Host-header-based in the outbound CEC
+- **No Istio / service mesh** — removed entirely; Cilium + standalone Envoy provide all needed L7 features
+- **No Envoy Gateway controller** — Gateway API (for gw-int/gw-ext) + standalone Envoy (for extapi mTLS) + CiliumEnvoyConfig (for outbound mTLS) covers all use cases
+- **No custom xDS control plane** — Cilium acts as the xDS control plane for outbound CEC; standalone Envoy uses file-based config with `watched_directory` for cert hot-reload
+- **No per-DFSP Gateway listeners** — single `extapi-envoy` listener with combined CA bundle validates all DFSPs; per-DFSP routing is Host-header-based in the outbound CEC
 - **No ESO for dynamic per-DFSP secrets** — ESO requires static manifests; Vault Agent template handles dynamic cert sync directly
 - **No egress proxy pod** — CiliumNetworkPolicy `listener` field transparently redirects egress through CEC's Envoy
-- **No IP whitelisting** (deferred) — mTLS client cert verification is the primary security boundary; IP whitelisting can be added later as a CEC Envoy RBAC filter
+- **No CiliumEnvoyConfig for inbound mTLS** — Cilium CEC's east/west BPF path rejects external traffic (no pod identity); standalone Envoy Deployment handles inbound mTLS instead
+- **No IP whitelisting** (deferred) — mTLS client cert verification is the primary security boundary; IP whitelisting can be added later as an Envoy RBAC filter
 - **No CiliumEgressGatewayPolicy** (deferred) — consistent source IP for outbound callbacks not yet implemented
 
 ---
