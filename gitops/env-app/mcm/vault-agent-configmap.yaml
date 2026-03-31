@@ -207,6 +207,28 @@ data:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                     stat_prefix: dfsp_egress
                     codec_type: AUTO
+                    access_log:
+                      - name: envoy.access_loggers.stdout
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                          log_format:
+                            json_format:
+                              timestamp: "%START_TIME%"
+                              method: "%REQ(:METHOD)%"
+                              path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                              protocol: "%PROTOCOL%"
+                              response_code: "%RESPONSE_CODE%"
+                              response_flags: "%RESPONSE_FLAGS%"
+                              bytes_received: "%BYTES_RECEIVED%"
+                              bytes_sent: "%BYTES_SENT%"
+                              duration_ms: "%DURATION%"
+                              upstream_cluster: "%UPSTREAM_CLUSTER%"
+                              upstream_host: "%UPSTREAM_HOST%"
+                              downstream_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+                              tls_version: "%UPSTREAM_TLS_VERSION%"
+                              request_id: "%REQ(X-REQUEST-ID)%"
+                              fspiop_source: "%REQ(FSPIOP-SOURCE)%"
+                              fspiop_destination: "%REQ(FSPIOP-DESTINATION)%"
                     http_filters:
                       - name: envoy.filters.http.router
                         typed_config:
@@ -271,10 +293,15 @@ data:
     {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}
             - matchName: "{{ .Data.fqdn }}"
     {{ end }}{{ end }}
-          listener:
-            envoyConfig:
-              kind: CiliumEnvoyConfig
-              name: dfsp-callback-mtls
+          toPorts:
+            - listener:
+                name: dfsp-egress-listener
+                envoyConfig:
+                  kind: CiliumEnvoyConfig
+                  name: dfsp-callback-mtls
+        - toEntities:
+            - world
+            - cluster
       EOH
       destination = "/vault/secrets/tmp/callback.yaml"
       command     = "/tools/kubectl apply --prune -l vault-agent/template=callback --prune-allowlist=/v1/Secret --prune-allowlist=cilium.io/v2/CiliumEnvoyConfig --prune-allowlist=cilium.io/v2/CiliumNetworkPolicy -n mojaloop -f /vault/secrets/tmp/callback.yaml 2>/dev/null || { /tools/kubectl delete secrets -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete ciliumenvoyconfigs.cilium.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete ciliumnetworkpolicies.cilium.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; } 2>/dev/null || true"
