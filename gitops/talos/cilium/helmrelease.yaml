@@ -102,9 +102,11 @@ spec:
         dashboards:
           enabled: false
 
-    # Envoy proxy (external)
+    # Envoy proxy (external) with prometheus metrics for CEC visibility
     envoy:
       enabled: true
+      prometheus:
+        enabled: true
 
     # Operator settings
     operator:
