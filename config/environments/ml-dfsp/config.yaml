@@ -46,7 +46,7 @@ cluster:
   role: "base"                        # cc | env — determines which gitops paths are deployed
 
   # Kubernetes API endpoint
-  vip: "192.168.88.7"              # Proxmox: floating IP
+  vip: "192.168.88.40"              # Proxmox: floating IP
 
   # Flux configuration
   flux:
@@ -72,7 +72,7 @@ dns:
 # ------------------------------------------------------------------
 app:
   lb_ipam:
-    range: "192.168.88.8-192.168.88.11"
+    range: "192.168.88.41-192.168.88.45"
   alert_email: "nathan@delma.me"
 
 # ------------------------------------------------------------------
