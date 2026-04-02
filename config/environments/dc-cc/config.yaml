@@ -20,6 +20,15 @@ infra:
       placement-group-2: "worker2"
       placement-group-3: "worker3"
       placement-group-4: "worker4"
+    network_bridge: "vmbr0"
+    storage_pool: "local-lvm"
+
+  # Talos node OS overrides (optional — any on-prem provider)
+  # talos:
+  #   nameservers:
+  #     - "8.8.8.8"
+  #   ntp_servers:
+  #     - "time.google.com"
 
   # # --- AWS ---
   # aws:

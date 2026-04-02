@@ -12,7 +12,8 @@ locals {
         for storage_item in instance.storage : {
           size         = storage_item.size
           interface    = storage_item.interface
-          storage_pool = try(storage_item.storage_pool, local.provider_config.storage.default_pool)
+          storage_pool = try(storage_item.storage_pool,
+            var.storage_pool_override != "" ? var.storage_pool_override : local.provider_config.storage.default_pool)
         }
       ]
     })
@@ -78,7 +79,7 @@ resource "proxmox_virtual_environment_vm" "instance" {
 
   # Network device
   network_device {
-    bridge   = local.provider_config.vm_defaults.network.bridge
+    bridge   = var.network_bridge_override != "" ? var.network_bridge_override : local.provider_config.vm_defaults.network.bridge
     model    = local.provider_config.vm_defaults.network.model
     firewall = local.provider_config.vm_defaults.network.firewall
   }

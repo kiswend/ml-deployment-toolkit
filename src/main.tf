@@ -58,6 +58,11 @@ module "proxmox" {
   oci_proxy_url      = try(local.config_raw.oci.proxy.url, "")
   oci_proxy_username = var.oci_proxy_username
   oci_proxy_password = var.oci_proxy_password
+
+  nameservers             = try(local.config_raw.infra.talos.nameservers, [])
+  ntp_servers             = try(local.config_raw.infra.talos.ntp_servers, [])
+  network_bridge_override = try(local.config_raw.infra.proxmox.network_bridge, "")
+  storage_pool_override   = try(local.config_raw.infra.proxmox.storage_pool, "")
 }
 
 # DigitalOcean Cluster (DOKS Managed Kubernetes)

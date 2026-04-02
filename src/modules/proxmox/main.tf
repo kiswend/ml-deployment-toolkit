@@ -37,6 +37,20 @@ locals {
     })
   ] : []
 
+  # Nameserver patch (applied to all instances when nameservers configured)
+  nameservers_patch = length(var.nameservers) > 0 ? [
+    templatefile("${var.patches_path}/patch-nameservers.yaml.tpl", {
+      nameservers = var.nameservers
+    })
+  ] : []
+
+  # NTP patch (applied to all instances when ntp_servers configured)
+  ntp_patch = length(var.ntp_servers) > 0 ? [
+    templatefile("${var.patches_path}/patch-ntp.yaml.tpl", {
+      ntp_servers = var.ntp_servers
+    })
+  ] : []
+
   # Build provider patches by class, also apply control-plane patches to mixed-plane
   provider_patches_by_class = merge(
     {
@@ -86,7 +100,9 @@ module "talos_config" {
         lookup(local.workload_class_patches, inst.workload_class, []),
         lookup(local.provider_patches_by_class, inst.workload_class, []),
         try([var.label_taint_patches[inst.workload_class]], []),
-        local.registry_mirror_patch
+        local.registry_mirror_patch,
+        local.nameservers_patch,
+        local.ntp_patch
       )
     }
   ]
@@ -102,6 +118,9 @@ module "infrastructure" {
   provider_image_config = local.provider_config.talos.image
 
   talos_configs = module.talos_config.instance_configs
+
+  network_bridge_override = var.network_bridge_override
+  storage_pool_override   = var.storage_pool_override
 
   depends_on = [module.talos_config]
 }

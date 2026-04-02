@@ -45,3 +45,15 @@ variable "provider_image_config" {
     decompression = string
   })
 }
+
+variable "network_bridge_override" {
+  description = "Override VM network bridge (empty = use provider config default)"
+  type        = string
+  default     = ""
+}
+
+variable "storage_pool_override" {
+  description = "Override VM storage pool (empty = use provider config default)"
+  type        = string
+  default     = ""
+}

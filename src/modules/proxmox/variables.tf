@@ -80,3 +80,31 @@ variable "oci_proxy_password" {
   default     = ""
   sensitive   = true
 }
+
+# --- Talos node OS overrides ---
+
+variable "nameservers" {
+  description = "DNS nameservers for Talos nodes (optional — omit for DHCP default)"
+  type        = list(string)
+  default     = []
+}
+
+variable "ntp_servers" {
+  description = "NTP servers for Talos nodes (optional — omit for Talos default)"
+  type        = list(string)
+  default     = []
+}
+
+# --- Proxmox hypervisor overrides ---
+
+variable "network_bridge_override" {
+  description = "Override Proxmox VM network bridge (empty = use provider config default)"
+  type        = string
+  default     = ""
+}
+
+variable "storage_pool_override" {
+  description = "Override Proxmox VM storage pool (empty = use provider config default)"
+  type        = string
+  default     = ""
+}
