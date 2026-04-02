@@ -32,7 +32,7 @@ locals {
 }
 
 # Download OS image to each unique node
-resource "proxmox_virtual_environment_download_file" "os_image" {
+resource "proxmox_download_file" "os_image" {
   for_each = local.node_image_downloads_map
 
   content_type = each.value.content_type
@@ -58,7 +58,7 @@ resource "proxmox_virtual_environment_download_file" "os_image" {
 locals {
   instance_image_ids = {
     for inst in local.instances_with_specs :
-    inst.name => proxmox_virtual_environment_download_file.os_image[
+    inst.name => proxmox_download_file.os_image[
       local.nodes_map[inst.name]
     ].id
   }
