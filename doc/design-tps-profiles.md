@@ -464,7 +464,10 @@ Platform services (Cilium, cert-manager, external-dns, ESO, metrics-server, VPA,
 | `config/providers/digitalocean/deployment-templates.yaml` | **Deleted** -- content moves into profiles |
 | `config/providers/{provider}/profiles/env/*.yaml` | **New** -- 5 TPS profile files per provider |
 | `config/providers/{provider}/profiles/cc/*.yaml` | **New** -- 3 CC profile files per provider |
-| `config/environments/*/config.yaml` | `template: "h2c1w3"` -> `profile: "tps-50"` |
+| `config/environments/ml-test/config.yaml` | `template: "h2c1w3"` -> `profile: "tps-1"` |
+| `config/environments/ml-cc/config.yaml` | `template: "h1m1"` -> `profile: "small"` |
+| `config/environments/ml-dfsp/config.yaml` | `template: "h1m1-dfsp"` -> `profile: "small"` |
+| `config/environments/dc-cc/config.yaml` | `template: "h1m1"` -> `profile: "small"` |
 | `config/.env.sample` | No change (secrets are orthogonal to profiles) |
 | `config/definitions/workload-classes.yaml` | No change (workload classes are referenced by profiles) |
 
