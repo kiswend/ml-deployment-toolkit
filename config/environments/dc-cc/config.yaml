@@ -27,8 +27,9 @@ infra:
   # talos:
   #   nameservers:
   #     - "8.8.8.8"
+  #     - "1.1.1.1"
   #   ntp_servers:
-  #     - "time.google.com"
+  #     - "time.cloudflare.com"
 
   # # --- AWS ---
   # aws:

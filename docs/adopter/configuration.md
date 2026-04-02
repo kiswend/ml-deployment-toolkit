@@ -208,8 +208,8 @@ infra:
   #   nameservers:               # optional — omit for DHCP default
   #     - "8.8.8.8"
   #     - "1.1.1.1"
-  #   ntp_servers:               # optional — omit for Talos default (pool.ntp.org)
-  #     - "time.google.com"
+  #   ntp_servers:               # optional — omit for Talos default (time.cloudflare.com)
+  #     - "time.cloudflare.com"
 
   # --- AWS ---
   # aws:
