@@ -22,18 +22,17 @@ jobs:
       - name: Install Flux CLI
         uses: fluxcd/flux2/action@main
 
-      - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | flux login ghcr.io --username=${{ github.actor }} --password-stdin
-
       - name: Push OCI artifact
         run: |
           VERSION=${GITHUB_REF_NAME}
           flux push artifact oci://${{ env.OCI_REPO }}:${VERSION} \
             --path=./gitops \
             --source="${{ github.server_url }}/${{ github.repository }}" \
-            --revision="${VERSION}@sha1:${{ github.sha }}"
+            --revision="${VERSION}@sha1:${{ github.sha }}" \
+            --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag as latest
         run: |
           VERSION=${GITHUB_REF_NAME}
-          flux tag artifact oci://${{ env.OCI_REPO }}:${VERSION} --tag=latest
+          flux tag artifact oci://${{ env.OCI_REPO }}:${VERSION} --tag=latest \
+            --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
