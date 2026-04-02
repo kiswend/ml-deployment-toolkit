@@ -18,7 +18,7 @@ spec:
   chart:
     spec:
       chart: mojaloop
-      version: "17.1.x"
+      version: "17.2.x"
       sourceRef:
         kind: HelmRepository
         name: mojaloop
@@ -487,13 +487,21 @@ spec:
       ml-testing-toolkit-cli:
         enabled: false
 
+    # --- Simulators ---
+    simulator:
+      enabled: false
+
     # --- Third Party (deferred) ---
     thirdparty:
       enabled: false
 
-    # --- Simulator (disabled — frees ~3.5Gi on memory-constrained cluster) ---
+    # --- Mojaloop Simulator ---
     mojaloop-simulator:
-      enabled: true
+      enabled: false
+
+    # --- TTK e2e Simulators (disabled — requires ttksims-redis not in our stack) ---
+    mojaloop-ttk-simulators:
+      enabled: false
 
     # --- Feature Flags ---
     forensicloggingsidecar:
