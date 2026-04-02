@@ -22,19 +22,27 @@ provider "aws" {
   skip_metadata_api_check     = true
 }
 
+# Kubeconfig path — static convention, no module output dependency.
+# fileexists() returns true for existing clusters, false for fresh deploys.
+# When false, providers get null and defer until apply (proxmox module creates the file first).
+locals {
+  static_kubeconfig = "../artifacts/${var.env_name}/kubernetes/kubeconfig"
+  kubeconfig        = fileexists(local.static_kubeconfig) ? local.static_kubeconfig : null
+}
+
 # Kubernetes Provider - configured with kubeconfig from cluster bootstrap
 provider "kubernetes" {
-  config_path = local.kubeconfig_path
+  config_path = local.kubeconfig
 }
 
 # Helm Provider - for Flux installation
 provider "helm" {
   kubernetes {
-    config_path = local.kubeconfig_path
+    config_path = local.kubeconfig
   }
 }
 
 # Kubectl Provider - for Flux CRDs (handles missing API server at plan time)
 provider "kubectl" {
-  config_path = local.kubeconfig_path
+  config_path = local.kubeconfig
 }
