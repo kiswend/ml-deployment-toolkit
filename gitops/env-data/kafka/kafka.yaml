@@ -39,7 +39,7 @@ spec:
     volumes:
       - id: 0
         type: persistent-claim
-        size: 8Gi
+        size: ${kafka_storage}
         deleteClaim: false
   resources:
     requests:
@@ -77,7 +77,7 @@ spec:
       transaction.state.log.min.isr: 2
       default.replication.factor: 3
       min.insync.replicas: 2
-      num.partitions: 6
+      num.partitions: ${kafka_default_partitions}
   entityOperator:
     topicOperator: {}
   kafkaExporter:

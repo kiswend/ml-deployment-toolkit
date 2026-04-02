@@ -50,7 +50,7 @@ Loads YAML configuration files and resolves environment-specific settings into s
 
 1. Loads environment config (`config.yaml`) and workload class definitions (`workload-classes.yaml`)
 2. Reads provider-specific config from `config/providers/<provider>/config.yaml`
-3. Selects the deployment template from `config/providers/<provider>/deployment-templates.yaml`
+3. Loads the sizing profile from `config/providers/<provider>/profiles/<role>/<profile>.yaml` — bundles infrastructure topology, application scaling, and data layer tuning ([ADR-012](../architecture/decisions/012-tps-sizing-profiles.md))
 4. Resolves instance placement (on-prem only) -- maps logical placement group names to physical hosts via `infra.<provider>.placement`
 5. Separates instances by role: control-plane/mixed-plane vs worker
 6. Constructs Talos image URLs from schematic, version, platform, and architecture (on-prem only)
@@ -69,7 +69,10 @@ Loads YAML configuration files and resolves environment-specific settings into s
 | `kubernetes_version` | Kubernetes version from workload-classes.yaml |
 | `talos_image` | Constructed image URL and filename |
 | `label_taint_patches` | Per-class YAML patches for node labels and taints |
-| `deployment_template` | Raw deployment template (provider-specific structure) |
+| `deployment_template` | Infrastructure topology from profile (provider-specific structure) |
+| `profile_app` | Application scaling variables from profile (empty map for cc/base roles) |
+| `profile_data` | Data layer tuning variables from profile (empty map for cc/base roles) |
+| `profile_cc` | CC services scaling variables from profile (empty map for env/base roles) |
 | `paths` | Standard paths for shared resources (patches directory) |
 
 ## Provider modules

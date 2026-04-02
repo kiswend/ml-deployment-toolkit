@@ -169,6 +169,12 @@ module "flux_config" {
   loki_url  = try(local.config_raw.observability.loki_url, "")
   mimir_url = try(local.config_raw.observability.mimir_url, "")
 
+  profile_vars = merge(
+    try({ for k, v in module.config.profile_app : k => tostring(v) }, {}),
+    try({ for k, v in module.config.profile_data : k => tostring(v) }, {}),
+    try({ for k, v in module.config.profile_cc : k => tostring(v) }, {}),
+  )
+
   depends_on = [
     module.flux_bootstrap
   ]

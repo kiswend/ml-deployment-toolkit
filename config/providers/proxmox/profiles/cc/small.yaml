@@ -1,0 +1,34 @@
+# -----------------------------------------------------------------------------
+# CC Profile: small (1-2 environments)
+# Provider: Proxmox
+# Derived from: deployment template h1m1 + current gitops CC service values
+# -----------------------------------------------------------------------------
+
+# --- Infrastructure topology ---
+infra:
+  instances:
+    - name: m-0
+      placement_group: placement-group-1
+      cores: 8
+      memory: 9216
+      workload_class: mixed-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-mixed
+
+# --- CC services scaling ---
+cc:
+  vault_replicas: 1
+  harbor_registry_storage: "20Gi"
+  harbor_db_storage: "2Gi"
+  harbor_redis_storage: "1Gi"
+  harbor_trivy_storage: "5Gi"
+  minio_replicas: 1
+  minio_storage: "20Gi"

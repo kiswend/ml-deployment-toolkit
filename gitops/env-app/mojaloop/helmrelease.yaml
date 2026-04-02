@@ -48,6 +48,7 @@ spec:
     # Transfers page shows empty results.
     centralledger:
       centralledger-service:
+        replicaCount: ${cl_service_replicas}
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
@@ -115,6 +116,7 @@ spec:
             LOG: 'off'
             TRACE: 'off'
       centralledger-handler-transfer-prepare:
+        replicaCount: ${cl_handler_prepare_replicas}
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
@@ -137,6 +139,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-position-batch:
+        replicaCount: ${cl_handler_position_batch_replicas}
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
@@ -148,6 +151,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-get:
+        replicaCount: ${cl_handler_get_replicas}
         metrics:
           enabled: true
         config:
@@ -161,6 +165,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-transfer-fulfil:
+        replicaCount: ${cl_handler_fulfil_replicas}
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
@@ -172,6 +177,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-timeout:
+        replicaCount: ${cl_handler_timeout_replicas}
         metrics:
           enabled: true
         config:
@@ -185,6 +191,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       centralledger-handler-admin-transfer:
+        replicaCount: ${cl_handler_admin_replicas}
         metrics:
           enabled: true
         config:
@@ -202,6 +209,7 @@ spec:
     # Event SDK: produces audit events to Kafka for Finance Portal reporting
     quoting-service:
       quoting-service:
+        replicaCount: ${qs_service_replicas}
         podAnnotations:
           prometheus.io/scrape: "true"
           prometheus.io/port: "3002"
@@ -219,6 +227,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       quoting-service-handler:
+        replicaCount: ${qs_handler_replicas}
         podAnnotations:
           prometheus.io/scrape: "true"
           prometheus.io/port: "3003"
@@ -242,6 +251,7 @@ spec:
     # --- Central Settlement (shares central_ledger DB) ---
     centralsettlement:
       centralsettlement-service:
+        replicaCount: ${cs_service_replicas}
         metrics:
           enabled: true
         config:
@@ -253,6 +263,7 @@ spec:
           db_password: "${mysql_central_ledger_password}"
           db_database: central_ledger
       centralsettlement-handler-deferredsettlement:
+        replicaCount: ${cs_handler_deferred_replicas}
         metrics:
           enabled: true
         config:
@@ -274,6 +285,7 @@ spec:
           db_database: central_ledger
         replicaCount: 0
       centralsettlement-handler-rules:
+        replicaCount: ${cs_handler_rules_replicas}
         metrics:
           enabled: true
         config:
@@ -289,6 +301,7 @@ spec:
     # Event SDK: produces audit events to Kafka for Finance Portal reporting
     account-lookup-service:
       account-lookup-service:
+        replicaCount: ${als_service_replicas}
         config:
           db_host: "${mysql_host}"
           db_port: ${mysql_port}
@@ -303,6 +316,7 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       account-lookup-service-admin:
+        replicaCount: ${als_admin_replicas}
         metrics:
           enabled: true
         config:
@@ -319,6 +333,7 @@ spec:
 
     # --- ALS MSISDN Oracle ---
     als-msisdn-oracle:
+      replicaCount: ${als_oracle_replicas}
       metrics:
         enabled: true
       config:
@@ -333,6 +348,7 @@ spec:
 
     # --- Transaction Requests Service ---
     transaction-requests-service:
+      replicaCount: ${tx_requests_replicas}
       metrics:
         enabled: true
 
@@ -340,12 +356,14 @@ spec:
     # Event SDK: produces audit events to Kafka for Finance Portal reporting
     ml-api-adapter:
       ml-api-adapter-service:
+        replicaCount: ${ml_adapter_service_replicas}
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
       ml-api-adapter-handler-notification:
+        replicaCount: ${ml_adapter_handler_notification_replicas}
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}

@@ -24,6 +24,7 @@ spec:
       retries: -1
       strategy: uninstall
   values:
+    replicaCount: ${keto_replicas}
     fullnameOverride: "keto"
 
     secret:

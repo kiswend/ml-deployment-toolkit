@@ -23,6 +23,7 @@ spec:
       retries: -1
       strategy: uninstall
   values:
+    replicaCount: ${oathkeeper_replicas}
     global:
       ory:
         oathkeeper:

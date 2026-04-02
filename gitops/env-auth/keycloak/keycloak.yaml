@@ -26,7 +26,7 @@ metadata:
   name: keycloak
   namespace: keycloak
 spec:
-  instances: 1
+  instances: ${keycloak_instances}
   image: quay.io/keycloak/keycloak:26.5.2
   db:
     vendor: mysql

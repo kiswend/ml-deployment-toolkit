@@ -59,7 +59,7 @@ artifacts/
 config/
   definitions/           # Talos/K8s versions, workload class definitions
   patches/               # Talos machine config patches
-  providers/             # Provider-specific config and deployment templates
+  providers/             # Provider-specific config and sizing profiles
 ```
 
 ---
@@ -217,36 +217,37 @@ infra:
 
 For Proxmox, the `placement` map ties deployment template placement groups to physical Proxmox node names. For cloud providers, specify the region and optional VPC CIDR.
 
-### 2. Deployment template
+### 2. Sizing profile
 
-Selects the cluster topology. Templates are defined in `config/providers/{provider}/deployment-templates.yaml`.
+Selects the sizing profile. Profiles bundle infrastructure topology, application scaling (replicas), and data layer tuning (Kafka partitions, MySQL buffer pool, etc.) into a single file. They live in `config/providers/{provider}/profiles/{role}/`.
 
 ```yaml
-template: "h1m1"
+profile: "tps-1"
 ```
 
-**Proxmox templates:**
+The profile is resolved using the provider and cluster role: `config/providers/{provider}/profiles/{role}/{profile}.yaml`. For example, `provider: proxmox` + `role: env` + `profile: tps-1` resolves to `config/providers/proxmox/profiles/env/tps-1.yaml`.
 
-| Template | Description | Nodes |
-|----------|-------------|-------|
-| `h1m1` | Single mixed-plane node | 1 node (control + worker) |
-| `h2c1w3` | 2 hosts, 1 control + 3 workers | 4 VMs |
-| `h2c1w4` | 2 hosts, 1 control + 4 workers | 5 VMs |
-| `h2c3w3` | 2 hosts, 3 control + 3 workers | 6 VMs |
-| `h3c3w3` | 3 hosts, 3 control + 3 workers | 6 VMs |
-| `h2c1w3k3d3` | 2 hosts, dedicated Kafka + DB nodes | 10 VMs |
-| `h1m1-dfsp` | Single mixed-plane, DFSP simulator | 1 node |
+**Env profiles** (TPS-driven, for Mojaloop switch clusters):
 
-**Cloud templates (AWS and DigitalOcean):**
+| Profile | Description |
+|---------|-------------|
+| `tps-1` | Minimal switch deployment (1 control + 3 workers on Proxmox, all replicas = 1) |
 
-| Template | Description | Nodes |
-|----------|-------------|-------|
-| `micro` | Minimal single-node | 1 node |
-| `tiny` | Two-node | 2 nodes |
-| `small` | Three-node | 3 nodes |
-| `small3m3w` | Six-node | 6 nodes |
+Higher TPS profiles (`tps-500`, `tps-2000`) will be added as they are validated through load testing.
 
-See [Provider Model](../architecture/provider-model.md) for detailed specifications (CPU, memory, storage) of each template.
+**CC profiles** (operations-scale-driven, for Tooling Clusters):
+
+| Profile | Description |
+|---------|-------------|
+| `small` | 1-2 environments (single mixed-plane node on Proxmox) |
+
+**Base profiles** (for DFSP simulator / lightweight clusters):
+
+| Profile | Description |
+|---------|-------------|
+| `small` | Single mixed-plane node, platform services only |
+
+See [ADR-012](../architecture/decisions/012-tps-sizing-profiles.md) for the design rationale behind TPS profiles.
 
 ### 3. Cluster parameters
 
@@ -262,7 +263,7 @@ cluster:
 | Field | Description |
 |-------|-------------|
 | `name` | Cluster name. Used in resource naming and Terraform state. |
-| `role` | `cc` for Tooling Cluster, `env` for App Environment. Determines which gitops kustomizations are deployed. |
+| `role` | `cc` for Tooling Cluster, `env` for App Environment, `base` for lightweight clusters (DFSP simulator). Determines which gitops kustomizations are deployed and which profile subdirectory is used. |
 | `vip` | On-prem only. Floating IP for the Kubernetes API server, managed by Talos VIP. Not used for cloud providers. |
 | `flux.version` | FluxCD operator version. |
 
@@ -359,7 +360,7 @@ infra:
     placement:
       placement-group-1: "pve-node-1"
 
-template: "h1m1"
+profile: "small"
 
 cluster:
   name: "my-cc"
@@ -397,7 +398,7 @@ infra:
       placement-group-1: "pve-node-1"
       placement-group-2: "pve-node-2"
 
-template: "h2c1w3"
+profile: "tps-1"
 
 cluster:
   name: "env-prod"

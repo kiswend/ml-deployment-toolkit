@@ -32,9 +32,9 @@ locals {
     "talos-${local.talos_version}-${local.talos_image_arch}.img"
   ) : ""
 
-  # Load provider-specific deployment template
-  deployment_templates = yamldecode(file("../config/providers/${local.provider_name}/deployment-templates.yaml"))
-  deployment_template  = local.deployment_templates[local.config.template]
+  # Load sizing profile (infra + app + data tuning, per provider/role)
+  profile             = yamldecode(file("../config/providers/${local.provider_name}/profiles/${local.config.cluster.role}/${local.config.profile}.yaml"))
+  deployment_template = local.profile.infra
 
   # Process instances — only for on-prem templates that define them
   instances = try([

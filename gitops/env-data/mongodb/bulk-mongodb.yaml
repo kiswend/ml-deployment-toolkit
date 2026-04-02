@@ -110,6 +110,6 @@ spec:
         persistentVolumeClaim:
           resources:
             requests:
-              storage: 3Gi
+              storage: ${mongodb_storage}
   sharding:
     enabled: false

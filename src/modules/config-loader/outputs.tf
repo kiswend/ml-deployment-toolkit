@@ -54,8 +54,23 @@ output "label_taint_patches" {
 }
 
 output "deployment_template" {
-  description = "Raw deployment template data (provider-specific structure)"
+  description = "Infrastructure topology from profile (provider-specific structure)"
   value       = local.deployment_template
+}
+
+output "profile_app" {
+  description = "Application scaling variables from profile"
+  value       = try(local.profile.app, {})
+}
+
+output "profile_data" {
+  description = "Data layer tuning variables from profile"
+  value       = try(local.profile.data, {})
+}
+
+output "profile_cc" {
+  description = "CC services scaling variables from profile"
+  value       = try(local.profile.cc, {})
 }
 
 output "cluster" {

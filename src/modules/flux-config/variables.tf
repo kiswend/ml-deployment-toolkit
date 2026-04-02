@@ -391,3 +391,11 @@ variable "onboarding_collection_version" {
   default     = "17.0.4"
 }
 
+# --- Profile Variables (TPS/CC sizing) ---
+
+variable "profile_vars" {
+  description = "Scaling and tuning variables from TPS/CC profile, merged into cluster-config ConfigMap"
+  type        = map(string)
+  default     = {}
+}
+

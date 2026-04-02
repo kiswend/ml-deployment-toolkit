@@ -118,7 +118,7 @@ spec:
       persistentVolumeClaim:
         resources:
           requests:
-            storage: 8Gi
+            storage: ${mysql_storage}
     sidecars:
       - name: mysqld-exporter
         image: prom/mysqld-exporter:v0.16.0
@@ -149,8 +149,8 @@ spec:
       wsrep_auto_increment_control=OFF
       auto_increment_increment=1
       auto_increment_offset=1
-      innodb_buffer_pool_size=512M
-      max_connections=2000
+      innodb_buffer_pool_size=${mysql_innodb_buffer_pool_size}
+      max_connections=${mysql_max_connections}
       character_set_server=utf8
     autoRecovery: true
   haproxy:

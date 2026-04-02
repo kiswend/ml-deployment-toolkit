@@ -1,0 +1,25 @@
+# -----------------------------------------------------------------------------
+# Base Profile: small (DFSP simulator / lightweight cluster)
+# Provider: Proxmox
+# Derived from: deployment template h1m1-dfsp
+# Base clusters deploy platform services only — no app/data/cc sections needed
+# -----------------------------------------------------------------------------
+
+# --- Infrastructure topology ---
+infra:
+  instances:
+    - name: m-0
+      placement_group: placement-group-1
+      cores: 8
+      memory: 4096
+      workload_class: mixed-plane
+      storage:
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi0
+        - storage_pool: local-lvm
+          size: 64
+          interface: scsi1
+      tags:
+        - ml
+        - ml-mixed

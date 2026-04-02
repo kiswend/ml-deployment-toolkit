@@ -33,6 +33,7 @@ spec:
       retries: -1
       strategy: uninstall
   values:
+    replicaCount: ${kratos_replicas}
     fullnameOverride: "kratos"
 
     secret:

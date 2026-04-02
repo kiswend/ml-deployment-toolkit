@@ -44,10 +44,10 @@ spec:
       valuesKey: rootPassword
   values:
     mode: standalone
-    replicas: 1
+    replicas: ${minio_replicas}
     persistence:
       enabled: true
-      size: 20Gi
+      size: ${minio_storage}
     resources:
       requests:
         memory: 256Mi

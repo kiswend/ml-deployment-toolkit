@@ -34,9 +34,9 @@ infra:
   #   vpc_cidr: "10.10.0.0/16"
 
 # ------------------------------------------------------------------
-# 2. DEPLOYMENT TOPOLOGY
+# 2. SIZING PROFILE
 # ------------------------------------------------------------------
-template: "h2c1w3"  # h1m1 | h2c1w4 | h2c3w3 | h3c3w3
+profile: "tps-1"  # TPS-based profile (see config/providers/proxmox/profiles/env/)
 
 # ------------------------------------------------------------------
 # 3. CLUSTER PARAMETERS
