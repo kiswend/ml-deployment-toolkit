@@ -74,7 +74,7 @@ OCI_REPO := $(shell grep -A4 'repo:' $(ENV_DIR)/config.yaml | grep 'url:' | head
 GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest")
 
 # Phony targets (not files)
-.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list render render-thanos push-gitops tag-gitops list-artifacts
+.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list render render-thanos push-gitops tag-gitops list-artifacts release
 
 # Help target - displays available commands
 help:
@@ -105,6 +105,7 @@ help:
 	@echo "  make push-gitops          - Push gitops/ as OCI artifact (version=git SHA)"
 	@echo "  make push-gitops GITOPS_VERSION=v1.0.0 - Push with explicit version"
 	@echo "  make tag-gitops TAG=latest - Tag an existing artifact"
+	@echo "  make release TAG=v0.3.0   - Git tag + push (triggers OCI build via GitHub Action)"
 	@echo "  make list-artifacts       - List published artifact versions"
 	@echo ""
 	@echo "Utility Commands:"
@@ -240,6 +241,13 @@ tag-gitops:
 	flux tag artifact oci://$(OCI_REPO):$(GITOPS_VERSION) --tag=$(TAG) \
 		--creds="$$OCI_REPO_USERNAME:$$OCI_REPO_PASSWORD"
 	@echo "Tagged oci://$(OCI_REPO):$(GITOPS_VERSION) as $(TAG)"
+
+# Tag git and push to trigger OCI artifact build
+release:
+	@if [ -z "$(TAG)" ]; then echo "Usage: make release TAG=v0.3.0 [MSG=\"Release description\"]"; exit 1; fi
+	git tag -a $(TAG) -m "$(or $(MSG),Release $(TAG))"
+	git push origin $(TAG)
+	@echo "Pushed tag $(TAG) — GitHub Action will build and push OCI artifact"
 
 # List published artifact versions
 list-artifacts:
