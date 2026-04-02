@@ -120,7 +120,7 @@ module "infrastructure" {
   talos_configs = module.talos_config.instance_configs
 
   network_bridge_override = var.network_bridge_override
-  storage_pool_override   = var.storage_pool_override
+  storage_override        = var.storage_override
 
   depends_on = [module.talos_config]
 }

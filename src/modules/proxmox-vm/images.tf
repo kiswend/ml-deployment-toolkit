@@ -36,7 +36,7 @@ resource "proxmox_download_file" "os_image" {
   for_each = local.node_image_downloads_map
 
   content_type = each.value.content_type
-  datastore_id = each.value.datastore
+  datastore_id = var.storage_override.images != "" ? var.storage_override.images : each.value.datastore
   node_name    = each.value.node
 
   url                     = each.value.url

@@ -52,8 +52,16 @@ variable "network_bridge_override" {
   default     = ""
 }
 
-variable "storage_pool_override" {
-  description = "Override VM storage pool (empty = use provider config default)"
-  type        = string
-  default     = ""
+variable "storage_override" {
+  description = "Override Proxmox storage locations (empty values = use provider config defaults)"
+  type = object({
+    disks    = string
+    images   = string
+    snippets = string
+  })
+  default = {
+    disks    = ""
+    images   = ""
+    snippets = ""
+  }
 }

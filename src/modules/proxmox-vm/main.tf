@@ -13,7 +13,7 @@ locals {
           size         = storage_item.size
           interface    = storage_item.interface
           storage_pool = try(storage_item.storage_pool,
-            var.storage_pool_override != "" ? var.storage_pool_override : local.provider_config.storage.default_pool)
+            var.storage_override.disks != "" ? var.storage_override.disks : local.provider_config.storage.default_pool)
         }
       ]
     })

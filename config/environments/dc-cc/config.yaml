@@ -21,7 +21,10 @@ infra:
       placement-group-3: "worker3"
       placement-group-4: "worker4"
     network_bridge: "vmbr0"
-    storage_pool: "local-lvm"
+    storage:
+      disks: "local-lvm"
+      images: "local"
+      snippets: "local"
 
   # Talos node OS overrides (optional — any on-prem provider)
   # talos:

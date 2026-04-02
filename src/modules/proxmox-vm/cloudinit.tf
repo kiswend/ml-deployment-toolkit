@@ -14,7 +14,7 @@ resource "proxmox_virtual_environment_file" "talos_config" {
   for_each = local.talos_instances_map
 
   content_type = "snippets"
-  datastore_id = local.provider_config.talos.image.datastore
+  datastore_id = var.storage_override.snippets != "" ? var.storage_override.snippets : local.provider_config.talos.image.datastore
   node_name    = local.nodes_map[each.key]
 
   source_raw {
@@ -36,7 +36,7 @@ resource "proxmox_virtual_environment_file" "talos_meta" {
   for_each = local.talos_instances_map
 
   content_type = "snippets"
-  datastore_id = local.provider_config.talos.image.datastore
+  datastore_id = var.storage_override.snippets != "" ? var.storage_override.snippets : local.provider_config.talos.image.datastore
   node_name    = local.nodes_map[each.key]
 
   source_raw {

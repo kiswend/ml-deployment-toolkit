@@ -62,7 +62,11 @@ module "proxmox" {
   nameservers             = try(local.config_raw.infra.talos.nameservers, [])
   ntp_servers             = try(local.config_raw.infra.talos.ntp_servers, [])
   network_bridge_override = try(local.config_raw.infra.proxmox.network_bridge, "")
-  storage_pool_override   = try(local.config_raw.infra.proxmox.storage_pool, "")
+  storage_override = {
+    disks    = try(local.config_raw.infra.proxmox.storage.disks, "")
+    images   = try(local.config_raw.infra.proxmox.storage.images, "")
+    snippets = try(local.config_raw.infra.proxmox.storage.snippets, "")
+  }
 }
 
 # DigitalOcean Cluster (DOKS Managed Kubernetes)

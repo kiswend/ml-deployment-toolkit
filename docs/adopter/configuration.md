@@ -201,7 +201,10 @@ infra:
       placement-group-1: "node0"
       placement-group-2: "node1"
     network_bridge: "vmbr0"      # optional — overrides provider config default
-    storage_pool: "local-lvm"    # optional — overrides provider config default
+    storage:                     # optional — overrides provider config defaults
+      disks: "local-lvm"        # VM boot/data/cloud-init disks
+      images: "local"           # Talos ISO downloads
+      snippets: "local"         # Machine config + meta-data snippets
 
   # --- Talos node OS overrides (any on-prem provider) ---
   # talos:
@@ -225,7 +228,7 @@ infra:
   #   vpc_cidr: "10.10.0.0/16"
 ```
 
-For Proxmox, the `placement` map ties profile placement groups to physical Proxmox node names. `network_bridge` and `storage_pool` override provider config defaults — useful when environments are on different VLANs or storage backends.
+For Proxmox, the `placement` map ties profile placement groups to physical Proxmox node names. `network_bridge` overrides the default VM bridge (useful for different VLANs). The `storage` group overrides the 3 Proxmox storage locations: `disks` (VM volumes, default `local-lvm`), `images` (Talos ISO downloads, default `local`), `snippets` (machine configs, default `local`). These are independent because different Proxmox storage types have different capabilities (e.g. LVM can't hold snippets).
 
 The `talos` section configures the Talos node OS. It applies to any on-prem provider (Proxmox, OpenStack) and is ignored by managed K8s providers. Nameservers override DHCP-provided DNS (set explicitly only if DHCP DNS is insufficient). NTP servers override the Talos default (`pool.ntp.org`).
 
