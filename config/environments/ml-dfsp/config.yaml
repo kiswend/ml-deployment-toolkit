@@ -25,12 +25,12 @@ infra:
       snippets: "local"
 
   # Talos node OS overrides (optional — any on-prem provider)
-  # talos:
-  #   nameservers:
-  #     - "8.8.8.8"
-  #     - "1.1.1.1"
-  #   ntp_servers:
-  #     - "time.cloudflare.com"
+  talos:
+    nameservers:
+      - "8.8.8.8"
+      - "1.1.1.1"
+    ntp_servers:
+      - "time.cloudflare.com"
 
   # # --- AWS ---
   # aws:

@@ -13,12 +13,11 @@ infra:
       memory: 9216
       workload_class: mixed-plane
       storage:
-        - storage_pool: local-lvm
+        - interface: scsi0
           size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
+          # storage_pool: local-lvm  # per-disk override (default: infra.proxmox.storage.disks)
+        - interface: scsi1
           size: 64
-          interface: scsi1
       tags:
         - ml
         - ml-mixed

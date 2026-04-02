@@ -13,9 +13,9 @@ infra:
       memory: 5120
       workload_class: control-plane
       storage:
-        - storage_pool: local-lvm
+        - interface: scsi0
           size: 32
-          interface: scsi0
+          # storage_pool: local-lvm  # per-disk override (default: infra.proxmox.storage.disks)
       tags:
         - ml
         - ml-master
@@ -26,12 +26,10 @@ infra:
       memory: 10240
       workload_class: worker-general
       storage:
-        - storage_pool: local-lvm
+        - interface: scsi0
           size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
+        - interface: scsi1
           size: 64
-          interface: scsi1
       tags:
         - ml
         - ml-worker
@@ -42,12 +40,10 @@ infra:
       memory: 10240
       workload_class: worker-general
       storage:
-        - storage_pool: local-lvm
+        - interface: scsi0
           size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
+        - interface: scsi1
           size: 64
-          interface: scsi1
       tags:
         - ml
         - ml-worker
@@ -58,12 +54,10 @@ infra:
       memory: 10240
       workload_class: worker-general
       storage:
-        - storage_pool: local-lvm
+        - interface: scsi0
           size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
+        - interface: scsi1
           size: 64
-          interface: scsi1
       tags:
         - ml
         - ml-worker

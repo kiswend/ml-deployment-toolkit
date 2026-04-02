@@ -14,12 +14,12 @@ infra:
       memory: 4096
       workload_class: mixed-plane
       storage:
-        - storage_pool: local-lvm
+        - interface: scsi0
           size: 64
-          interface: scsi0
-        - storage_pool: local-lvm
+          # storage_pool: local-lvm
+        - interface: scsi1
           size: 64
-          interface: scsi1
+          # storage_pool: local-lvm
       tags:
         - ml
         - ml-mixed
