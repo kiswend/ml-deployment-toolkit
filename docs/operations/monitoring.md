@@ -6,6 +6,36 @@
 
 ---
 
+## Talos node dashboard
+
+On-prem clusters (Proxmox) run Talos Linux. The `talosctl dashboard` command provides a real-time TUI showing CPU, memory, network, and process activity per node.
+
+```bash
+talosctl dashboard --talosconfig artifacts/<env>/talos-config/talosconfig -n <vip>
+```
+
+The VIP is the `cluster.vip` value from `config/environments/<env>/config.yaml`. Example:
+
+```bash
+talosctl dashboard --talosconfig artifacts/ml-test/talos-config/talosconfig -n 192.168.88.14
+```
+
+Other useful `talosctl` commands:
+
+```bash
+# Node health and version
+talosctl health --talosconfig artifacts/<env>/talos-config/talosconfig -n <vip>
+talosctl version --talosconfig artifacts/<env>/talos-config/talosconfig -n <vip>
+
+# Kernel logs (dmesg)
+talosctl dmesg --talosconfig artifacts/<env>/talos-config/talosconfig -n <vip>
+
+# Running services
+talosctl services --talosconfig artifacts/<env>/talos-config/talosconfig -n <vip>
+```
+
+---
+
 ## Accessing Grafana
 
 ```bash
