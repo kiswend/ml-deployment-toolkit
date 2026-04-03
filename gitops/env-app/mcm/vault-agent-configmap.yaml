@@ -264,7 +264,7 @@ data:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
               sni: {{ .Data.fqdn }}
-              common_tls_params:
+              common_tls_context:
                 tls_certificate_sds_secret_configs:
                   - name: "mojaloop/{{ .Data.host }}-clientcert-tls"
                     sds_config:
@@ -289,6 +289,17 @@ data:
     spec:
       endpointSelector: {}
       egress:
+        - toEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: kube-system
+                k8s-app: kube-dns
+          toPorts:
+            - ports:
+                - port: "53"
+                  protocol: UDP
+              rules:
+                dns:
+                  - matchPattern: "*"
         - toFQDNs:
     {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}
             - matchName: "{{ .Data.fqdn }}"
@@ -358,7 +369,8 @@ data:
             "fundsIn": "${onboarding_funds_in}",
             "isProxy": "{{ .Data.isProxy }}",
             "hub_operator": "NOT_APPLICABLE",
-            "NET_DEBIT_CAP": "${onboarding_net_debit_cap}"
+            "NET_DEBIT_CAP": "${onboarding_net_debit_cap}",
+            "dfspEmail": "{{ .Data.dfspEmail }}"
           }
         }
     ---

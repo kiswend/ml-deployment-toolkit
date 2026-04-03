@@ -102,6 +102,10 @@ data:
                                 prefix: "/fxQuotes"
                               route:
                                 cluster: quoting-service
+                            - match:
+                                prefix: "/bulkQuotes"
+                              route:
+                                cluster: quoting-service
                             # ML API Adapter (transfers)
                             - match:
                                 prefix: "/transfers"
@@ -111,6 +115,11 @@ data:
                                 prefix: "/fxTransfers"
                               route:
                                 cluster: ml-api-adapter-service
+                            # Bulk API Adapter (bulk transfers)
+                            - match:
+                                prefix: "/bulkTransfers"
+                              route:
+                                cluster: bulk-api-adapter-service
                             # Transaction Requests Service
                             - match:
                                 prefix: "/transactionRequests"
@@ -157,6 +166,18 @@ data:
                       address:
                         socket_address:
                           address: moja-ml-api-adapter-service.mojaloop.svc.cluster.local
+                          port_value: 80
+        - name: bulk-api-adapter-service
+          type: STRICT_DNS
+          connect_timeout: 5s
+          load_assignment:
+            cluster_name: bulk-api-adapter-service
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: moja-bulk-api-adapter-service.mojaloop.svc.cluster.local
                           port_value: 80
         - name: transaction-requests-service
           type: STRICT_DNS
