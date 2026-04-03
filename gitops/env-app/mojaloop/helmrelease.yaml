@@ -370,14 +370,73 @@ spec:
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
 
-    # --- Bulk (MongoDB) ---
+    # --- Bulk ---
     mojaloop-bulk:
+      enabled: true
       config:
         mongo_host: "${mongodb_host}"
         mongo_port: ${mongodb_port}
         mongo_database: mlos
         mongo_user: mlos
         mongo_password: "${mongodb_app_password}"
+      bulk-api-adapter:
+        bulk-api-adapter-service:
+          config: &bulkApiConfig
+            kafka_host: "${kafka_host}"
+            kafka_port: ${kafka_port}
+            mongo_host: "${mongodb_host}"
+            mongo_port: ${mongodb_port}
+            mongo_user: mlos
+            mongo_password: "${mongodb_app_password}"
+            mongo_secret:
+              name: bulk-mongodb-app-secrets
+              key: MONGODB_APP_PASSWORD
+            mongo_database: mlos
+            # Nested mongodb config for the TLS init container (waitForMongodbTlsInitContainer).
+            # The umbrella chart overrides initContainers for bulk-api-adapter services
+            # to use the TLS variant, which reads config.mongodb.* instead of config.mongo_*.
+            mongodb:
+              host: "${mongodb_host}"
+              port: "${mongodb_port}"
+              user: mlos
+              password: "${mongodb_app_password}"
+              secret:
+                name: bulk-mongodb-app-secrets
+                key: MONGODB_APP_PASSWORD
+              database: mlos
+              ssl:
+                enabled: false
+                verify: false
+                caSecret: {}
+                clientCert: {}
+            central_services_host: "moja-centralledger-service"
+            central_services_port: 80
+        bulk-api-adapter-handler-notification:
+          config: *bulkApiConfig
+      bulk-centralledger:
+        cl-handler-bulk-transfer-prepare:
+          config: &bulkClConfig
+            kafka_host: "${kafka_host}"
+            kafka_port: ${kafka_port}
+            mongo_host: "${mongodb_host}"
+            mongo_port: ${mongodb_port}
+            mongo_user: mlos
+            mongo_password: "${mongodb_app_password}"
+            mongo_secret:
+              name: bulk-mongodb-app-secrets
+              key: MONGODB_APP_PASSWORD
+            mongo_database: mlos
+            db_host: "${mysql_host}"
+            db_port: ${mysql_port}
+            db_user: central_ledger
+            db_password: "${mysql_central_ledger_password}"
+            db_database: central_ledger
+        cl-handler-bulk-transfer-fulfil:
+          config: *bulkClConfig
+        cl-handler-bulk-transfer-processing:
+          config: *bulkClConfig
+        cl-handler-bulk-transfer-get:
+          config: *bulkClConfig
 
     # --- TTK (Testing Toolkit) ---
     ml-testing-toolkit:

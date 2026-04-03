@@ -9,6 +9,7 @@ resources:
   - kafka/kafka-metrics-service.yaml
   - kafka/kafka-exporter-metrics-service.yaml
   - kafka/kafka.yaml
+  - kafka/kafka-topics.yaml
   - mongodb/secrets.yaml
   - mongodb/mongodb-metrics-service.yaml
   - mongodb/bulk-mongodb.yaml
