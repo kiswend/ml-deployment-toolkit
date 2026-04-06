@@ -243,8 +243,4 @@ variable "onboarding_net_debit_cap" {
   default     = "1000"
 }
 
-variable "onboarding_collection_version" {
-  description = "TTK test-cases collection version (from mojaloop/testing-toolkit-test-cases)"
-  type        = string
-  default     = "17.0.4"
-}
+

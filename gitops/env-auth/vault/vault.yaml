@@ -167,6 +167,8 @@ spec:
       - path: pki
         type: pki
         description: "MCM PKI for DFSP certificates"
+        config:
+          max_lease_ttl: 87600h
         configuration:
           config:
             - name: urls
@@ -187,11 +189,15 @@ spec:
                 - "${domain}"
               allow_subdomains: true
               max_ttl: 43800h
+              key_type: rsa
+              key_bits: 4096
             - name: client-cert-role
               allow_any_name: true
               max_ttl: 43800h
               client_flag: true
               server_flag: false
+              key_type: rsa
+              key_bits: 4096
 
     # startupSecrets: seeded by bank-vaults on first boot.
     # WHY secret/X (not secret/data/X): KV-v1 paths — no "data/" prefix in the path.

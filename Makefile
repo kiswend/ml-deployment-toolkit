@@ -55,7 +55,6 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_onboarding_hub_name=$${ONBOARDING_HUB_NAME:-} \
 	       TF_VAR_onboarding_funds_in=$${ONBOARDING_FUNDS_IN:-} \
 	       TF_VAR_onboarding_net_debit_cap=$${ONBOARDING_NET_DEBIT_CAP:-} \
-	       TF_VAR_onboarding_collection_version=$${ONBOARDING_COLLECTION_VERSION:-} \
 	       TF_VAR_backup_s3_access_key=$${BACKUP_S3_ACCESS_KEY:-} \
 	       TF_VAR_backup_s3_secret_key=$${BACKUP_S3_SECRET_KEY:-} \
 	       TF_VAR_smtp_host=$${SMTP_HOST:-} \

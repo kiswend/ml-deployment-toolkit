@@ -13,6 +13,9 @@ spec:
   issuerRef:
     name: vault-pki-issuer
     kind: ClusterIssuer
+  privateKey:
+    algorithm: RSA
+    size: 4096
   commonName: "extapi.${domain}"
   dnsNames:
     - "extapi.${domain}"

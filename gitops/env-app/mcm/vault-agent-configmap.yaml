@@ -181,7 +181,9 @@ data:
         vault-agent/template: callback
     stringData:
       ca.crt: |
-    {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}{{ .Data.ca_bundle }}
+    {{ with secret "pki/cert/ca" }}{{ .Data.certificate | indent 4 }}
+    {{ end }}
+    {{ range secrets "secret/onboarding_pm4mls/" }}{{ with secret (printf "secret/onboarding_pm4mls/%s" .) }}{{ .Data.ca_bundle | indent 4 }}
     {{ end }}{{ end }}
     ---
     # CiliumEnvoyConfig: outbound mTLS origination for DFSP callbacks.
@@ -415,7 +417,7 @@ data:
                   echo "Downloading the test collection...";
 
                   wget
-                  https://github.com/mojaloop/testing-toolkit-test-cases/archive/v${onboarding_collection_version}.zip
+                  https://github.com/mojaloop/testing-toolkit-test-cases/archive/v17.2.0.zip
                   -O /tmp/downloaded-test-collections.zip;
 
                   mkdir /tmp/test_cases;
@@ -429,7 +431,7 @@ data:
                     npm run cli -- \
                       -c cli-add-dfsp-config.json \
                       -e cli-add-dfsp-environment.json \
-                      -i /tmp/test_cases/testing-toolkit-test-cases-${onboarding_collection_version}/collections/hub/provisioning/new_participants/new_dfsp.json \
+                      -i /tmp/test_cases/testing-toolkit-test-cases-17.2.0/collections/hub/provisioning/new_participants/new_dfsp.json \
                       -u http://moja-ml-testing-toolkit-backend:5050 \
                       --report-format html \
                       --report-auto-filename-enable true \
@@ -448,7 +450,7 @@ data:
                       npm run cli -- \
                         -c cli-add-dfsp-config.json \
                         -e /tmp/fxp.json \
-                        -i /tmp/test_cases/testing-toolkit-test-cases-${onboarding_collection_version}/collections/hub/provisioning/new_participants/new_fxp.json \
+                        -i /tmp/test_cases/testing-toolkit-test-cases-17.2.0/collections/hub/provisioning/new_participants/new_fxp.json \
                         -u http://moja-ml-testing-toolkit-backend:5050 \
                         --report-format html \
                         --report-auto-filename-enable true \

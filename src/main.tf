@@ -167,7 +167,6 @@ module "flux_config" {
   onboarding_hub_name           = var.onboarding_hub_name
   onboarding_funds_in           = var.onboarding_funds_in
   onboarding_net_debit_cap      = var.onboarding_net_debit_cap
-  onboarding_collection_version = var.onboarding_collection_version
 
   backup_s3_endpoint   = try(local.config_raw.backup.s3.endpoint, "")
   backup_s3_bucket     = try(local.config_raw.backup.s3.bucket, "backups")

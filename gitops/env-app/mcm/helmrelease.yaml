@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: connection-manager
-      version: "1.4.0"
+      version: "17.2.0"
       sourceRef:
         kind: HelmRepository
         name: mojaloop
@@ -34,6 +34,10 @@ spec:
       schema: mcm
 
     api:
+      image:
+        version: v3.7.4
+      ports:
+        portName: api
       url: "https://mcm.int.${domain}"
       clientUrl: "https://mcm.int.${domain}"
       switchFQDN: "${domain}"
@@ -77,6 +81,7 @@ spec:
         pkiServerRole: server-cert-role
         pkiClientRole: client-cert-role
         signExpiryHours: 43800
+        keyLength: 4096
 
       serviceAccount:
         name: connection-manager-api
@@ -101,6 +106,17 @@ spec:
     migrations:
       enabled: true
       deletePolicy: before-hook-creation
+      env:
+        VAULT_AUTH_METHOD: K8S
+        VAULT_K8S_TOKEN_FILE: /var/run/secrets/kubernetes.io/serviceaccount/token
+        VAULT_K8S_ROLE: mcm
+        VAULT_K8S_AUTH_MOUNT_POINT: kubernetes
+        VAULT_ENDPOINT: "http://vault.vault.svc.cluster.local:8200"
+        VAULT_MOUNT_PKI: pki
+        VAULT_MOUNT_KV: secret/mcm
+        VAULT_PKI_SERVER_ROLE: server-cert-role
+        VAULT_PKI_CLIENT_ROLE: client-cert-role
+        SWITCH_ID: "hub-${domain}"
 
     ingress:
       enabled: false
