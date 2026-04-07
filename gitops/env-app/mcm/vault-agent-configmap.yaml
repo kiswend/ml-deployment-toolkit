@@ -324,7 +324,11 @@ data:
             - cluster
       EOH
       destination = "/vault/secrets/tmp/callback.yaml"
-      command     = "/tools/kubectl apply --prune -l vault-agent/template=callback --prune-allowlist=/v1/Secret --prune-allowlist=cilium.io/v2/CiliumEnvoyConfig --prune-allowlist=cilium.io/v2/CiliumNetworkPolicy -n mojaloop -f /vault/secrets/tmp/callback.yaml 2>/dev/null || { /tools/kubectl delete secrets -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete ciliumenvoyconfigs.cilium.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; /tools/kubectl delete ciliumnetworkpolicies.cilium.io -n mojaloop -l vault-agent/template=callback --ignore-not-found; } 2>/dev/null || true"
+      # Apply without -n flag so kubectl honors metadata.namespace for each resource
+      # (per-DFSP TLS secrets live in cilium-secrets; CEC/CNP/dfsp-ca-bundle live in mojaloop).
+      # Prune is omitted because --prune scope is per-namespace and we apply across two namespaces;
+      # orphan cleanup for removed DFSPs is a known limitation to address separately.
+      command     = "/tools/kubectl apply -f /vault/secrets/tmp/callback.yaml || true"
     }
 
     # -------------------------------------------------------------------------
