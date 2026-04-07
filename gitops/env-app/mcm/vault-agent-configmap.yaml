@@ -150,11 +150,13 @@ data:
     ---
     # TLS Secret: holds the DFSP's client certificate bundle for outbound mTLS origination.
     # Referenced by the CiliumEnvoyConfig's per-DFSP UpstreamTlsContext via SDS.
+    # Must live in cilium-secrets namespace — Cilium SDS for envoyConfig only reads from there
+    # (envoyConfig.secretsNamespace.name is hardcoded to cilium-secrets in the chart).
     apiVersion: v1
     kind: Secret
     metadata:
       name: {{ .Data.host }}-clientcert-tls
-      namespace: mojaloop
+      namespace: cilium-secrets
       labels:
         app.kubernetes.io/managed-by: vault-agent
         vault-agent/template: callback
@@ -268,7 +270,7 @@ data:
               sni: {{ .Data.fqdn }}
               common_tls_context:
                 tls_certificate_sds_secret_configs:
-                  - name: "mojaloop/{{ .Data.host }}-clientcert-tls"
+                  - name: "cilium-secrets/{{ .Data.host }}-clientcert-tls"
                     sds_config:
                       api_config_source:
                         api_type: GRPC
@@ -307,7 +309,12 @@ data:
             - matchName: "{{ .Data.fqdn }}"
     {{ end }}{{ end }}
           toPorts:
-            - listener:
+            - ports:
+                - port: "80"
+                  protocol: TCP
+                - port: "443"
+                  protocol: TCP
+              listener:
                 name: dfsp-egress-listener
                 envoyConfig:
                   kind: CiliumEnvoyConfig

@@ -36,3 +36,31 @@ subjects:
   - kind: ServiceAccount
     name: vault-agent
     namespace: mcm
+---
+# Role in cilium-secrets namespace — Vault Agent writes per-DFSP TLS secrets here
+# because Cilium SDS for CiliumEnvoyConfig only reads from cilium-secrets
+# (envoyConfig.secretsNamespace.name is hardcoded in the Cilium chart).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-agent
+  namespace: cilium-secrets
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+---
+# Bind vault-agent SA (mcm namespace) to the Role in cilium-secrets namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-agent
+  namespace: cilium-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vault-agent
+subjects:
+  - kind: ServiceAccount
+    name: vault-agent
+    namespace: mcm
