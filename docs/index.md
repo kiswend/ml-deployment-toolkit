@@ -14,16 +14,19 @@ flowchart TD
     start --> build["Build, extend, or\npublish the distribution"]
     start --> deploy["Configure and\ndeploy Mojaloop"]
     start --> run["Monitor, troubleshoot,\nor recover"]
+    start --> join["Connect as a DFSP\nto an existing switch"]
 
     eval --> arch["Architecture"]
     build --> plat["Platform engineer guide"]
     deploy --> adopt["Adopter guide"]
     run --> ops["Operations guide"]
+    join --> part["Participant guide"]
 
     click arch "architecture/index.md"
     click plat "platform/index.md"
     click adopt "adopter/index.md"
     click ops "operations/index.md"
+    click part "participant/index.md"
 ```
 
 | I want to... | Go to |
@@ -39,6 +42,8 @@ flowchart TD
 | Read Grafana dashboards or investigate alerts | [Monitoring](operations/monitoring.md) |
 | Diagnose a failing deployment or runtime error | [Troubleshooting](operations/troubleshooting.md) |
 | Restore from backup or handle disaster recovery | [Backup and restore](operations/backup-restore.md) |
+| Connect my DFSP to an existing Mojaloop switch | [Participant guide](participant/index.md) |
+| Install the DFSP Helm chart on my own Kubernetes | [Participant install](participant/installation.md) |
 
 ## Delivery pipeline
 
@@ -70,6 +75,7 @@ A deployment can be as simple as a single env cluster pulling artifacts from an 
 | **System integrator** | [Platform guide](platform/index.md), [Adopter guide](adopter/index.md) | Customized artifacts, adopter docs for their customers |
 | **Adopter (deploy)** | [Adopter guide](adopter/index.md) | Environment config |
 | **Adopter (operate)** | [Operations guide](operations/index.md) | Incident learnings, runbook feedback |
+| **Participant (DFSP)** | [Participant guide](participant/index.md), [DFSP Integration](architecture/dfsp-integration.md) | DFSP chart values, local runbooks |
 
 ## Quick reference
 

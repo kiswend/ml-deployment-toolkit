@@ -22,12 +22,15 @@ flowchart TD
     networking --> mtls["DFSP mTLS\n(PKI model, inbound/outbound,\nCA rotation)"]
     security --> mtls
     provider --> networking
+    mtls --> dfspint["DFSP Integration\n(tenancy boundary,\nDFSP-side stack)"]
+    networking --> dfspint
 
     click overview "system-overview.md"
     click provider "provider-model.md"
     click gitops "gitops-structure.md"
     click networking "networking.md"
     click mtls "dfsp-mtls.md"
+    click dfspint "dfsp-integration.md"
     click security "security.md"
     click observability "observability.md"
     click data "data-layer.md"
@@ -42,6 +45,7 @@ flowchart TD
 | [GitOps Structure](gitops-structure.md) | OCI artifact, kustomization hierarchy, Flux wiring |
 | [Networking](networking.md) | Gateway API, 3-LB architecture, DNS strategy |
 | [DFSP mTLS](dfsp-mtls.md) | PKI model, inbound/outbound mTLS, Vault Agent, CA rotation |
+| [DFSP Integration](dfsp-integration.md) | Tenancy boundary, DFSP-side Helm chart topology, config and cert bootstrap |
 | [Security](security.md) | Vault isolation model, security layers, recovery kit |
 | [Observability](observability.md) | Metrics (Thanos), logs (Loki), traces (Tempo), dashboards |
 | [Data Layer](data-layer.md) | Databases, backup architecture, disaster recovery |
