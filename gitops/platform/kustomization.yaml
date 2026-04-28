@@ -9,3 +9,4 @@ resources:
   - external-secrets/helmrelease.yaml
   - vpa/helmrelease.yaml
   - goldilocks/helmrelease.yaml
+  - reloader/helmrelease.yaml

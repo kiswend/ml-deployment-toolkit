@@ -137,10 +137,10 @@ module "flux_config" {
   oci_proxy_username = var.oci_proxy_username
   oci_proxy_password = var.oci_proxy_password
 
-  minio_root_user       = var.minio_root_user
-  minio_root_password   = var.minio_root_password
-  harbor_admin_password = var.harbor_admin_password
-  grafana_admin_password         = var.grafana_admin_password
+  minio_root_user        = var.minio_root_user
+  minio_root_password    = var.minio_root_password
+  harbor_admin_password  = var.harbor_admin_password
+  grafana_admin_password = var.grafana_admin_password
 
   mysql_root_password           = var.mysql_root_password
   mysql_central_ledger_password = var.mysql_central_ledger_password
@@ -164,9 +164,9 @@ module "flux_config" {
   smtp_user     = var.smtp_user
   smtp_password = var.smtp_password
 
-  onboarding_hub_name           = var.onboarding_hub_name
-  onboarding_funds_in           = var.onboarding_funds_in
-  onboarding_net_debit_cap      = var.onboarding_net_debit_cap
+  hub_participant_name     = var.hub_participant_name
+  onboarding_funds_in      = var.onboarding_funds_in
+  onboarding_net_debit_cap = var.onboarding_net_debit_cap
 
   backup_s3_endpoint   = try(local.config_raw.backup.s3.endpoint, "")
   backup_s3_bucket     = try(local.config_raw.backup.s3.bucket, "backups")

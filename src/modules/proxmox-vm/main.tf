@@ -10,10 +10,10 @@ locals {
     for instance in var.instances : merge(instance, {
       storage_config = [
         for storage_item in instance.storage : {
-          size         = storage_item.size
-          interface    = storage_item.interface
+          size      = storage_item.size
+          interface = storage_item.interface
           storage_pool = try(storage_item.storage_pool,
-            var.storage_override.disks != "" ? var.storage_override.disks : local.provider_config.storage.default_pool)
+          var.storage_override.disks != "" ? var.storage_override.disks : local.provider_config.storage.default_pool)
         }
       ]
     })

@@ -365,12 +365,12 @@ variable "mimir_url" {
   default     = ""
 }
 
-# --- DFSP Onboarding Parameters ---
+# --- Hub Identity ---
 
-variable "onboarding_hub_name" {
-  description = "Hub participant name in central-ledger for DFSP onboarding"
+variable "hub_participant_name" {
+  description = "Hub participant name — canonical identifier used by mojaloop chart HUB_PARTICIPANT.NAME, MCM SWITCH_ID, and DFSP onboarding HUB_NAME"
   type        = string
-  default     = "hub"
+  default     = "Hub"
 }
 
 variable "onboarding_funds_in" {

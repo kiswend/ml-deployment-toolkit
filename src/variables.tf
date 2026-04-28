@@ -223,13 +223,15 @@ variable "smtp_password" {
   sensitive   = true
 }
 
-# --- DFSP Onboarding Parameters ---
+# --- Hub Identity ---
 
-variable "onboarding_hub_name" {
-  description = "Hub participant name in central-ledger for DFSP onboarding"
+variable "hub_participant_name" {
+  description = "Hub participant name — single source of truth for HUB_PARTICIPANT.NAME (mojaloop chart), SWITCH_ID (MCM), and HUB_NAME (DFSP onboarding). Must match the string the switch uses as fspiop-source on outbound callbacks."
   type        = string
-  default     = "hub"
+  default     = "Hub"
 }
+
+# --- DFSP Onboarding Parameters ---
 
 variable "onboarding_funds_in" {
   description = "Initial deposit into DFSP settlement account"

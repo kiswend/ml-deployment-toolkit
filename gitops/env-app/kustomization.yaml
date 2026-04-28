@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - ory-rbac-role-permissions.yaml
   - mojaloop/helmrelease.yaml
+  - mojaloop/switch-jws-cert.yaml
+  - mojaloop/switch-jws-pubkey-job.yaml
   - mcm/helmrelease.yaml
   - mcm/secrets.yaml
   - mcm/oathkeeper-rules.yaml

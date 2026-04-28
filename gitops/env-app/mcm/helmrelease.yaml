@@ -41,7 +41,7 @@ spec:
       url: "https://mcm.int.${domain}"
       clientUrl: "https://mcm.int.${domain}"
       switchFQDN: "${domain}"
-      switchId: "hub-${domain}"
+      switchId: "${hub_participant_name}"
 
       openid:
         enabled: true
@@ -116,7 +116,7 @@ spec:
         VAULT_MOUNT_KV: secret/mcm
         VAULT_PKI_SERVER_ROLE: server-cert-role
         VAULT_PKI_CLIENT_ROLE: client-cert-role
-        SWITCH_ID: "hub-${domain}"
+        SWITCH_ID: "${hub_participant_name}"
 
     ingress:
       enabled: false

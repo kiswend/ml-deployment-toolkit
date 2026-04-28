@@ -228,6 +228,8 @@ spec:
           .EVENT_SDKrc: *eventSdkConfig
       quoting-service-handler:
         replicaCount: ${qs_handler_replicas}
+        commonAnnotations: &switchJwsReloader
+          secret.reloader.stakater.com/reload: switch-jws
         podAnnotations:
           prometheus.io/scrape: "true"
           prometheus.io/port: "3003"
@@ -245,6 +247,12 @@ spec:
           # Without this, the aggregator's INNER JOIN on the quote table
           # returns zero rows, and the Finance Portal Transfers UI is empty.
           simple_routing_mode_enabled: false
+          # Shared Hub JWS signing key (see gitops/env-app/mojaloop/switch-jws-cert.yaml).
+          # All switch signing services use the same keypair so DFSPs validate with one pub key.
+          endpointSecurity:
+            jwsSigningKeySecret: &switchJwsSigningKey
+              name: switch-jws
+              key: tls.key
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
 
@@ -302,6 +310,7 @@ spec:
     account-lookup-service:
       account-lookup-service:
         replicaCount: ${als_service_replicas}
+        commonAnnotations: *switchJwsReloader
         config:
           db_host: "${mysql_host}"
           db_port: ${mysql_port}
@@ -311,6 +320,8 @@ spec:
           db_secret:
             name: mysqldb
             key: mysql-als-password
+          endpointSecurity:
+            jwsSigningKeySecret: *switchJwsSigningKey
         init:
           enabled: true
         configOverride:
@@ -364,9 +375,12 @@ spec:
           .EVENT_SDKrc: *eventSdkConfig
       ml-api-adapter-handler-notification:
         replicaCount: ${ml_adapter_handler_notification_replicas}
+        commonAnnotations: *switchJwsReloader
         config:
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
+          endpointSecurity:
+            jwsSigningKeySecret: *switchJwsSigningKey
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
 

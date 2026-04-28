@@ -377,7 +377,7 @@ data:
             "HOST_ORACLE_MSISDN": "http://moja-als-msisdn-oracle",
             "DFSP_CALLBACK_URL": "http://{{ .Data.fqdn }}",
             "DFSP_NAME": "{{ .Data.host }}",
-            "HUB_NAME": "${onboarding_hub_name}",
+            "HUB_NAME": "${hub_participant_name}",
             "currency": "{{ .Data.currency_code }}",
             "fundsIn": "${onboarding_funds_in}",
             "isProxy": "{{ .Data.isProxy }}",

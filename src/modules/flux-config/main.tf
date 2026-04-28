@@ -93,9 +93,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       redis_host   = local.redis_host
       redis_port   = local.redis_port
 
-      onboarding_hub_name           = var.onboarding_hub_name
-      onboarding_funds_in           = var.onboarding_funds_in
-      onboarding_net_debit_cap      = var.onboarding_net_debit_cap
+      hub_participant_name     = var.hub_participant_name
+      onboarding_funds_in      = var.onboarding_funds_in
+      onboarding_net_debit_cap = var.onboarding_net_debit_cap
 
       backup_s3_endpoint = var.backup_s3_endpoint
       backup_s3_bucket   = var.backup_s3_bucket
@@ -115,14 +115,14 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
   data = merge(
     var.dns_credentials,
     {
-      oci_repo_username                = var.oci_repo_username
-      oci_repo_password                = var.oci_repo_password
-      oci_proxy_username               = var.oci_proxy_username
-      oci_proxy_password               = var.oci_proxy_password
-      minio_root_user                  = var.minio_root_user
-      minio_root_password              = var.minio_root_password
-      harbor_admin_password            = var.harbor_admin_password
-      grafana_admin_password           = var.grafana_admin_password
+      oci_repo_username      = var.oci_repo_username
+      oci_repo_password      = var.oci_repo_password
+      oci_proxy_username     = var.oci_proxy_username
+      oci_proxy_password     = var.oci_proxy_password
+      minio_root_user        = var.minio_root_user
+      minio_root_password    = var.minio_root_password
+      harbor_admin_password  = var.harbor_admin_password
+      grafana_admin_password = var.grafana_admin_password
     },
     local.is_env ? {
       mysql_root_password           = var.mysql_root_password
@@ -936,7 +936,7 @@ resource "kubectl_manifest" "kustomization_env_observability_agent" {
       prune    = true
       wait     = true
       dependsOn = [
-        { name = "platform-config" }  # Needs Gateway/DNS for remote write
+        { name = "platform-config" } # Needs Gateway/DNS for remote write
       ]
       sourceRef = {
         kind = "OCIRepository"

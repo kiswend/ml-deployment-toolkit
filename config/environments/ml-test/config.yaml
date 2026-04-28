@@ -18,6 +18,7 @@ infra:
     placement:
       placement-group-1: "node0"
       placement-group-2: "node1"
+      placement-group-3: "node2"
     network_bridge: "vmbr0"
     storage:
       disks: "local-lvm"
