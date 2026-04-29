@@ -168,6 +168,8 @@ module "flux_config" {
   onboarding_funds_in      = var.onboarding_funds_in
   onboarding_net_debit_cap = var.onboarding_net_debit_cap
 
+  api_type = try(local.config.app.api_type, "fspiop")
+
   backup_s3_endpoint   = try(local.config_raw.backup.s3.endpoint, "")
   backup_s3_bucket     = try(local.config_raw.backup.s3.bucket, "backups")
   backup_s3_region     = try(local.config_raw.backup.s3.region, "us-east-1")

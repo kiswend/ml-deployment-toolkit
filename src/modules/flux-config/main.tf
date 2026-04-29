@@ -97,6 +97,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       onboarding_funds_in      = var.onboarding_funds_in
       onboarding_net_debit_cap = var.onboarding_net_debit_cap
 
+      api_type = var.api_type
+
       backup_s3_endpoint = var.backup_s3_endpoint
       backup_s3_bucket   = var.backup_s3_bucket
       backup_s3_region   = var.backup_s3_region

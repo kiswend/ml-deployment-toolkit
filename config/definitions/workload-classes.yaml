@@ -2,8 +2,8 @@
 # Global versions are the single source of truth for Talos/Kubernetes versions
 
 # Global Talos/Kubernetes versions
-talos_version: "v1.12.6"
-kubernetes_version: "1.35.2"
+talos_version: "v1.13.0"
+kubernetes_version: "1.36.0"
 
 # Talos image factory schematic (extensions baked into the image)
 talos_image:

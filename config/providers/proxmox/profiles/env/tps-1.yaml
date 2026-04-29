@@ -23,7 +23,7 @@ infra:
     - name: w-0
       placement_group: placement-group-3
       cores: 6
-      memory: 11264
+      memory: 12288
       workload_class: worker-general
       storage:
         - interface: scsi0
@@ -37,7 +37,7 @@ infra:
     - name: w-1
       placement_group: placement-group-2
       cores: 6
-      memory: 11264
+      memory: 12288
       workload_class: worker-general
       storage:
         - interface: scsi0
@@ -51,7 +51,7 @@ infra:
     - name: w-2
       placement_group: placement-group-1
       cores: 6
-      memory: 11264
+      memory: 12288
       workload_class: worker-general
       storage:
         - interface: scsi0

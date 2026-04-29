@@ -89,6 +89,13 @@ app:
   lb_ipam:
     range: "192.168.88.37-192.168.88.39"
   alert_email: "nathan@example.com"
+  # Mojaloop API dialect for ALS, quoting-service, and ml-api-adapter.
+  #   fspiop    — FSPIOP 1.x JSON message bodies (default)
+  #   iso20022  — ISO 20022 message bodies (FSPIOP 2.0 envelope)
+  # Switching modes mid-flight breaks in-progress transfers (Kafka topics carry
+  # bodies in the previous dialect). Set this once at deploy time. DFSPs and
+  # simulators connecting to the switch must use the same dialect.
+  api_type: "fspiop"
 
 # ------------------------------------------------------------------
 # 6. BACKUP

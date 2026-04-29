@@ -385,6 +385,17 @@ variable "onboarding_net_debit_cap" {
   default     = "1000"
 }
 
+variable "api_type" {
+  description = "Mojaloop API dialect — fspiop or iso20022. Substituted into ALS, quoting-service, and ml-api-adapter HelmRelease config."
+  type        = string
+  default     = "fspiop"
+
+  validation {
+    condition     = contains(["fspiop", "iso20022"], var.api_type)
+    error_message = "api_type must be 'fspiop' or 'iso20022'."
+  }
+}
+
 
 # --- Profile Variables (TPS/CC sizing) ---
 

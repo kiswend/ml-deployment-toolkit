@@ -216,6 +216,7 @@ spec:
         metrics:
           enabled: true
         config:
+          api_type: ${api_type}
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
           db_host: "${mysql_host}"
@@ -312,6 +313,7 @@ spec:
         replicaCount: ${als_service_replicas}
         commonAnnotations: *switchJwsReloader
         config:
+          api_type: ${api_type}
           db_host: "${mysql_host}"
           db_port: ${mysql_port}
           db_user: account_lookup
@@ -369,6 +371,7 @@ spec:
       ml-api-adapter-service:
         replicaCount: ${ml_adapter_service_replicas}
         config:
+          api_type: ${api_type}
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
         configOverride:
@@ -377,6 +380,7 @@ spec:
         replicaCount: ${ml_adapter_handler_notification_replicas}
         commonAnnotations: *switchJwsReloader
         config:
+          api_type: ${api_type}
           kafka_host: "${kafka_host}"
           kafka_port: ${kafka_port}
           endpointSecurity:
