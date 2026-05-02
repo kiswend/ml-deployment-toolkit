@@ -17,7 +17,7 @@ spec:
   chart:
     spec:
       chart: external-dns
-      version: "1.x"
+      version: "1.20.x" # pin to version that support digitalocean
       sourceRef:
         kind: HelmRepository
         name: external-dns
