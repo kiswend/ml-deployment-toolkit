@@ -280,8 +280,11 @@ data:
     {{ end }}{{ end }}
     ---
     # CiliumNetworkPolicy: redirect DFSP-bound egress through the CEC Envoy listener.
-    # All pods in the mojaloop namespace that send traffic to enrolled DFSP FQDNs
-    # are transparently redirected to the dfsp-callback-mtls CEC for mTLS origination.
+    # Scoped to switch services that originate FSPIOP callbacks back to DFSPs.
+    # Source for the canonical list: ml-perf-whitepaper-ws/.../mtls_switch/defaults/main.yml
+    # (the four "moja-*" callback Deployments). With endpointSelector: {} the policy
+    # would intercept ALL TCP/80+443 egress in the mojaloop namespace and redirect it
+    # to a plain-HTTP Envoy listener — breaking unrelated HTTPS (e.g. PXC PITR → MinIO).
     apiVersion: cilium.io/v2
     kind: CiliumNetworkPolicy
     metadata:
@@ -291,7 +294,17 @@ data:
         app.kubernetes.io/managed-by: vault-agent
         vault-agent/template: callback
     spec:
-      endpointSelector: {}
+      endpointSelector:
+        matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+              - ml-api-adapter-handler-notification
+              - account-lookup-service
+              - quoting-service
+              - quoting-service-handler
+              # - bulk-api-adapter-handler-notification   # add when bulk FSPIOP flows are enabled
+              # - transaction-requests-service            # add when transactionRequests callbacks are enabled
       egress:
         - toEndpoints:
             - matchLabels:
