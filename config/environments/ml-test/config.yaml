@@ -130,3 +130,80 @@ oci:
   proxy:
     active: true                   # Enable container image proxy through Harbor
     url: "harbor.int.cc1.pj1.moja-do.example.com"   # Harbor proxy cache URL (no oci:// prefix — used in Talos mirrors)
+
+
+# hub:
+#   bootstrap: true
+#   account:
+#     - type: HUB_MULTILATERAL_SETTLEMENT
+#       currency: XXX
+#     - type: HUB_RECONCILIATION
+#       currency: XXX
+#     - type: HUB_MULTILATERAL_SETTLEMENT
+#       currency: XTS
+#     - type: HUB_RECONCILIATION
+#       currency: XTS
+#     - type: HUB_MULTILATERAL_SETTLEMENT
+#       currency: INR
+#     - type: HUB_RECONCILIATION
+#       currency: INR
+#     - type: HUB_MULTILATERAL_SETTLEMENT
+#       currency: XDR
+#     - type: HUB_RECONCILIATION
+#       currency: XDR
+#   email: some.email@gmail.com # account alert email
+#   settlement_model:
+#     - name: DEFERREDNETXXX
+#       settlementGranularity: NET
+#       settlementInterchange: MULTILATERAL
+#       settlementDelay: DEFERRED
+#       requireLiquidityCheck: false
+#       ledgerAccountType: POSITION
+#       autoPositionReset: true
+#       currency: XXX
+#       settlementAccountType: SETTLEMENT
+#     - name: DEFAULTDEFERREDNET
+#       settlementGranularity: NET
+#       settlementInterchange: MULTILATERAL
+#       settlementDelay: DEFERRED
+#       requireLiquidityCheck: false
+#       ledgerAccountType: POSITION
+#       autoPositionReset: true
+#       settlementAccountType: SETTLEMENT
+#     - name: CGS
+#       settlementGranularity: GROSS
+#       settlementInterchange: BILATERAL
+#       settlementDelay: IMMEDIATE
+#       currency: INR
+#       requireLiquidityCheck: false
+#       ledgerAccountType: POSITION
+#       autoPositionReset: false
+#       settlementAccountType: SETTLEMENT
+#     - name: INTERCHANGEFEE
+#       settlementGranularity: NET
+#       settlementInterchange: MULTILATERAL
+#       settlementDelay: DEFERRED
+#       currency: INR
+#       requireLiquidityCheck: false
+#       ledgerAccountType: INTERCHANGE_FEE
+#       autoPositionReset: true
+#       settlementAccountType: INTERCHANGE_FEE_SETTLEMENT
+#   oracle:
+#     - oracleIdType: MSISDN
+#       endpoint:
+#         value: http://moja-als-msisdn-oracle
+#         endpointType: URL
+#       currency: XXX
+#       isDefault: true
+#     - oracleIdType: BUSINESS
+#       endpoint:
+#         value: http://moja-simulator/oracle
+#         endpointType: URL
+#       currency: XXX
+#       isDefault: true
+#     - oracleIdType: ALIAS
+#       endpoint:
+#         value: http://moja-simulator/oracle
+#         endpointType: URL
+#       currency: XXX
+#       isDefault: true
