@@ -405,3 +405,11 @@ variable "profile_vars" {
   default     = {}
 }
 
+# --- Deployer Helm Value Overrides ---
+
+variable "helm_value_overrides" {
+  description = "Per-chart deployer override values (chart_name => raw values.yaml string). Empty string skips ConfigMap creation; HelmRelease valuesFrom entry is optional, so missing ConfigMap is a no-op."
+  type        = map(string)
+  default     = {}
+}
+

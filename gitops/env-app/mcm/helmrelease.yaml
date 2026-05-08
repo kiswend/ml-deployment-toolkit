@@ -24,6 +24,11 @@ spec:
     remediation:
       retries: -1
       strategy: uninstall
+  valuesFrom:
+    - kind: ConfigMap
+      name: mcm-values-override
+      valuesKey: values.yaml
+      optional: true
   values:
     db:
       user: mcm

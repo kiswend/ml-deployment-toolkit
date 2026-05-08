@@ -185,6 +185,11 @@ module "flux_config" {
     try({ for k, v in module.config.profile_cc : k => tostring(v) }, {}),
   )
 
+  helm_value_overrides = {
+    mojaloop = try(file("../config/environments/${var.env_name}/values/mojaloop.yaml"), "")
+    mcm      = try(file("../config/environments/${var.env_name}/values/mcm.yaml"), "")
+  }
+
   depends_on = [
     module.flux_bootstrap
   ]

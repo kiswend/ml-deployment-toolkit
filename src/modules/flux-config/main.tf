@@ -158,6 +158,21 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
   type = "Opaque"
 }
 
+# Deployer Helm value overrides — one ConfigMap per chart with a non-empty override
+# Referenced by HelmRelease.valuesFrom (optional: true), merged on top of the platform-team's inline values.
+resource "kubernetes_config_map_v1" "helm_value_overrides" {
+  for_each = { for k, v in var.helm_value_overrides : k => v if v != "" }
+
+  metadata {
+    name      = "${each.key}-values-override"
+    namespace = var.flux_namespace
+  }
+
+  data = {
+    "values.yaml" = each.value
+  }
+}
+
 # OCI registry credentials secret (for Flux source-controller to pull from private registry)
 resource "kubernetes_secret_v1" "oci_credentials" {
   count = local.has_oci_credentials ? 1 : 0
