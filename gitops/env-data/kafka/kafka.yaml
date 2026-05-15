@@ -2,7 +2,7 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaNodePool
 metadata:
   name: dual-role
-  namespace: mojaloop
+  namespace: data
   labels:
     strimzi.io/cluster: mojaloop-kafka
 spec:
@@ -53,7 +53,7 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: Kafka
 metadata:
   name: mojaloop-kafka
-  namespace: mojaloop
+  namespace: data
   annotations:
     strimzi.io/node-pools: enabled
     strimzi.io/kraft: enabled

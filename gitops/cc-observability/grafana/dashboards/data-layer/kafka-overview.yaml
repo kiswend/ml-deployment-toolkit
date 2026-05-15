@@ -413,11 +413,11 @@ data:
           "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } } },
           "targets": [
             {
-              "expr": "jvm_memory_used_bytes{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", service=\"mojaloop-kafka-metrics\", area=\"heap\"}",
+              "expr": "jvm_memory_used_bytes{cluster_name=\"$cluster_name\", namespace=\"data\", service=\"mojaloop-kafka-metrics\", area=\"heap\"}",
               "legendFormat": "{{pod}} heap used"
             },
             {
-              "expr": "jvm_memory_max_bytes{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", service=\"mojaloop-kafka-metrics\", area=\"heap\"}",
+              "expr": "jvm_memory_max_bytes{cluster_name=\"$cluster_name\", namespace=\"data\", service=\"mojaloop-kafka-metrics\", area=\"heap\"}",
               "legendFormat": "{{pod}} heap max"
             }
           ]
@@ -431,7 +431,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
           "targets": [
             {
-              "expr": "rate(jvm_gc_collection_seconds_sum{cluster_name=\"$cluster_name\", namespace=\"mojaloop\", service=\"mojaloop-kafka-metrics\"}[$__rate_interval])",
+              "expr": "rate(jvm_gc_collection_seconds_sum{cluster_name=\"$cluster_name\", namespace=\"data\", service=\"mojaloop-kafka-metrics\"}[$__rate_interval])",
               "legendFormat": "{{pod}} {{gc}} time/s"
             }
           ]

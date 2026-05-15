@@ -2,7 +2,7 @@ apiVersion: redis.redis.opstreelabs.in/v1beta2
 kind: Redis
 metadata:
   name: ttk-redis
-  namespace: mojaloop
+  namespace: data
 spec:
   kubernetesConfig:
     image: quay.io/opstree/redis:v7.0.12

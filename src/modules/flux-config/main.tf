@@ -26,14 +26,14 @@ locals {
     }
   }) : ""
 
-  # Data layer endpoints — self-hosted uses in-cluster service names, managed uses cloud service endpoints
-  mysql_host   = local.is_talos ? "mojaloop-db-haproxy.mojaloop.svc.cluster.local" : var.mysql_host
+  # Data layer endpoints — self-hosted uses in-cluster FQDNs (data ns), managed uses cloud service endpoints
+  mysql_host   = local.is_talos ? "mojaloop-db-haproxy.data.svc.cluster.local" : var.mysql_host
   mysql_port   = local.is_talos ? "3306" : var.mysql_port
-  kafka_host   = local.is_talos ? "mojaloop-kafka-kafka-bootstrap" : var.kafka_host
+  kafka_host   = local.is_talos ? "mojaloop-kafka-kafka-bootstrap.data.svc.cluster.local" : var.kafka_host
   kafka_port   = local.is_talos ? "9092" : var.kafka_port
-  mongodb_host = local.is_talos ? "bulk-mongodb-rs0" : var.mongodb_host
+  mongodb_host = local.is_talos ? "bulk-mongodb-rs0.data.svc.cluster.local" : var.mongodb_host
   mongodb_port = local.is_talos ? "27017" : var.mongodb_port
-  redis_host   = local.is_talos ? "ttk-redis" : var.redis_host
+  redis_host   = local.is_talos ? "ttk-redis.data.svc.cluster.local" : var.redis_host
   redis_port   = local.is_talos ? "6379" : var.redis_port
 }
 
@@ -715,13 +715,13 @@ resource "kubectl_manifest" "kustomization_env_data" {
           apiVersion = "kafka.strimzi.io/v1beta2"
           kind       = "Kafka"
           name       = "mojaloop-kafka"
-          namespace  = "mojaloop"
+          namespace  = "data"
         },
         {
           apiVersion = "psmdb.percona.com/v1"
           kind       = "PerconaServerMongoDB"
           name       = "bulk-mongodb"
-          namespace  = "mojaloop"
+          namespace  = "data"
         }
       ]
       postBuild = {

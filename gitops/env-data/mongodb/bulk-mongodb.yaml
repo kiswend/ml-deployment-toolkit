@@ -2,7 +2,7 @@ apiVersion: psmdb.percona.com/v1
 kind: PerconaServerMongoDB
 metadata:
   name: bulk-mongodb
-  namespace: mojaloop
+  namespace: data
 spec:
   crVersion: "1.21.0"
   image: percona/percona-server-mongodb:7.0

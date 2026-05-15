@@ -7,7 +7,7 @@ This documentation covers the full lifecycle: architecture decisions, building t
 ## Start here
 
 ```mermaid
-flowchart TD
+flowchart LR
     start["What do you need?"]
 
     start --> eval["Evaluate the design\nor understand trade-offs"]
@@ -50,7 +50,7 @@ flowchart TD
 This repo sits in the middle of the Mojaloop delivery chain:
 
 ```mermaid
-flowchart LR
+flowchart TD
     dev["Mojaloop dev team\n(Helm charts, containers)"]
     oss["Third-party ecosystem\n(CNCF, Percona, Ory, etc.)"]
     dist["Distribution team\n(this repo)"]

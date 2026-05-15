@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mojaloop-db-metrics
-  namespace: mojaloop
+  namespace: data
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "9104"

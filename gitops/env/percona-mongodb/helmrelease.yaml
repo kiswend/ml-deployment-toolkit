@@ -32,4 +32,4 @@ spec:
     remediation:
       retries: 3
   values:
-    watchNamespace: "mojaloop"
+    watchNamespace: "data"

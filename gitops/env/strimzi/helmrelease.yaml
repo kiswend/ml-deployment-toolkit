@@ -33,7 +33,7 @@ spec:
       retries: 3
   values:
     watchNamespaces:
-      - mojaloop
+      - data
     # Pod annotations for Alloy metrics scraping
     annotations:
       prometheus.io/scrape: "true"

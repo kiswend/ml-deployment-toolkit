@@ -17,6 +17,14 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: data
+  labels:
+    app.kubernetes.io/part-of: mojaloop
+    mojaloop.io/layer: environment
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: vault
   labels:
     app.kubernetes.io/part-of: mojaloop

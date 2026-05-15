@@ -9,7 +9,7 @@
 Observability follows a hub-and-spoke topology. A dedicated observability cluster (typically the Tooling Cluster, if one exists) runs the full backend stack (storage, querying, dashboards). Each App Environment cluster runs a lightweight collection agent that pushes telemetry data to the backend. No environment cluster stores its own metrics or logs persistently.
 
 ```mermaid
-flowchart TB
+flowchart LR
     subgraph env1["App Environment (env-prod)"]
         alloy1["Alloy\n(single Deployment)"]
         ksm1["kube-state-metrics"]
