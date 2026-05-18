@@ -1,51 +1,43 @@
-# Mojaloop distribution system
+# ml-deployment-toolkit
 
+An infrastructure-agnostic distribution of [Mojaloop](https://mojaloop.io/) — the open-source real-time payment switch. The toolkit packages Terraform modules and FluxCD GitOps manifests into OCI artifacts, so a full Mojaloop deployment becomes a single `make plan-apply` against the infrastructure provider of your choice (Proxmox/Talos on-prem, AWS EKS, DigitalOcean DOKS).
 
-## Prerequisites
+## What you can deploy
 
-Create the promox token
-```bash
-pveum user token add root@pam 'ml-iac3' --privsep 0
-# pveum acl modify / -user root@pam -token 'root@pam!ml-iac3' -role Administrator
-pveum acl modify / -token 'root@pam!ml-iac3' -role Administrator
-```
+Two cluster kinds, each driven from its own environment config under `config/environments/<env>/`.
 
-┌──────────────┬──────────────────────────────────────┐
-│ key          │ value                                │
-╞══════════════╪══════════════════════════════════════╡
-│ full-tokenid │ root@pam!ml-iac3                     │
-├──────────────┼──────────────────────────────────────┤
-│ info         │ {"privsep":"0"}                      │
-├──────────────┼──────────────────────────────────────┤
-│ value        │ 702f4dd6-7511-4442-ac26-5b1309b7c1a6 │
+### Tooling Cluster (CC)
 
-token to use: root@pam!ml-iac3=702f4dd6-7511-4442-ac26-5b1309b7c1a6 
+A management-plane cluster hosting the shared services that the rest of the platform depends on: Harbor (OCI registry and pull-through cache), Vault (secrets and PKI), MinIO or managed object storage (state and backups), FluxCD, and the observability stack. A Tooling Cluster is optional — a single Switch can pull artifacts directly from a public OCI registry — but recommended for multi-environment setups and air-gapped operation.
 
+→ [Deploy a Tooling Cluster](docs/adopter/deployment-cc.md)
 
-##
+### Switch (SW)
 
-```bash
-mojaloop@ccu6:~$ eval "$(ssh-agent -s)"
+An App Environment cluster running Mojaloop itself: central ledger, account lookup, quoting, settlements, MCM, the auth stack (Keycloak + Ory), and the data layer (MySQL, Kafka, MongoDB, Redis). DFSPs connect to it over mTLS via the Cilium-based gateway.
 
-mojaloop@ccu6:~$ ssh-add ssh_key_ml_iac3
+→ [Deploy a Switch](docs/adopter/deployment-sw.md)
 
-mojaloop@ccu6:~$ git clone git@github.com:kiswend/ml-iac3.git
+## Quick start
 
-```
+Before your first deployment you need a provider account, DNS zone, and a few CLI tools installed — see [prerequisites](docs/adopter/prerequisites.md) and [provider setup](docs/adopter/provider-setup/index.md).
 
-
-
-
-## DNS zone
 
 ```bash
-# 1. Create the subdomain zone
-doctl compute domain create sw5.pj1.moja-do.example.com
+# 1. Pick an environment name and create its config dir
+cp -r config/environments/ml-cc config/environments/<env>
 
-# 2. Add NS delegation in the parent zone
-doctl compute domain records create moja-do.example.com --record-type NS --record-name sw5.pj1 --record-data ns1.digitalocean.com. --record-ttl 300
-doctl compute domain records create moja-do.example.com --record-type NS --record-name sw5.pj1 --record-data ns2.digitalocean.com. --record-ttl 300
-doctl compute domain records create moja-do.example.com --record-type NS --record-name sw5.pj1 --record-data ns3.digitalocean.com. --record-ttl 300
+# 2. Fill in credentials
+cp config/environments/<env>/.env.sample config/environments/<env>/.env
+$EDITOR config/environments/<env>/.env
 
+# 3. Edit cluster, provider, DNS, and sizing
+$EDITOR config/environments/<env>/config.yaml
 
+# 4. Plan and apply
+make plan-apply ENV=<env>
 ```
+
+## Documentation
+
+Full guide — architecture, adopter, platform, operations, participant — is in [docs/](docs/index.md).
