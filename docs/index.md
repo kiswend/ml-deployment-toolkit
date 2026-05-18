@@ -36,7 +36,9 @@ flowchart LR
 | Add a provider, service, or DNS integration | [Platform guide](platform/index.md) |
 | Build and publish an OCI artifact | [Building artifacts](platform/building-artifacts.md) |
 | Understand the Terraform module flow | [Module pipeline](platform/module-pipeline.md) |
-| Set up a new environment from scratch | [Prerequisites](adopter/prerequisites.md) then [Deployment](adopter/deployment.md) |
+| Set up a new environment from scratch | [Prerequisites](adopter/prerequisites.md) then [Provider setup](adopter/provider-setup/index.md) |
+| Deploy a Tooling Cluster (CC) | [Deploy a Tooling Cluster](adopter/deployment-cc.md) |
+| Deploy a Switch (SW) | [Deploy a Switch](adopter/deployment-sw.md) |
 | Configure environments, secrets, named environments | [Configuration](adopter/configuration.md) |
 | Upgrade an existing deployment | [Upgrading](adopter/upgrading.md) |
 | Read Grafana dashboards or investigate alerts | [Monitoring](operations/monitoring.md) |

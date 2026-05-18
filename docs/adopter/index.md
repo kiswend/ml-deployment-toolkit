@@ -15,8 +15,11 @@ For architecture details and design rationale, see the [Architecture](../archite
 | Page | Description |
 |------|-------------|
 | [Prerequisites](prerequisites.md) | Required tools, provider accounts, credentials |
+| [Provider setup](provider-setup/index.md) | How to provision provider accounts, tokens, and DNS zones |
 | [Configuration](configuration.md) | Environment config, secrets, named environments, OCI settings |
-| [Deployment](deployment.md) | Deploy workflow, verification, accessing services |
+| [Deployment](deployment.md) | Shared deployment workflow (init, plan/apply, commands, destroy) |
+| [Deploy a Tooling Cluster (CC)](deployment-cc.md) | CC-specific config, verification, accessing services |
+| [Deploy a Switch (SW)](deployment-sw.md) | SW-specific config, verification, Harbor proxy cache |
 | [Upgrading](upgrading.md) | Upgrading platform services and infrastructure |
 | [Known issues](known-issues.md) | Deployment-level known issues and workarounds |
 

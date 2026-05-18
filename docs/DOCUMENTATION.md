@@ -68,9 +68,17 @@ docs/
 
   adopter/
     index.md                            # Adopter landing page + table of contents
-    prerequisites.md                    # Required tools, provider accounts, credentials
+    prerequisites.md                    # Required tools, provider accounts, credentials (the "what")
+    provider-setup/                     # How to provision provider accounts, tokens, DNS zones (the "how")
+      index.md                          # Router: infra and DNS provider tables
+      proxmox.md                        # PVE token, SSH, storage, IP plan (covers CC and SW)
+      dns-digitalocean.md               # API token + zone delegation via doctl
+      dns-cloudflare.md                 # Scoped API token (Zone:DNS:Edit)
+      dns-aws.md                        # Route53 hosted zone + IAM policy
     configuration.md                    # Environment config, secrets, named environments
-    deployment.md                       # Deploy workflow (init, plan, apply, verify)
+    deployment.md                       # Shared workflow (init, plan, apply, commands, destroy)
+    deployment-cc.md                    # Tooling Cluster: CC-specific config + verification + accessing services
+    deployment-sw.md                    # Switch: SW-specific config + verification + Harbor proxy cache
     upgrading.md                        # Upgrade procedures (platform services, infrastructure)
     known-issues.md                     # Deployment-level known issues (migrations, bootstrap)
 
