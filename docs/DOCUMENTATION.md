@@ -89,11 +89,6 @@ docs/
     backup-restore.md                   # Backup schedules, restore procedures, DR
     known-issues.md                     # Runtime known issues (token expiry, metrics gaps)
 
-  # Reference (not required reading)
-  reference/
-    sw002.md                            # Historical: prior Istio-based DFSP mTLS design
-    ml-test.md                          # Planned: test cluster architecture (not yet implemented)
-
   # Diagrams (complex visuals that exceed Mermaid's capabilities)
   diagrams/
     *.drawio.svg                        # Editable SVGs authored in draw.io
@@ -117,7 +112,6 @@ Each audience folder has its own `index.md` that serves as the table of contents
 | Troubleshooting, incident response | `operations/troubleshooting.md` | — |
 | Backup and disaster recovery | `operations/backup-restore.md` | — |
 | Known issues | `<audience>/known-issues.md` for the audience who encounters them | Cross-link if multiple audiences affected |
-| Historical/reference designs | `reference/` | Link with status banner |
 
 ## Content principles
 
@@ -201,14 +195,7 @@ Each known issue follows the same format:
 
 ### Current state only
 
-Documentation describes what **is**, not what **will be**. Planned or aspirational work goes in `reference/` with a status banner at the top:
-
-```markdown
-> **Status: Planned** — This document describes a design that is not yet implemented.
-> See [tracking issue](#) for progress.
-```
-
-Never mix planned features into guides as if they exist. A reader following a guide must be able to execute every step.
+Documentation describes what **is**, not what **will be**. Never mix planned features into guides as if they exist. A reader following a guide must be able to execute every step.
 
 ### Navigability
 
