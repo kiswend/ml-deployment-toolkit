@@ -44,7 +44,7 @@ DNS credentials go in your environment's `.env` file. See [Configuration](config
 
 ## OCI registry access
 
-Mojian uses OCI artifacts for distributing GitOps manifests via FluxCD. Your access requirements depend on your setup.
+ML Deployment Toolkit uses OCI artifacts for distributing GitOps manifests via FluxCD. Your access requirements depend on your setup.
 
 ### Public GHCR packages (pull only)
 

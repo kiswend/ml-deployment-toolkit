@@ -4,7 +4,7 @@
 
 **Audiences:** adopter (deploy)
 
-How to configure Mojian environments. For the architecture behind these choices, see [System Overview](../architecture/system-overview.md) and [Provider Model](../architecture/provider-model.md).
+How to configure ML Deployment Toolkit environments. For the architecture behind these choices, see [System Overview](../architecture/system-overview.md) and [Provider Model](../architecture/provider-model.md).
 
 ---
 
@@ -339,7 +339,7 @@ Remote write endpoints for centralized observability. Env clusters push logs and
 oci:
   repo:
     active: true
-    url: "oci://ghcr.io/your-org/mojian"
+    url: "oci://ghcr.io/your-org/ML Deployment Toolkit"
     version: "latest"
 
   proxy:
@@ -396,7 +396,7 @@ app:
 oci:
   repo:
     active: true
-    url: "oci://ghcr.io/your-org/mojian"
+    url: "oci://ghcr.io/your-org/ML Deployment Toolkit"
     version: "latest"
   proxy:
     active: false
@@ -444,7 +444,7 @@ observability:
 oci:
   repo:
     active: true
-    url: "oci://ghcr.io/your-org/mojian"
+    url: "oci://ghcr.io/your-org/ML Deployment Toolkit"
     version: "latest"
   proxy:
     active: true

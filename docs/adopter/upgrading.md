@@ -4,7 +4,7 @@
 
 **Audiences:** adopter (deploy)
 
-This guide covers how to upgrade an existing Mojian deployment. For architecture context on how OCI artifacts and Flux reconciliation work, see [GitOps structure](../architecture/gitops-structure.md).
+This guide covers how to upgrade an existing ML Deployment Toolkit deployment. For architecture context on how OCI artifacts and Flux reconciliation work, see [GitOps structure](../architecture/gitops-structure.md).
 
 ## Upgrading platform services
 

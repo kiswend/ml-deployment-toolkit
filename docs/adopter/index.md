@@ -4,7 +4,7 @@
 
 **Audiences:** adopter (deploy)
 
-This guide covers configuring, deploying, and managing Mojian environments. You configure two files per environment (`config.yaml` and `.env`), run Terraform via Make, and get a Kubernetes cluster with FluxCD reconciling platform services.
+This guide covers configuring, deploying, and managing ML Deployment Toolkit environments. You configure two files per environment (`config.yaml` and `.env`), run Terraform via Make, and get a Kubernetes cluster with FluxCD reconciling platform services.
 
 You never fork or edit the platform bundle -- all personalization flows through your local configuration.
 

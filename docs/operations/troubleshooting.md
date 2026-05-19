@@ -4,7 +4,7 @@
 
 **Audiences:** adopter (operate)
 
-Symptom-based diagnosis and resolution for Mojian runtime issues. For architecture context, see [system overview](../architecture/system-overview.md) and [networking](../architecture/networking.md).
+Symptom-based diagnosis and resolution for ML Deployment Toolkit runtime issues. For architecture context, see [system overview](../architecture/system-overview.md) and [networking](../architecture/networking.md).
 
 ---
 

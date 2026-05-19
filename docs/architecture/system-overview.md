@@ -4,13 +4,13 @@
 
 **Audiences:** all
 
-## What is Mojian
+## What is ML Deployment Toolkit
 
-Mojian packages [Mojaloop](https://mojaloop.io/) -- the open-source real-time payment switch -- into a deployable, infrastructure-agnostic distribution. It bundles Terraform IaC modules and FluxCD GitOps manifests into OCI artifacts that can be consumed directly by adopters or customized and redistributed by system integrators. The distribution handles everything below the application layer: Kubernetes provisioning, networking, secrets, TLS, observability, data services, and the Mojaloop deployment itself.
+ML Deployment Toolkit packages [Mojaloop](https://mojaloop.io/) -- the open-source real-time payment switch -- into a deployable, infrastructure-agnostic distribution. It bundles Terraform IaC modules and FluxCD GitOps manifests into OCI artifacts that can be consumed directly by adopters or customized and redistributed by system integrators. The distribution handles everything below the application layer: Kubernetes provisioning, networking, secrets, TLS, observability, data services, and the Mojaloop deployment itself.
 
 ## Delivery pipeline
 
-Mojian sits in the middle of a four-stage delivery chain. Each stage produces artifacts consumed by the next.
+ML Deployment Toolkit sits in the middle of a four-stage delivery chain. Each stage produces artifacts consumed by the next.
 
 ```mermaid
 flowchart LR
@@ -77,7 +77,7 @@ Stage 3 is optional. Adopters can consume the distribution artifact directly wit
 
 ## Deployment topology
 
-A Mojian deployment requires at least one **App Environment** cluster running the Mojaloop switch. An optional **Tooling Cluster** adds centralized management services for multi-environment deployments.
+A ML Deployment Toolkit deployment requires at least one **App Environment** cluster running the Mojaloop switch. An optional **Tooling Cluster** adds centralized management services for multi-environment deployments.
 
 ### Minimal deployment (env cluster only)
 

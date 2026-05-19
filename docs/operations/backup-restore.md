@@ -4,7 +4,7 @@
 
 **Audiences:** adopter (operate)
 
-Backup schedules, restore procedures, and disaster recovery for Mojian deployments. For backup design rationale and data layer architecture, see [data layer architecture](../architecture/data-layer.md).
+Backup schedules, restore procedures, and disaster recovery for ML Deployment Toolkit deployments. For backup design rationale and data layer architecture, see [data layer architecture](../architecture/data-layer.md).
 
 ---
 

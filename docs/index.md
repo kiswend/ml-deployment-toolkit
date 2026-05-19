@@ -1,6 +1,6 @@
-# Mojian Documentation
+# ML Deployment Toolkit Documentation
 
-Mojian is an infrastructure-agnostic distribution of [Mojaloop](https://mojaloop.io/) — an open-source real-time payment switch. It packages infrastructure-as-code, GitOps manifests, and operational tooling into a deployable OCI-based distribution that adopters consume and system integrators can build on.
+ML Deployment Toolkit is an infrastructure-agnostic distribution of [Mojaloop](https://mojaloop.io/) — an open-source real-time payment switch. It packages infrastructure-as-code, GitOps manifests, and operational tooling into a deployable OCI-based distribution that adopters consume and system integrators can build on.
 
 This documentation covers the full lifecycle: architecture decisions, building the distribution, deploying it, and operating it in production.
 

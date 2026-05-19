@@ -4,7 +4,7 @@
 
 **Audiences:** platform engineer
 
-This page covers the integration points for adding a new infrastructure provider to Mojian. For the architectural rationale behind the provider model, see [provider model](../architecture/provider-model.md).
+This page covers the integration points for adding a new infrastructure provider to ML Deployment Toolkit. For the architectural rationale behind the provider model, see [provider model](../architecture/provider-model.md).
 
 ## What a new provider requires
 

@@ -4,7 +4,7 @@
 
 **Audiences:** adopter (operate)
 
-Runtime known issues encountered during Mojian operations. For deployment issues, see [adopter known issues](../adopter/known-issues.md). For platform build issues, see [platform known issues](../platform/known-issues.md).
+Runtime known issues encountered during ML Deployment Toolkit operations. For deployment issues, see [adopter known issues](../adopter/known-issues.md). For platform build issues, see [platform known issues](../platform/known-issues.md).
 
 ---
 

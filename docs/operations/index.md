@@ -6,7 +6,7 @@
 
 ---
 
-This guide covers day-2 operations: monitoring, troubleshooting, backup/restore, and incident response for Mojian deployments.
+This guide covers day-2 operations: monitoring, troubleshooting, backup/restore, and incident response for ML Deployment Toolkit deployments.
 
 ## Contents
 

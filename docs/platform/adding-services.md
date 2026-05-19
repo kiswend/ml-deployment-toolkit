@@ -4,7 +4,7 @@
 
 **Audiences:** platform engineer
 
-This page covers how to add platform services, vendor-specific services, DNS providers, and role-specific services to the Mojian gitops artifact. For the architectural rationale behind the gitops directory structure and dependency chain, see [GitOps structure](../architecture/gitops-structure.md).
+This page covers how to add platform services, vendor-specific services, DNS providers, and role-specific services to the ML Deployment Toolkit gitops artifact. For the architectural rationale behind the gitops directory structure and dependency chain, see [GitOps structure](../architecture/gitops-structure.md).
 
 ## Adding a platform service
 

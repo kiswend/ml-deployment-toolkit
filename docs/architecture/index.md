@@ -4,7 +4,7 @@
 
 **Audiences:** all
 
-System architecture and design decisions for Mojian -- an infrastructure-agnostic Mojaloop distribution. The platform uses an optional Tooling Cluster for shared services (OCI registry, secrets, object storage) and one or more App Environment clusters for Mojaloop workloads.
+System architecture and design decisions for ML Deployment Toolkit -- an infrastructure-agnostic Mojaloop distribution. The platform uses an optional Tooling Cluster for shared services (OCI registry, secrets, object storage) and one or more App Environment clusters for Mojaloop workloads.
 
 ## How these documents fit together
 

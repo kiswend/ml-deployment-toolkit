@@ -6,7 +6,7 @@
 
 ## Gateway API architecture
 
-Mojian uses Kubernetes [Gateway API](https://gateway-api.sigs.k8s.io/) as its ingress layer. The deprecated Ingress resource is not used anywhere in the distribution.
+ML Deployment Toolkit uses Kubernetes [Gateway API](https://gateway-api.sigs.k8s.io/) as its ingress layer. The deprecated Ingress resource is not used anywhere in the distribution.
 
 Two shared Gateways live in the `platform-system` namespace, deployed by the `platform-config/` kustomization:
 

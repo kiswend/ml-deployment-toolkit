@@ -4,7 +4,7 @@
 
 **Audiences:** platform engineer, system integrator
 
-This guide covers building, extending, and publishing the Mojian distribution. As a platform engineer, you maintain the Terraform modules in `src/`, the GitOps manifests in `gitops/`, and publish OCI artifacts that adopters consume.
+This guide covers building, extending, and publishing the ML Deployment Toolkit distribution. As a platform engineer, you maintain the Terraform modules in `src/`, the GitOps manifests in `gitops/`, and publish OCI artifacts that adopters consume.
 
 System integrators who customize the distribution for specific adopters should also read this guide alongside the [adopter guide](../adopter/index.md).
 
