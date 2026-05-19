@@ -21,12 +21,6 @@ flowchart LR
     deploy --> adopt["Adopter guide"]
     run --> ops["Operations guide"]
     join --> part["Participant guide"]
-
-    click arch "architecture/index.md"
-    click plat "platform/index.md"
-    click adopt "adopter/index.md"
-    click ops "operations/index.md"
-    click part "participant/index.md"
 ```
 
 | I want to... | Go to |

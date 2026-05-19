@@ -24,16 +24,6 @@ flowchart TD
     provider --> networking
     mtls --> dfspint["DFSP Integration\n(tenancy boundary,\nDFSP-side stack)"]
     networking --> dfspint
-
-    click overview "system-overview.md"
-    click provider "provider-model.md"
-    click gitops "gitops-structure.md"
-    click networking "networking.md"
-    click mtls "dfsp-mtls.md"
-    click dfspint "dfsp-integration.md"
-    click security "security.md"
-    click observability "observability.md"
-    click data "data-layer.md"
 ```
 
 ## Documents
