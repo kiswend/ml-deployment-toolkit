@@ -18,6 +18,14 @@ spec:
       backendRefs:
         - name: thanos-receive
           port: 19291
+    # OTLP/HTTP push (e.g. Proxmox metric server) → Thanos Receive
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1/otlp
+      backendRefs:
+        - name: thanos-receive
+          port: 19291
     # All other requests (Grafana queries) → Thanos Query
     - backendRefs:
         - name: thanos-query
