@@ -192,7 +192,7 @@ resource "kubernetes_secret_v1" "oci_credentials" {
 # OCIRepository source — single artifact containing all gitops paths
 resource "kubectl_manifest" "oci_repository" {
   yaml_body = yamlencode({
-    apiVersion = "source.toolkit.fluxcd.io/v1beta2"
+    apiVersion = "source.toolkit.fluxcd.io/v1"
     kind       = "OCIRepository"
     metadata = {
       name      = "ml-gitops"
