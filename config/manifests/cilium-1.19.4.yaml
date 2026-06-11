@@ -86,6 +86,18 @@ data:
   # is scheduled.
   operator-prometheus-serve-addr: ":9963"
   enable-metrics: "true"
+  enable-envoy-config: "true"
+  envoy-config-retry-interval: "15s"
+  enable-gateway-api: "true"
+  enable-gateway-api-secrets-sync: "true"
+  enable-gateway-api-proxy-protocol: "false"
+  enable-gateway-api-app-protocol: "false"
+  enable-gateway-api-alpn: "false"
+  gateway-api-xff-num-trusted-hops: "0"
+  gateway-api-service-externaltrafficpolicy: "Cluster"
+  gateway-api-secrets-namespace: "cilium-secrets"
+  gateway-api-hostnetwork-enabled: "false"
+  gateway-api-hostnetwork-nodelabelselector: ""
   enable-policy-secrets-sync: "true"
   policy-secrets-only-from-secrets-namespace: "true"
   policy-secrets-namespace: "cilium-secrets"
@@ -503,6 +515,22 @@ rules:
   - get
   - list
   - watch
+  - create
+  - update
+  - delete
+  - patch
+- apiGroups:
+  - "discovery.k8s.io"
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
 - apiGroups:
   - cilium.io
   resources:
@@ -662,6 +690,60 @@ rules:
   - get
   - update
 - apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  - gateways
+  - tlsroutes
+  - httproutes
+  - grpcroutes
+  - referencegrants
+  - referencepolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  verbs:
+  - patch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses/status
+  - gateways/status
+  - httproutes/status
+  - grpcroutes/status
+  - tlsroutes/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumgatewayclassconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumgatewayclassconfigs/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceimports
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - cilium.io
   resources:
   - ciliumendpointslices
@@ -725,6 +807,24 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
+  name: cilium-gateway-secrets
+  namespace: "cilium-secrets"
+  labels:
+    app.kubernetes.io/part-of: cilium
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+---
+# Source: cilium/templates/cilium-agent/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
   name: cilium-tlsinterception-secrets
   namespace: "cilium-secrets"
   labels:
@@ -739,6 +839,25 @@ rules:
   - list
   - watch
 
+---
+# Source: cilium/templates/cilium-operator/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cilium-operator-gateway-secrets
+  namespace: "cilium-secrets"
+  labels:
+    app.kubernetes.io/part-of: cilium
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - update
+  - patch
 ---
 # Source: cilium/templates/cilium-operator/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -804,6 +923,23 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
+  name: cilium-gateway-secrets
+  namespace: "cilium-secrets"
+  labels:
+    app.kubernetes.io/part-of: cilium
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cilium-gateway-secrets
+subjects:
+- kind: ServiceAccount
+  name: "cilium"
+  namespace: cilium
+---
+# Source: cilium/templates/cilium-agent/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
   name: cilium-tlsinterception-secrets
   namespace: "cilium-secrets"
   labels:
@@ -817,6 +953,23 @@ subjects:
   name: "cilium"
   namespace: cilium
 
+---
+# Source: cilium/templates/cilium-operator/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cilium-operator-gateway-secrets
+  namespace: "cilium-secrets"
+  labels:
+    app.kubernetes.io/part-of: cilium
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cilium-operator-gateway-secrets
+subjects:
+- kind: ServiceAccount
+  name: "cilium-operator"
+  namespace: cilium
 ---
 # Source: cilium/templates/cilium-operator/rolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1

@@ -35,6 +35,13 @@ spec:
     # Kube-proxy replacement (Cilium handles all service routing)
     kubeProxyReplacement: true
 
+    # Reach the API server via Talos KubePrism on every node — with kube-proxy
+    # disabled, the in-cluster Service VIP only works while Cilium's own
+    # datapath is up. Must match rendering/cilium/values.yaml so the takeover
+    # doesn't leave agent/operator depending on the VIP.
+    k8sServiceHost: localhost
+    k8sServicePort: 7445
+
     # IPAM mode — use Kubernetes-assigned pod CIDRs
     ipam:
       mode: kubernetes
@@ -108,9 +115,13 @@ spec:
       prometheus:
         enabled: true
 
-    # Operator settings
+    # Operator settings. rollOutPods adds a cilium-config checksum annotation
+    # to the operator pod template so config changes (bootstrap → Flux
+    # takeover, future flag flips) restart the operator — it only registers
+    # feature-gated CRDs at startup.
     operator:
       replicas: 1
+      rollOutPods: true
 
     # Agent resource limits (prevent OOM during BPF compilation)
     resources:

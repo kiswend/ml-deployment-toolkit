@@ -46,6 +46,15 @@ securityContext:
       - SYS_ADMIN
       - SYS_RESOURCE
 
+# Gateway API must be enabled at bootstrap even though Flux owns the full
+# config: it sets enable-gateway-api/enable-envoy-config, and the operator
+# only registers the CiliumEnvoyConfig CRDs at startup based on those flags.
+# Flux's takeover flips the flags and rolls the agent but not the operator,
+# so agents would wait forever on CRDs the bootstrap operator never
+# registered. Renders no Secrets, so safe to commit.
+gatewayAPI:
+  enabled: true
+
 # No TLS secrets in the rendered output (see header). Flux enables Hubble
 # with cluster-generated certs after takeover.
 hubble:
