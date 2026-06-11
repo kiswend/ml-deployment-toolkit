@@ -978,6 +978,10 @@ spec:
             resourceFieldRef:
               resource: limits.memory
               divisor: '1'
+        - name: KUBERNETES_SERVICE_HOST
+          value: "localhost"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "7445"
         - name: KUBE_CLIENT_BACKOFF_BASE
           value: "1"
         - name: KUBE_CLIENT_BACKOFF_DURATION
@@ -1097,6 +1101,10 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.namespace
+        - name: KUBERNETES_SERVICE_HOST
+          value: "localhost"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "7445"
         volumeMounts:
         - name: tmp
           mountPath: /tmp
@@ -1185,6 +1193,10 @@ spec:
               name: cilium-config
               key: write-cni-conf-when-ready
               optional: true
+        - name: KUBERNETES_SERVICE_HOST
+          value: "localhost"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "7445"
         terminationMessagePolicy: FallbackToLogsOnError
         securityContext:
           seLinuxOptions:
@@ -1435,6 +1447,10 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.namespace
+        - name: KUBERNETES_SERVICE_HOST
+          value: "localhost"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "7445"
         
         ports:
         - name: envoy-metrics
@@ -1592,6 +1608,10 @@ spec:
               key: debug
               name: cilium-config
               optional: true
+        - name: KUBERNETES_SERVICE_HOST
+          value: "localhost"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "7445"
         ports:
         - name: health
           containerPort: 9234

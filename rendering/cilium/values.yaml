@@ -10,6 +10,12 @@
 # Kube-proxy replacement (Cilium handles all service routing)
 kubeProxyReplacement: true
 
+# With kube-proxy disabled, the in-cluster Service IP (10.96.0.1) is not
+# routable until Cilium itself is running — agent and operator must reach the
+# API server through Talos KubePrism on every node instead.
+k8sServiceHost: localhost
+k8sServicePort: 7445
+
 # IPAM mode — use Kubernetes-assigned pod CIDRs
 ipam:
   mode: kubernetes
