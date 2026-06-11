@@ -74,14 +74,40 @@ This tags the current `GITOPS_VERSION` (default: git SHA) with the given tag. Us
 
 ## Rendering pre-build artifacts
 
-Some components require pre-rendering before publishing. Currently this applies to Thanos (Jsonnet to YAML):
+Some components require pre-rendering before publishing:
 
 ```bash
 make render              # Render all pre-build artifacts
 make render-thanos       # Render Thanos manifests only
+make render-cilium       # Render Cilium bootstrap manifest only
 ```
 
-Rendered output lands in `gitops/` and should be committed before running `push-gitops`.
+### Thanos (Jsonnet to YAML)
+
+Thanos manifests are rendered from kube-thanos Jsonnet (`rendering/thanos/`). Rendered output lands in `gitops/cc-observability/thanos/` and should be committed before running `push-gitops`.
+
+### Cilium bootstrap manifest (Helm to YAML)
+
+Talos installs Cilium during node bootstrap via `cluster.extraManifests` (see `config/patches/talos/patch-cilium-install.yaml`), fetching the rendered manifest from this repository over `raw.githubusercontent.com`. The render uses a minimal, standalone values file (`rendering/cilium/values.yaml`) — just enough for nodes to reach `Ready`. Once the cluster is up, Flux reconciles the full Cilium configuration from `gitops/talos/cilium/helmrelease.yaml` (Hubble, Gateway API, L2 announcements, metrics).
+
+```bash
+make render-cilium                        # Render the default chart version
+make render-cilium CILIUM_VERSION=1.19.4  # Render a specific chart version
+```
+
+What `render-cilium` does:
+
+1. Prepends `rendering/cilium/namespace.yaml` — the `cilium` namespace with privileged Pod Security labels, which Talos requires and `helm template` does not emit
+2. Renders the chart with `helm template` using `rendering/cilium/values.yaml`
+3. Fails if the output contains any `Secret` — this repository is public, so no private keys may be committed (this is also why Hubble must stay disabled in the bootstrap values)
+4. Writes `config/manifests/cilium-<version>.yaml`
+
+To upgrade Cilium:
+
+1. `make render-cilium CILIUM_VERSION=<new-version>`
+2. Update the manifest URL in `config/patches/talos/patch-cilium-install.yaml` to the new filename
+3. Bump the chart version in `gitops/talos/cilium/helmrelease.yaml` to match
+4. Commit **and push to `main`** — Talos fetches the manifest from GitHub at node bootstrap, so until the commit is on `origin/main` the URL returns 404 and new nodes cannot install CNI (they stay `NotReady`)
 
 ## Verify artifact contents
 
