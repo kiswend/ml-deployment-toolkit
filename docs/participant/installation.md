@@ -84,7 +84,7 @@ If you want these reachable from outside the cluster, add your cluster's native 
 The namespace already exists (you created it in step 1 when provisioning the Secret):
 
 ```bash
-helm install dfsp /path/to/ml-iac3/dfsp \
+helm install dfsp /path/to/ml-deployment-toolkit/dfsp \
   -n dfsp-201 \
   -f my-dfsp-values.yaml
 ```
@@ -195,7 +195,7 @@ The recovery kit Secret lives in the namespace and is deleted with it. Make sure
 ## Upgrade
 
 ```bash
-helm upgrade dfsp /path/to/ml-iac3/dfsp \
+helm upgrade dfsp /path/to/ml-deployment-toolkit/dfsp \
   -n dfsp-201 \
   -f my-dfsp-values.yaml
 ```

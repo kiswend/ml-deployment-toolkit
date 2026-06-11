@@ -26,19 +26,19 @@ Create a token the toolkit will use to manage VMs. Run on a PVE node:
 
 ```bash
 # Create the token (privilege separation off so the token inherits user ACLs)
-pveum user token add root@pam 'ml-iac3' --privsep 0
+pveum user token add root@pam 'ml-deployment-toolkit' --privsep 0
 
 # Grant the token Administrator on the whole datacenter
-pveum acl modify / -token 'root@pam!ml-iac3' -role Administrator
+pveum acl modify / -token 'root@pam!ml-deployment-toolkit' -role Administrator
 ```
 
-The first command prints the token secret once — save it. The full token ID has the form `root@pam!ml-iac3=<uuid>`.
+The first command prints the token secret once — save it. The full token ID has the form `root@pam!ml-deployment-toolkit=<uuid>`.
 
 Put the value in `config/environments/<env>/.env`:
 
 ```bash
 PROXMOX_VE_ENDPOINT="https://pve.example.com:8006"
-PROXMOX_VE_API_TOKEN="root@pam!ml-iac3=<uuid>"
+PROXMOX_VE_API_TOKEN="root@pam!ml-deployment-toolkit=<uuid>"
 PROXMOX_VE_INSECURE="true"    # set false if PVE uses a CA-signed cert
 ```
 

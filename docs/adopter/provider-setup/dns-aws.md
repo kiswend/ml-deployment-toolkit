@@ -20,7 +20,7 @@ All commands below are parameterized — set these once and the rest is copy-pas
 export AWS_PROFILE="mojaloop"          # named CLI profile (aws configure --profile mojaloop)
 DOMAIN="sw1.example.com"               # must match dns.domain in config.yaml
 PARENT_DOMAIN="example.com"            # existing parent zone the subdomain is delegated from
-DNS_USER="ml-iac3-dns"                 # scoped IAM user the toolkit will use
+DNS_USER="ml-deployment-toolkit-dns"                 # scoped IAM user the toolkit will use
 ```
 
 With `AWS_PROFILE` exported, every `aws` command uses that profile; alternatively drop the export and append `--profile mojaloop` to each command. The profile is only for running these setup commands — the toolkit itself does not use profiles; it reads the static key from `.env` (see [IAM credentials](#iam-credentials)).
@@ -34,7 +34,7 @@ The toolkit expects a Route53 hosted zone matching `$DOMAIN`. Create it once:
 ```bash
 aws route53 create-hosted-zone \
   --name "$DOMAIN" \
-  --caller-reference "ml-iac3-$(date +%s)"
+  --caller-reference "ml-deployment-toolkit-$(date +%s)"
 ```
 
 Capture the zone ID and its four nameservers:

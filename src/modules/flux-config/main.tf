@@ -12,7 +12,7 @@ locals {
   has_vendor          = contains(["proxmox", "openstack", "aws", "gcp"], var.infra_provider)
   is_env              = var.cluster_role == "env"
 
-  # Extract registry host from artifact URL (e.g. "oci://ghcr.io/kiswend/ml-iac3" → "ghcr.io")
+  # Extract registry host from artifact URL (e.g. "oci://ghcr.io/kiswend/ml-deployment-toolkit" → "ghcr.io")
   oci_registry = local.has_oci_credentials ? split("/", replace(var.artifact_url, "oci://", ""))[0] : ""
 
   # Docker config JSON for Flux source-controller authentication

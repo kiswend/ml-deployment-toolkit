@@ -28,7 +28,7 @@ For architecture details and design rationale, see the [Architecture](../archite
 1. **Clone the repository**
 
    ```bash
-   git clone <repo-url> && cd ml-iac3
+   git clone <repo-url> && cd ml-deployment-toolkit
    ```
 
 2. **Create your environment configuration**

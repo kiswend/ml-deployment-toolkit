@@ -34,7 +34,7 @@ The switch operator and the DFSP operator are separate organisations with separa
 
 ```mermaid
 graph TB
-  subgraph SW["SWITCH premise (ml-iac3 / gitops)"]
+  subgraph SW["SWITCH premise (ml-deployment-toolkit / gitops)"]
     direction TB
     KC[keycloak<br/>hub-operators realm]
     MCM[mcm-server<br/>connection-manager-api]

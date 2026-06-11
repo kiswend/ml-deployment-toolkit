@@ -53,7 +53,7 @@ app:
 oci:
   repo:
     active: true
-    url: "oci://ghcr.io/<org>/ml-iac3"
+    url: "oci://ghcr.io/<org>/ml-deployment-toolkit"
     version: "latest"
   proxy:
     active: false             # CC hosts Harbor — it doesn't pull through itself

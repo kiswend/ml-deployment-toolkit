@@ -68,7 +68,7 @@ observability:
 oci:
   repo:
     active: true
-    url: "oci://ghcr.io/<org>/ml-iac3"      # or oci://harbor.int.<cc-domain>/ml-iac3
+    url: "oci://ghcr.io/<org>/ml-deployment-toolkit"      # or oci://harbor.int.<cc-domain>/ml-deployment-toolkit
     version: "latest"
   proxy:
     active: true
