@@ -290,7 +290,7 @@ dns:
   domain: "cc1.example.com"
 ```
 
-The DNS provider is independent from the infrastructure provider. Any combination works (e.g., Proxmox + Cloudflare, AWS + DigitalOcean). See [DNS strategy](../architecture/networking.md#dns-strategy) for details.
+The DNS provider is independent from the infrastructure provider. Any combination works (e.g., Proxmox + Cloudflare, AWS + DigitalOcean). Supported values: `digitalocean`, `cloudflare`, `route53`. Credentials go in the environment's `.env` — see the per-provider setup guides: [DigitalOcean](provider-setup/dns-digitalocean.md), [Cloudflare](provider-setup/dns-cloudflare.md), [AWS Route53](provider-setup/dns-aws.md). See [DNS strategy](../architecture/networking.md#dns-strategy) for details.
 
 The domain value determines service URLs. For a Tooling Cluster with domain `cc1.example.com`:
 - Vault: `vault.int.cc1.example.com`

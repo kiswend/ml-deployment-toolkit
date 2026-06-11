@@ -76,16 +76,12 @@ cluster:
 # 4. DNS
 # ------------------------------------------------------------------
 dns:
-  provider: "digitalocean"            # digitalocean | cloudflare | route53 | powerdns
+  provider: "digitalocean"            # digitalocean | cloudflare | route53
   domain: "cc.example.com"
 
-  # For Cloudflare:
-  # cloudflare:
-  #   proxied: false
-
-  # For AWS Route53:
-  # aws:
-  #   region: "us-east-1"
+  # Supported providers: digitalocean | cloudflare | route53
+  # Credentials come from .env: DIGITALOCEAN_TOKEN, CLOUDFLARE_API_TOKEN,
+  # or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_REGION for route53.
 
 # ------------------------------------------------------------------
 # 5. APPLICATION PARAMETERS

@@ -4,7 +4,7 @@
 #
 # Two independent provider dimensions:
 #   - infra_provider (proxmox, aws, gcp, openstack, digitalocean) → selects vendor kustomization
-#   - dns_provider (digitalocean, cloudflare, route53, clouddns, rfc2136, designate) → selects dns kustomization
+#   - dns_provider (digitalocean, cloudflare, route53) → selects dns kustomization (gitops/dns/{provider})
 
 locals {
   has_oci_credentials = var.oci_repo_username != "" && var.oci_repo_password != ""

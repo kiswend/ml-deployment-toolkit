@@ -42,25 +42,38 @@ curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
 
 ## Zone
 
-The toolkit expects a DNS zone matching the `dns.domain` value in `config.yaml`. The zone must already exist in Cloudflare:
+The toolkit expects the records under `dns.domain` (from `config.yaml`) to be manageable in a Cloudflare zone. Unlike Route53/DigitalOcean, Cloudflare only supports **delegated subdomain zones on the Enterprise plan** — on other plans, host the *parent* domain as the zone (e.g. zone `example.com` for `dns.domain: sw1.example.com`). external-dns and cert-manager find the enclosing zone by suffix and manage the subdomain's records inside it; no delegation needed.
 
-1. Add the zone in the Cloudflare dashboard (or via the API).
-2. Update the parent registrar/zone to delegate to Cloudflare's assigned nameservers.
-3. Wait for delegation to propagate.
+The toolkit will not create or delete the zone itself. Create it once via the dashboard, or via the API:
 
-The toolkit will not create or delete the zone itself.
+```bash
+# Zone creation needs an account-scoped token (Account → Zone → Edit) or the dashboard;
+# the DNS-edit token created above is intentionally too narrow for this.
+
+ZONE_NAME="example.com"
+
+# Look up your account ID
+ACCOUNT_ID=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_ZONE_ADMIN_TOKEN" \
+  https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+
+# Create the zone and note the assigned nameservers
+curl -s -X POST https://api.cloudflare.com/client/v4/zones \
+  -H "Authorization: Bearer $CLOUDFLARE_ZONE_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"$ZONE_NAME\", \"account\": {\"id\": \"$ACCOUNT_ID\"}, \"type\": \"full\"}" \
+  | jq '.result.name_servers'
+```
+
+Point the domain's registrar (or, for an Enterprise subdomain zone, the parent zone's NS records) at the two returned `*.ns.cloudflare.com` nameservers, then verify:
+
+```bash
+dig +short NS "$ZONE_NAME" @1.1.1.1
+# → the two assigned cloudflare nameservers
+```
 
 ### Proxied vs DNS-only
 
-Set `dns.cloudflare.proxied: false` in `config.yaml` for records the toolkit manages. The orange-cloud proxy interferes with mTLS termination on the gateway and with ACME DNS-01 validation.
-
-```yaml
-dns:
-  provider: "cloudflare"
-  domain: "sw1.example.com"
-  cloudflare:
-    proxied: false
-```
+The toolkit creates all records **DNS-only** (grey cloud) — external-dns is not configured with Cloudflare proxying and cert-manager TXT records are never proxied. Leave it that way: the orange-cloud proxy breaks gateway mTLS, non-HTTP ports, and direct connectivity to the LoadBalancer IPs.
 
 ---
 

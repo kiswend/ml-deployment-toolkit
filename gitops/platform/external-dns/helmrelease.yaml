@@ -17,14 +17,13 @@ spec:
   chart:
     spec:
       chart: external-dns
-      version: "1.20.x" # pin to version that support digitalocean
+      version: "1.20.x"
       sourceRef:
         kind: HelmRepository
         name: external-dns
       interval: 12h
   targetNamespace: external-dns
   install:
-    createNamespace: true
     remediation:
       retries: 3
   upgrade:
@@ -37,18 +36,12 @@ spec:
     sources:
       - service
       - gateway-httproute
-    provider:
-      name: ${dns_provider}
     domainFilters:
       - ${domain}
     txtOwnerId: ${cluster_name}
     policy: sync
-    env:
-      - name: DO_TOKEN
-        value: "${digitalocean_token}"
-      - name: CF_API_TOKEN
-        value: "${cloudflare_api_token}"
-      - name: EXTERNAL_DNS_PDNS_SERVER
-        value: "${powerdns_api_url}"
-      - name: EXTERNAL_DNS_PDNS_API_KEY
-        value: "${powerdns_api_key}"
+  # Provider-specific values (provider name, credential env vars) come from the
+  # dns/{provider} kustomization — stays unready until that ConfigMap exists.
+  valuesFrom:
+    - kind: ConfigMap
+      name: external-dns-provider-values

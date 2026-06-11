@@ -12,22 +12,69 @@ For background on the DNS strategy, see [Networking](../../architecture/networki
 
 ---
 
+## Variables and CLI profile
+
+All commands below are parameterized — set these once and the rest is copy-paste:
+
+```bash
+export AWS_PROFILE="mojaloop"          # named CLI profile (aws configure --profile mojaloop)
+DOMAIN="sw1.example.com"               # must match dns.domain in config.yaml
+PARENT_DOMAIN="example.com"            # existing parent zone the subdomain is delegated from
+DNS_USER="ml-iac3-dns"                 # scoped IAM user the toolkit will use
+```
+
+With `AWS_PROFILE` exported, every `aws` command uses that profile; alternatively drop the export and append `--profile mojaloop` to each command. The profile is only for running these setup commands — the toolkit itself does not use profiles; it reads the static key from `.env` (see [IAM credentials](#iam-credentials)).
+
+---
+
 ## Hosted zone
 
-The toolkit expects a Route53 hosted zone matching the `dns.domain` value in `config.yaml`. Create it once:
+The toolkit expects a Route53 hosted zone matching `$DOMAIN`. Create it once:
 
 ```bash
 aws route53 create-hosted-zone \
-  --name sw1.example.com \
+  --name "$DOMAIN" \
   --caller-reference "ml-iac3-$(date +%s)"
 ```
 
-Note the four NS values returned. Add them as NS records in the parent zone (Route53, the registrar, or wherever the parent lives) so the subdomain is delegated to Route53.
+Capture the zone ID and its four nameservers:
+
+```bash
+ZONE_ID=$(aws route53 list-hosted-zones-by-name \
+  --dns-name "$DOMAIN" --max-items 1 \
+  --query 'HostedZones[0].Id' --output text)
+
+aws route53 get-hosted-zone --id "$ZONE_ID" \
+  --query 'DelegationSet.NameServers'
+```
+
+### Delegate from the parent zone
+
+If the parent zone is also in Route53, add the NS delegation records via the CLI:
+
+```bash
+PARENT_ID=$(aws route53 list-hosted-zones-by-name \
+  --dns-name "$PARENT_DOMAIN" --max-items 1 \
+  --query 'HostedZones[0].Id' --output text)
+
+aws route53 get-hosted-zone --id "$ZONE_ID" \
+  --query 'DelegationSet.NameServers' --output json \
+| jq --arg domain "$DOMAIN" '{Changes: [{Action: "UPSERT", ResourceRecordSet: {
+    Name: $domain, Type: "NS", TTL: 300,
+    ResourceRecords: [.[] | {Value: .}]}}]}' > /tmp/delegation.json
+
+aws route53 change-resource-record-sets \
+  --hosted-zone-id "$PARENT_ID" \
+  --change-batch file:///tmp/delegation.json
+```
+
+If the parent zone lives elsewhere (registrar, Cloudflare, DigitalOcean), add the four NS records there using that provider's UI or API instead.
 
 Verify delegation propagated:
 
 ```bash
-dig +short NS sw1.example.com @1.1.1.1
+dig +short NS "$DOMAIN" @1.1.1.1
+# → the four awsdns nameservers returned above
 ```
 
 The toolkit will not create or delete the hosted zone itself.
@@ -36,20 +83,21 @@ The toolkit will not create or delete the hosted zone itself.
 
 ## IAM credentials
 
-Create an IAM user (or role, if you prefer assume-role) with permissions external-dns and cert-manager need.
+Create a dedicated IAM user scoped to the hosted zone, with the permissions external-dns and cert-manager need — do not reuse a personal or admin key in `.env`.
 
-### Minimum policy
+### Scoped IAM user, policy, and access key
 
-Scope to the specific hosted zone if possible. Replace `Z123EXAMPLE` with your hosted zone ID:
+Uses `$ZONE_ID` from the previous section, so write changes are limited to this zone (the `List*`/`GetChange` actions do not support resource-level scoping):
 
-```json
+```bash
+cat > /tmp/${DNS_USER}-policy.json <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
     {
       "Effect": "Allow",
       "Action": "route53:ChangeResourceRecordSets",
-      "Resource": "arn:aws:route53:::hostedzone/Z123EXAMPLE"
+      "Resource": "arn:aws:route53:::hostedzone/${ZONE_ID#/hostedzone/}"
     },
     {
       "Effect": "Allow",
@@ -57,21 +105,20 @@ Scope to the specific hosted zone if possible. Replace `Z123EXAMPLE` with your h
         "route53:ListHostedZones",
         "route53:ListHostedZonesByName",
         "route53:ListResourceRecordSets",
+        "route53:ListTagsForResource",
         "route53:GetChange"
       ],
       "Resource": "*"
     }
   ]
 }
-```
+EOF
 
-### Create the user and access key
-
-```bash
-aws iam create-user --user-name ml-iac3-dns
-aws iam put-user-policy --user-name ml-iac3-dns \
-  --policy-name ml-iac3-dns --policy-document file://policy.json
-aws iam create-access-key --user-name ml-iac3-dns
+aws iam create-user --user-name "$DNS_USER"
+aws iam put-user-policy --user-name "$DNS_USER" \
+  --policy-name "$DNS_USER" \
+  --policy-document "file:///tmp/${DNS_USER}-policy.json"
+aws iam create-access-key --user-name "$DNS_USER"
 ```
 
 Save the `AccessKeyId` and `SecretAccessKey` from the last command.

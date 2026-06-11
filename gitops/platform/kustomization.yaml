@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - observability-namespace.yaml
+  - external-dns-namespace.yaml
   - metrics-server/helmrelease.yaml
   - cert-manager/helmrelease.yaml
   - external-dns/helmrelease.yaml
