@@ -6,7 +6,7 @@ cluster:
     disabled: true
   extraManifests:
     - "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.0/experimental-install.yaml"
-    - "https://0fa947a0-8e55-45b1-8b8b-5526d83e4988.nyc3.digitaloceanspaces.com/cilium-manifest.yaml"
+    - "https://raw.githubusercontent.com/kiswend/ml-deployment-toolkit/main/config/manifests/cilium-1.19.4.yaml"
 machine:
   features:
     hostDNS:

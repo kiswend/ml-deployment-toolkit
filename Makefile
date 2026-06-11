@@ -73,7 +73,7 @@ OCI_REPO := $(shell grep -A4 'repo:' $(ENV_DIR)/config.yaml | grep 'url:' | head
 GITOPS_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "latest")
 
 # Phony targets (not files)
-.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list render render-thanos push-gitops tag-gitops list-artifacts release
+.PHONY: help init plan apply plan-apply apply-direct apply-force destroy destroy-fast clean validate fmt show list render render-thanos render-cilium push-gitops tag-gitops list-artifacts release
 
 # Help target - displays available commands
 help:
@@ -99,6 +99,7 @@ help:
 	@echo "Rendering Commands:"
 	@echo "  make render               - Render all pre-rendered manifests (Jsonnet → YAML)"
 	@echo "  make render-thanos        - Render Thanos manifests only"
+	@echo "  make render-cilium        - Render Cilium bootstrap manifest (CILIUM_VERSION=$(CILIUM_VERSION))"
 	@echo ""
 	@echo "GitOps Commands:"
 	@echo "  make push-gitops          - Push gitops/ as OCI artifact (version=git SHA)"
@@ -202,8 +203,13 @@ list:
 # Manifest Rendering (Jsonnet → YAML)
 # --------------------------------------------------------------------------
 
+# Cilium chart version for the Talos bootstrap manifest
+# (override: make render-cilium CILIUM_VERSION=1.19.4)
+CILIUM_VERSION ?= 1.19.4
+CILIUM_MANIFEST := config/manifests/cilium-$(CILIUM_VERSION).yaml
+
 # Render all components that need pre-rendering
-render: render-thanos
+render: render-thanos render-cilium
 
 # Render Thanos manifests from kube-thanos Jsonnet
 render-thanos:
@@ -213,6 +219,29 @@ render-thanos:
 	cd ../../gitops/cc-observability/thanos && \
 	for f in thanos-*; do [ -f "$$f" ] && [ "$${f##*.}" != "yaml" ] && yq -p json -o yaml "$$f" > "$$f.yaml" && rm "$$f"; done || true
 	@echo "Thanos manifests rendered to gitops/cc-observability/thanos/"
+
+# Render the Cilium bootstrap manifest fetched by Talos extraManifests.
+# Minimal values only — Flux reconciles the full config (gitops/talos/cilium/)
+# after the cluster is up. Hubble stays disabled so no TLS Secrets are
+# rendered into the committed file; the guard below enforces that.
+render-cilium:
+	@echo "Rendering Cilium $(CILIUM_VERSION) bootstrap manifest..."
+	@mkdir -p config/manifests
+	@cat rendering/cilium/namespace.yaml > $(CILIUM_MANIFEST)
+	@helm template cilium cilium \
+		--repo https://helm.cilium.io/ \
+		--version $(CILIUM_VERSION) \
+		--namespace cilium \
+		-f rendering/cilium/values.yaml \
+		>> $(CILIUM_MANIFEST)
+	@if grep -q "^kind: Secret" $(CILIUM_MANIFEST); then \
+		rm $(CILIUM_MANIFEST); \
+		echo "ERROR: rendered manifest contains Secrets (private keys) — not writing it. Check hubble is disabled in rendering/cilium/values.yaml"; \
+		exit 1; \
+	fi
+	@echo "Rendered to $(CILIUM_MANIFEST)"
+	@echo "Reference in config/patches/talos/patch-cilium-install.yaml:"
+	@echo "  https://raw.githubusercontent.com/kiswend/ml-deployment-toolkit/main/$(CILIUM_MANIFEST)"
 
 # --------------------------------------------------------------------------
 # GitOps OCI Artifact Management
