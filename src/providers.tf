@@ -22,12 +22,21 @@ provider "aws" {
   skip_metadata_api_check     = true
 }
 
-# Kubeconfig path — static convention, no module output dependency.
-# fileexists() returns true for existing clusters, false for fresh deploys.
-# When false, providers get null and defer until apply (proxmox module creates the file first).
+# Kubeconfig path — references the infra module's kubeconfig file resource
+# (local.kubeconfig_path in main.tf = <module>.kubeconfig_path = local_sensitive_file filename).
+# The value is a plan-time-known string, but the reference creates the graph
+# dependency that makes Terraform configure these providers only AFTER the
+# kubeconfig is written/rewritten during apply. Without it, the kubectl and
+# kubernetes providers read and cache the file at the START of apply (stale
+# endpoint on rebuilds → "dial tcp ... i/o timeout" on the first apply).
+# fileexists() cannot be used here: it hard-errors ("inconsistent result")
+# when the file appears mid-apply.
+# The kubectl provider also stats+loads config_path at plan time, so `make init`
+# seeds a placeholder file on fresh deploys; its content is never dialed because
+# the real kubeconfig replaces it before any provider is configured.
 locals {
   static_kubeconfig = "../artifacts/${var.env_name}/kubernetes/kubeconfig"
-  kubeconfig        = fileexists(local.static_kubeconfig) ? local.static_kubeconfig : null
+  kubeconfig        = local.kubeconfig_path != null ? local.kubeconfig_path : local.static_kubeconfig
 }
 
 # Kubernetes Provider - configured with kubeconfig from cluster bootstrap

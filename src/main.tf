@@ -24,9 +24,19 @@ locals {
   active_provider = try(local.provider_outputs[local.provider_name], null)
 
   # Kubeconfig path — derived from provider module output (local_sensitive_file.filename).
-  # This is an input attribute, so it's known at plan time even for new resources.
-  # On first deploy, providers defer configuration until apply when the file is written.
-  kubeconfig_path = local.active_provider != null ? local.active_provider.kubeconfig_path : null
+  # This is an input attribute, so it's known at plan time even for new resources,
+  # while the reference defers provider configuration until the file is written.
+  # IMPORTANT: access the kubeconfig_path output directly, NOT via local.active_provider.
+  # The active_provider object contains plan-unknown outputs (e.g. bootstrap_complete),
+  # and `!= null` on such an object evaluates to unknown — which made config_path
+  # unknown at plan time and broke kubectl provider configuration ("no configuration
+  # has been provided").
+  kubeconfig_paths = {
+    proxmox      = length(module.proxmox) > 0 ? module.proxmox[0].kubeconfig_path : null
+    digitalocean = length(module.digitalocean) > 0 ? module.digitalocean[0].kubeconfig_path : null
+    aws          = length(module.aws) > 0 ? module.aws[0].kubeconfig_path : null
+  }
+  kubeconfig_path = try(local.kubeconfig_paths[local.provider_name], null)
 }
 
 # Load configuration from YAML files
