@@ -1,13 +1,13 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: keto
+  name: hydra
   namespace: flux-system
 spec:
   interval: 30m
   chart:
     spec:
-      chart: keto
+      chart: hydra
       version: "0.55.0"
       sourceRef:
         kind: HelmRepository
@@ -24,12 +24,12 @@ spec:
       retries: -1
       strategy: uninstall
   values:
-    replicaCount: ${keto_replicas}
-    fullnameOverride: "keto"
+    replicaCount: ${hydra_replicas}
+    fullnameOverride: "hydra"
 
     secret:
       enabled: false
-      nameOverride: keto-secret
+      nameOverride: hydra-secret
 
     deployment:
       extraInitContainers: |
@@ -38,8 +38,6 @@ spec:
           command: [sh, -c]
           args:
             - |
-              # Extract host, port, user, password from DSN
-              # DSN format: mysql://user:pass@tcp(host:port)/db?params
               DB_USER=$(echo "$DSN" | sed 's|mysql://\([^:]*\):.*|\1|')
               DB_PASS=$(echo "$DSN" | sed 's|mysql://[^:]*:\([^@]*\)@.*|\1|')
               HOST=$(echo "$DSN" | sed 's|.*tcp(\([^:]*\):.*|\1|')
@@ -68,32 +66,40 @@ spec:
             - name: DSN
               valueFrom:
                 secretKeyRef:
-                  name: keto-secret
+                  name: hydra-secret
                   key: dsn
 
-    keto:
+    hydra:
       automigration:
         enabled: true
         type: initContainer
       config:
-        dsn: "mysql://keto:${keto_db_password}@tcp(${mysql_host}:${mysql_port})/keto?max_conns=20&max_idle_conns=4"
+        dsn: "mysql://hydra:${hydra_db_password}@tcp(${mysql_host}:${mysql_port})/hydra?max_conns=20&max_idle_conns=4"
+
         serve:
-          read:
-            port: 4466
-          write:
-            port: 4467
-          metrics:
-            port: 4468
-        namespaces:
-          - id: 0
-            name: role
-          - id: 1
-            name: permission
-          - id: 2
-            name: participant
-          - id: 3
-            name: User
-          - id: 4
-            name: Hub
-          - id: 5
-            name: Dfsp
+          public:
+            port: 4444
+            cors:
+              enabled: true
+              allowed_origins:
+                - "https://*.${domain}"
+          admin:
+            port: 4445
+
+        urls:
+          self:
+            issuer: "https://hydra.ext.${domain}"
+
+        oauth2:
+          expose_internal_errors: false
+
+        strategies:
+          access_token: jwt
+
+        ttl:
+          access_token: 1h
+          refresh_token: 720h
+
+        log:
+          level: info
+          format: json

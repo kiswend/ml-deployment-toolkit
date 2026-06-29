@@ -215,12 +215,19 @@ spec:
             secretsCookie: "${kratos_secrets_cookie}"
             secretsCSRFCookie: "${kratos_secrets_csrf_cookie}"
             secretsDefault: "${kratos_secrets_default}"
-            smtpConnectionURI: "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
+            smtpConnectionURI: "smtp://${smtp_user}:${smtp_password}@${smtp_host}:${smtp_port}/?skip_ssl_verify=true"
       - type: kv
         path: secret/keto
         data:
           data:
             dsn: "mysql://keto:${keto_db_password}@tcp(${mysql_host}:${mysql_port})/keto?max_conns=20&max_idle_conns=4"
+      - type: kv
+        path: secret/hydra
+        data:
+          data:
+            dsn: "mysql://hydra:${hydra_db_password}@tcp(${mysql_host}:${mysql_port})/hydra?max_conns=20&max_idle_conns=4"
+            secretsSystem: "${hydra_secrets_system}"
+            secretsCookie: "${hydra_secrets_cookie}"
       - type: kv
         path: secret/finance-portal
         data:

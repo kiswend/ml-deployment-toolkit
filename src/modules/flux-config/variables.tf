@@ -255,11 +255,24 @@ variable "mcm_db_password" {
   sensitive   = true
 }
 
-variable "keycloak_admin_password" {
-  description = "Keycloak admin console password"
+variable "hydra_db_password" {
+  description = "Hydra MySQL user password"
   type        = string
   default     = ""
   sensitive   = true
+}
+
+variable "hub_admin_password" {
+  description = "Hub admin initial password (seeded into Kratos on first deploy)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "hub_admin_email" {
+  description = "Hub admin email address (seeded into Kratos on first deploy)"
+  type        = string
+  default     = ""
 }
 
 variable "hubop_oidc_secret" {

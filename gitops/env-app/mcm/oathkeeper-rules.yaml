@@ -509,7 +509,9 @@ spec:
     - handler: jwt
       config:
         jwks_urls:
-          - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+        trusted_issuers:
+          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
@@ -547,7 +549,9 @@ spec:
     - handler: jwt
       config:
         jwks_urls:
-          - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+        trusted_issuers:
+          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
@@ -586,7 +590,9 @@ spec:
     - handler: jwt
       config:
         jwks_urls:
-          - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+        trusted_issuers:
+          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
@@ -625,7 +631,9 @@ spec:
     - handler: jwt
       config:
         jwks_urls:
-          - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+        trusted_issuers:
+          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
@@ -665,7 +673,9 @@ spec:
     - handler: jwt
       config:
         jwks_urls:
-          - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+        trusted_issuers:
+          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
@@ -703,7 +713,9 @@ spec:
     - handler: jwt
       config:
         jwks_urls:
-          - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+        trusted_issuers:
+          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:

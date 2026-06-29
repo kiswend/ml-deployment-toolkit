@@ -40,7 +40,8 @@ spec:
 
     api:
       image:
-        version: v3.7.4
+        name: ndelma/connection-manager-api
+        version: pr-202
       ports:
         portName: api
       url: "https://mcm.int.${domain}"
@@ -48,21 +49,23 @@ spec:
       switchFQDN: "${domain}"
       switchId: "${hub_participant_name}"
 
+      env:
+        IAM_ENABLED: "true"
+        IAM_AUTO_CREATE_ACCOUNTS: "true"
+        HYDRA_ADMIN_URL: "http://hydra-admin.ory.svc.cluster.local:4445"
+        HYDRA_PUBLIC_URL: "http://hydra-public.ory.svc.cluster.local:4444"
+        KRATOS_ADMIN_URL: "http://kratos-admin.ory.svc.cluster.local:80"
+        KRATOS_PUBLIC_URL: "http://kratos-public.ory.svc.cluster.local:80"
+        KETO_WRITE_URL: "http://keto-write.ory.svc.cluster.local:80"
+        KETO_READ_URL: "http://keto-read.ory.svc.cluster.local:80"
+        KETO_HUB_OBJECT: "${hub_participant_name}"
+
       openid:
-        enabled: true
-        clientId: mcm-portal
-        clientSecretName: mcm-oidc-client-secret
-        clientSecretKey: secret
+        enabled: false
 
       keycloak:
-        enabled: true
-        baseUrl: "https://keycloak.int.${domain}"
-        discoveryUrl: "https://keycloak.int.${domain}/realms/dfsps/.well-known/openid-configuration"
-        adminClientId: mcm-portal
-        adminClientSecretName: mcm-oidc-client-secret
-        adminClientSecretKey: secret
-        dfspsRealm: dfsps
-        autoCreateAccounts: true
+        enabled: false
+        autoCreateAccounts: false
 
       certManager:
         enabled: true
@@ -99,14 +102,10 @@ spec:
     ui:
       checkSessionUrl: "https://mcm.int.${domain}/kratos/sessions/whoami"
       loginUrl: "https://auth.int.${domain}/kratos/self-service/login/browser"
-      loginProvider: keycloak
-      logoutUrl: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Fkeycloak.int.${domain}%2Frealms%2Fdfsps%2Fprotocol%2Fopenid-connect%2Flogout"
+      loginProvider: kratos
+      logoutUrl: "/kratos/self-service/logout/browser"
       oauth:
-        enabled: true
-        hubOidcProviderUrl: "https://keycloak.int.${domain}/realms/dfsps/protocol/openid-connect"
-        clientId: mcm-portal
-        clientSecretName: mcm-oidc-client-secret
-        clientSecretKey: secret
+        enabled: false
 
     migrations:
       enabled: true

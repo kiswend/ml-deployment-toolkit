@@ -145,8 +145,8 @@ spec:
           REMOTE_API_BASE_URL: ''
           REMOTE_MOCK_API: false
           LOGIN_URL: "https://auth.int.${domain}/kratos/self-service/login/browser"
-          LOGOUT_URL: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Fkeycloak.int.${domain}%2Frealms%2Fhub-operators%2Fprotocol%2Fopenid-connect%2Flogout"
-          LOGIN_PROVIDER: keycloak
+          LOGOUT_URL: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Ffinance-portal.int.${domain}"
+          LOGIN_PROVIDER: kratos
           AUTH_TOKEN_URL: "/kratos/sessions/whoami"
           AUTH_ENABLED: true
           REMOTE_1_URL: "https://finance-portal.int.${domain}/uis/iam"
@@ -167,8 +167,8 @@ spec:
           REMOTE_MOCK_API: 'false'
           AUTH_ENABLED: 'true'
           LOGIN_URL: "https://auth.int.${domain}/kratos/self-service/login/browser"
-          LOGIN_PROVIDER: keycloak
-          LOGOUT_URL: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Fkeycloak.int.${domain}%2Frealms%2Fhub-operators%2Fprotocol%2Fopenid-connect%2Flogout"
+          LOGIN_PROVIDER: kratos
+          LOGOUT_URL: "/kratos/self-service/logout/browser?return_to=https%3A%2F%2Ffinance-portal.int.${domain}"
           AUTH_TOKEN_URL: /kratos/sessions/whoami
         remotes.json:
           roles:
@@ -319,7 +319,7 @@ spec:
           settlementAudit: true
 
     role-assignment-service:
-      enabled: true
+      enabled: false
       ingress:
         enabled: false
       configFiles:

@@ -93,9 +93,9 @@ app:
   # MCM
   mcm_replicas: 1
   # Auth
-  keycloak_instances: 1
   kratos_replicas: 1
   keto_replicas: 1
+  hydra_replicas: 1
   oathkeeper_replicas: 1
 
 # --- Data layer tuning (replicas stay 3 for raft HA) ---

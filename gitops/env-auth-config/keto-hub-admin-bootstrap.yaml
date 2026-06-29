@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keto-hub-admin-bootstrap
+  namespace: ory
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: "enabled"
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: curlimages/curl:8.7.1
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              KETO_WRITE="http://keto-write.ory.svc.cluster.local:80"
+
+              echo "Waiting for Keto write API..."
+              until curl -sf "$KETO_WRITE/health/ready" > /dev/null 2>&1; do
+                echo "  not ready, retrying in 5s..."
+                sleep 5
+              done
+              echo "Keto write API is ready."
+
+              seed_role() {
+                ROLE=$1
+                echo "Seeding role:$ROLE#member@$HUB_ADMIN_EMAIL..."
+                HTTP_CODE=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+                  -X PUT "$KETO_WRITE/admin/relation-tuples" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"namespace\":\"role\",\"object\":\"$ROLE\",\"relation\":\"member\",\"subject_id\":\"$HUB_ADMIN_EMAIL\"}")
+                echo "  HTTP $HTTP_CODE: $(cat /tmp/resp.json)"
+                case "$HTTP_CODE" in
+                  2*) ;;
+                  *) echo "  ERROR: unexpected status $HTTP_CODE"; exit 1 ;;
+                esac
+              }
+
+              seed_role manager
+              seed_role pta
+              seed_role operator
+              seed_role financeManager
+              seed_role audit
+              seed_role mcmadmin
+              seed_role clerk
+
+              echo "Hub admin Keto roles seeded for $HUB_ADMIN_EMAIL."
+          env:
+            - name: HUB_ADMIN_EMAIL
+              value: "${hub_admin_email}"

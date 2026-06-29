@@ -6,21 +6,19 @@ resources:
   - vault/backup-s3-credentials.yaml
   - vault/secretstore.yaml
   - vault/vault-pki-issuer.yaml
-  - keycloak/operator.yaml
-  - keycloak/keycloak.yaml
-  - keycloak/keycloak-metrics-service.yaml
+  - ory/kratos-email-templates.yaml
   - ory/externalsecret-kratos.yaml
   - ory/externalsecret-keto.yaml
+  - ory/externalsecret-hydra.yaml
   - ory/helmrelease-kratos.yaml
   - ory/helmrelease-oathkeeper.yaml
   - ory/helmrelease-keto.yaml
+  - ory/helmrelease-hydra.yaml
   - ory/keto-metrics-service.yaml
   - ory/helmrelease-selfservice-ui.yaml
   - ory/helmrelease-bof.yaml
-  - ory/kratos-role-webhook.yaml
   - ory/keto-batch-auth.yaml
   - routes/auth-httproute.yaml
-  - routes/keycloak-httproute.yaml
   - routes/vault-httproute.yaml
   - routes/mcm-httproute.yaml
   - routes/finance-portal-httproute.yaml

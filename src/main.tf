@@ -163,7 +163,9 @@ module "flux_config" {
   kratos_db_password      = var.kratos_db_password
   keto_db_password        = var.keto_db_password
   mcm_db_password         = var.mcm_db_password
-  keycloak_admin_password = var.keycloak_admin_password
+  hydra_db_password       = var.hydra_db_password
+  hub_admin_password      = var.hub_admin_password
+  hub_admin_email    = var.hub_admin_email
   hubop_oidc_secret       = var.hubop_oidc_secret
   mcm_oidc_client_secret  = var.mcm_oidc_client_secret
   role_assign_svc_secret  = var.role_assign_svc_secret

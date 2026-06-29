@@ -62,6 +62,19 @@ resource "random_password" "kratos_secrets_default" {
   special = false
 }
 
+# Hydra secrets — generated once, stored in Terraform state, seeded into Vault via cluster-secrets → Flux substitution
+resource "random_password" "hydra_secrets_system" {
+  count   = local.is_env ? 1 : 0
+  length  = 32
+  special = false
+}
+
+resource "random_password" "hydra_secrets_cookie" {
+  count   = local.is_env ? 1 : 0
+  length  = 32
+  special = false
+}
+
 # ConfigMap with cluster configuration for postBuild substitution
 resource "kubernetes_config_map_v1" "cluster_config" {
   metadata {
@@ -137,7 +150,8 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       kratos_db_password            = var.kratos_db_password
       keto_db_password              = var.keto_db_password
       mcm_db_password               = var.mcm_db_password
-      keycloak_admin_password       = var.keycloak_admin_password
+      hub_admin_password = var.hub_admin_password
+      hub_admin_email    = var.hub_admin_email
       hubop_oidc_secret             = var.hubop_oidc_secret
       mcm_oidc_client_secret        = var.mcm_oidc_client_secret
       role_assign_svc_secret        = var.role_assign_svc_secret
@@ -150,6 +164,9 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       kratos_secrets_cookie         = random_password.kratos_secrets_cookie[0].result
       kratos_secrets_csrf_cookie    = random_password.kratos_secrets_csrf_cookie[0].result
       kratos_secrets_default        = random_password.kratos_secrets_default[0].result
+      hydra_db_password             = var.hydra_db_password
+      hydra_secrets_system          = random_password.hydra_secrets_system[0].result
+      hydra_secrets_cookie          = random_password.hydra_secrets_cookie[0].result
       backup_s3_access_key          = var.backup_s3_access_key
       backup_s3_secret_key          = var.backup_s3_secret_key
     } : {}
@@ -776,19 +793,6 @@ resource "kubectl_manifest" "kustomization_env_auth" {
           name       = "vault"
           namespace  = "vault"
         },
-        # Keycloak: operator + instance
-        {
-          apiVersion = "apps/v1"
-          kind       = "Deployment"
-          name       = "keycloak-operator"
-          namespace  = "keycloak"
-        },
-        {
-          apiVersion = "k8s.keycloak.org/v2alpha1"
-          kind       = "Keycloak"
-          name       = "keycloak"
-          namespace  = "keycloak"
-        },
         # Ory stack
         {
           apiVersion = "helm.toolkit.fluxcd.io/v2"
@@ -800,6 +804,12 @@ resource "kubectl_manifest" "kustomization_env_auth" {
           apiVersion = "helm.toolkit.fluxcd.io/v2"
           kind       = "HelmRelease"
           name       = "keto"
+          namespace  = var.flux_namespace
+        },
+        {
+          apiVersion = "helm.toolkit.fluxcd.io/v2"
+          kind       = "HelmRelease"
+          name       = "hydra"
           namespace  = var.flux_namespace
         }
       ]
@@ -825,7 +835,7 @@ resource "kubectl_manifest" "kustomization_env_auth" {
   ]
 }
 
-# Kustomization: env-auth-config (Keycloak realm imports — must wait for Keycloak instance to be ready)
+# Kustomization: env-auth-config (bootstrap jobs — depends on env-auth being healthy)
 resource "kubectl_manifest" "kustomization_env_auth_config" {
   count = local.is_env ? 1 : 0
 

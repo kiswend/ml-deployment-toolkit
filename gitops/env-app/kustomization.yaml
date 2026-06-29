@@ -20,7 +20,7 @@ resources:
   - finance-portal/referencegrant.yaml
   # gw-ext routes (DFSP-facing — SIMPLE TLS via Cilium Gateway)
   - routes/mcm-ext-httproute.yaml
-  - routes/keycloak-ext-httproute.yaml
+  - routes/hydra-ext-httproute.yaml
   - routes/referencegrant-ext.yaml
   # extapi mTLS (DFSP-facing — mutual TLS via standalone Envoy Deployment)
   - routes/extapi-service.yaml

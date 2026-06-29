@@ -53,13 +53,6 @@ spec:
       passwordSecretRef:
         name: mysqldb
         key: mysql-oracle-password
-    - name: keycloak
-      dbs: [keycloak]
-      hosts: ["%"]
-      grants: [ALL PRIVILEGES]
-      passwordSecretRef:
-        name: auth-db-app-secrets
-        key: keycloak-password
     - name: kratos
       dbs: [kratos]
       hosts: ["%"]
@@ -74,6 +67,13 @@ spec:
       passwordSecretRef:
         name: auth-db-app-secrets
         key: keto-password
+    - name: hydra
+      dbs: [hydra]
+      hosts: ["%"]
+      grants: [ALL PRIVILEGES]
+      passwordSecretRef:
+        name: auth-db-app-secrets
+        key: hydra-password
     - name: mcm
       dbs: [mcm]
       hosts: ["%"]

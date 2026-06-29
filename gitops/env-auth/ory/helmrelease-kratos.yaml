@@ -41,7 +41,7 @@ spec:
       nameOverride: kratos-secret
 
     courier:
-      enabled: false
+      enabled: true
 
     deployment:
       extraInitContainers: |
@@ -82,6 +82,14 @@ spec:
                 secretKeyRef:
                   name: kratos-secret
                   key: dsn
+      extraVolumes:
+        - name: kratos-email-templates
+          configMap:
+            name: kratos-email-templates
+      extraVolumeMounts:
+        - name: kratos-email-templates
+          mountPath: /etc/kratos-templates
+          readOnly: true
 
     service:
       admin:
@@ -109,7 +117,17 @@ spec:
                   "email": {
                     "title": "E-Mail",
                     "type": "string",
-                    "format": "email"
+                    "format": "email",
+                    "ory.sh/kratos": {
+                      "credentials": {
+                        "password": {
+                          "identifier": true
+                        }
+                      },
+                      "recovery": {
+                        "via": "email"
+                      }
+                    }
                   },
                   "subject": {
                     "title": "Subject",
@@ -130,18 +148,23 @@ spec:
               }
             }
           }
-        "role-injection-body.jsonnet": |
-          function(ctx) {
-            identity_id: ctx.identity.id,
-            user_subject: ctx.identity.traits.subject
-          }
 
       config:
         dsn: "mysql://kratos:${kratos_db_password}@tcp(${mysql_host}:${mysql_port})/kratos?max_conns=20&max_idle_conns=4"
 
         courier:
           smtp:
-            connection_uri: "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
+            connection_uri: "smtp://placeholder@localhost:25"
+            from_address: "${smtp_user}"
+            from_name: "Mojaloop Hub"
+          templates:
+            recovery:
+              valid:
+                email:
+                  subject: file:///etc/kratos-templates/recovery-subject.gotmpl
+                  body:
+                    plaintext: file:///etc/kratos-templates/recovery-body.txt.gotmpl
+                    html: file:///etc/kratos-templates/recovery-body.html.gotmpl
 
         identity:
           default_schema_id: default
@@ -167,76 +190,31 @@ spec:
 
           methods:
             password:
-              enabled: false
-            oidc:
+              enabled: true
+            link:
               enabled: true
               config:
-                providers:
-                  - id: hub-operators
-                    provider: generic
-                    client_id: hub-op
-                    client_secret: "${hubop_oidc_secret}"
-                    scope:
-                      - openid
-                      - profile
-                      - email
-                    mapper_url: "base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7Cgp7CiAgaWRlbnRpdHk6IHsKICAgIHRyYWl0czogewogICAgICBlbWFpbDogY2xhaW1zLmVtYWlsLAogICAgICBuYW1lOiBjbGFpbXMubmFtZSwKICAgICAgc3ViamVjdDogY2xhaW1zLnN1YgogICAgfSwKICB9LAp9Cg=="
-                    issuer_url: "https://keycloak.int.${domain}/realms/hub-operators"
-                  - id: dfsps
-                    provider: generic
-                    client_id: dfsp-oidc
-                    client_secret: "${dfsp_oidc_client_secret}"
-                    scope:
-                      - openid
-                      - profile
-                      - email
-                    mapper_url: "base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7Cgp7CiAgaWRlbnRpdHk6IHsKICAgIHRyYWl0czogewogICAgICBlbWFpbDogY2xhaW1zLmVtYWlsLAogICAgICBuYW1lOiBjbGFpbXMubmFtZSwKICAgICAgc3ViamVjdDogY2xhaW1zLnN1YgogICAgfSwKICB9LAp9Cg=="
-                    issuer_url: "https://keycloak.int.${domain}/realms/dfsps"
+                lifespan: 1h
+            oidc:
+              enabled: false
 
           flows:
             login:
               ui_url: "https://auth.int.${domain}/ui/login"
               lifespan: 10m
-              after:
-                oidc:
-                  default_browser_return_url: "https://auth.int.${domain}/ui/welcome"
-                  hooks:
-                    - hook: web_hook
-                      config:
-                        url: http://kratos-role-webhook.ory.svc.cluster.local/inject-roles
-                        method: POST
-                        body: file:///etc/config/role-injection-body.jsonnet
-                        response:
-                          parse: false
-                        auth:
-                          type: api_key
-                          config:
-                            name: Authorization
-                            value: Bearer kratos-webhook-token
-                            in: header
 
             registration:
-              after:
-                oidc:
-                  hooks:
-                    - hook: web_hook
-                      config:
-                        url: http://kratos-role-webhook.ory.svc.cluster.local/inject-roles
-                        method: POST
-                        body: file:///etc/config/role-injection-body.jsonnet
-                        response:
-                          parse: false
-                        auth:
-                          type: api_key
-                          config:
-                            name: Authorization
-                            value: Bearer kratos-webhook-token
-                            in: header
-                    - hook: session
+              enabled: false
+
+            recovery:
+              enabled: true
+              use: link
+              ui_url: "https://auth.int.${domain}/ui/recovery"
+              lifespan: 1h
 
             logout:
               after:
-                default_browser_return_url: "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/logout"
+                default_browser_return_url: "https://auth.int.${domain}/ui/login"
 
             error:
               ui_url: "https://auth.int.${domain}/ui/error"

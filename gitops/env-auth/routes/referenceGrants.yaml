@@ -11,9 +11,6 @@ spec:
       namespace: vault
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      namespace: keycloak
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
       namespace: ory
     - group: gateway.networking.k8s.io
       kind: HTTPRoute

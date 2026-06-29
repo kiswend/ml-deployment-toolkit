@@ -45,14 +45,16 @@ spec:
             enabled: true
             config:
               jwks_urls:
-                - "https://keycloak.int.${domain}/realms/hub-operators/protocol/openid-connect/certs"
+                - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
+              trusted_issuers:
+                - "https://hydra.ext.${domain}"
           cookie_session:
             enabled: true
             config:
               check_session_url: http://kratos-public/sessions/whoami
               preserve_path: true
               extra_from: "@this"
-              subject_from: "identity.traits.subject"
+              subject_from: "identity.traits.email"
               only:
               - ory_kratos_session
           anonymous:
