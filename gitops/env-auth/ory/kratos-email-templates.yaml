@@ -5,7 +5,7 @@ metadata:
   namespace: ory
 data:
   recovery-subject.gotmpl: |
-    Set your password for {{ .Identity.Traits.email }}
+    Set your password for {{ index (index .Identity "traits") "email" }}
   recovery-body.txt.gotmpl: |
     Hello,
 
@@ -14,8 +14,6 @@ data:
     Click the link below to set your password:
     {{ .RecoveryURL }}
 
-    This link expires in {{ .ExpiresIn }}.
-
     If you did not request this, you can safely ignore this email.
   recovery-body.html.gotmpl: |
     <html>
@@ -23,7 +21,7 @@ data:
       <h2 style="color:#1a73e8;">Set your account password</h2>
       <p>
         The <strong>${hub_participant_name}</strong> hub administrator has requested that a
-        password be set for your account (<strong>{{ .Identity.Traits.email }}</strong>).
+        password be set for your account (<strong>{{ index (index .Identity "traits") "email" }}</strong>).
       </p>
       <p style="margin:32px 0;">
         <a href="{{ .RecoveryURL }}"
@@ -35,7 +33,6 @@ data:
         Or copy this link into your browser:<br>
         <span style="word-break:break-all;">{{ .RecoveryURL }}</span>
       </p>
-      <p style="color:#555;font-size:14px;">This link expires in {{ .ExpiresIn }}.</p>
       <hr style="border:none;border-top:1px solid #eee;margin:32px 0;">
       <p style="color:#aaa;font-size:12px;">
         If you did not request this, you can safely ignore this email.
