@@ -206,6 +206,9 @@ spec:
             registration:
               enabled: false
 
+            settings:
+              ui_url: "https://auth.int.${domain}/ui/settings"
+
             recovery:
               enabled: true
               use: link
