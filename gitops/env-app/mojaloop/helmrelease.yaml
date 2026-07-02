@@ -96,6 +96,27 @@ spec:
             patch: *honorTaints
           - target: {kind: Deployment, name: moja-ml-api-adapter-handler-notification}
             patch: *honorTaints
+          # Kafka-consumer handlers report unhealthy (isAssigned=false) while
+          # group rebalances are in progress; at failureThreshold=3/period=15s
+          # the probe kills pods mid-rebalance, triggering another rebalance —
+          # the death spiral of 2026-07-02 (perf/RESULTS.md). 8×15s = 2min
+          # tolerance lets rebalances complete. Upstream fix candidates: health
+          # endpoint tolerating transitional assignment, or cooperative-sticky.
+          - target: {kind: Deployment, name: moja-quoting-service-handler}
+            patch: &relaxProbe |
+              - op: replace
+                path: /spec/template/spec/containers/0/livenessProbe/failureThreshold
+                value: 8
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-prepare}
+            patch: *relaxProbe
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-position}
+            patch: *relaxProbe
+          - target: {kind: Deployment, name: moja-handler-pos-batch}
+            patch: *relaxProbe
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-fulfil}
+            patch: *relaxProbe
+          - target: {kind: Deployment, name: moja-ml-api-adapter-handler-notification}
+            patch: *relaxProbe
   values:
     global:
       kafka:
