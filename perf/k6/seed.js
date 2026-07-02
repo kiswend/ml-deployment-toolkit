@@ -43,7 +43,12 @@ export default function () {
         }),
         { headers, tags: { name: 'POST /repository/parties' } }
       );
-      check(res, { 'party registered': (r) => r.status >= 200 && r.status < 300 });
+      check(res, {
+        // sim-backend returns 500 "ID is already registered" on duplicates —
+        // count re-seeding an existing party as success
+        'party registered': (r) =>
+          (r.status >= 200 && r.status < 300) || (r.body && r.body.includes('already registered')),
+      });
     }
 
     const accounts = [];

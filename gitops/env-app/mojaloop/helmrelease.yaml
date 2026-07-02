@@ -39,6 +39,60 @@ spec:
       name: mojaloop-values-override
       valuesKey: values.yaml
       optional: true
+  # The chart's common.topologySpread template hardcodes maxSkew=1/DoNotSchedule
+  # on hostname. With default nodeTaintsPolicy (Ignore), the tainted control
+  # plane counts as a 0-pod domain, capping replicas at one per worker.
+  # Honor excludes tainted nodes from skew domains so replicas > worker count
+  # can schedule while keeping even spread.
+  # Targets are enumerated (not a kind-wide wildcard) because several release
+  # members (bulk adapters, testing-toolkit frontend) render without
+  # topologySpreadConstraints and a JSON6902 add would fail the whole render.
+  # Names verified against chart 17.2.0 — re-verify on chart version bumps.
+  # Remove this block once the fix lands upstream in the common chart.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target: {kind: Deployment, name: moja-account-lookup-service}
+            patch: &honorTaints |
+              - op: add
+                path: /spec/template/spec/topologySpreadConstraints/0/nodeTaintsPolicy
+                value: Honor
+          - target: {kind: Deployment, name: moja-account-lookup-service-admin}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-als-msisdn-oracle}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-quoting-service}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-quoting-service-handler}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-service}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-prepare}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-position}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-handler-pos-batch}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-fulfil}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-get}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-handler-timeout}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralledger-handler-admin-transfer}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralsettlement-service}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralsettlement-handler-deferredsettlement}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-centralsettlement-handler-rules}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-transaction-requests-service}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-ml-api-adapter-service}
+            patch: *honorTaints
+          - target: {kind: Deployment, name: moja-ml-api-adapter-handler-notification}
+            patch: *honorTaints
   values:
     global:
       kafka:
