@@ -297,3 +297,11 @@ deployments; `rollout status` returns at pod readiness, but Kafka groups
 stabilize later; the run measured rebalance chaos. METHOD FIX: run.sh settle
 gate (newest container >=180s old). Probe relaxation itself deployed fine
 (failureThreshold=8 on 6 consumer handlers). Re-run follows.
+
+### `ramp-target5b` (23:54–23:56) — CONTAMINATED by PVE host contention
+Settle gate worked (364s). 37% success, failures from minute one at 2 TPS —
+but dfsp-201 steal+iowait rose 0.1→3.5%% exactly across the window (midnight
+PVE backup signature; same host class as the 17:32 incident). Sequential
+transfers complete fine. NOT a config verdict. Ramp auto-rescheduled for when
+host contention subsides (<0.5%% for 10 min). METHOD: steal/iowait gate worth
+adding to run.sh pre-flight permanently.
