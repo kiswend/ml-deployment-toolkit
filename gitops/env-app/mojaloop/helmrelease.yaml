@@ -32,8 +32,11 @@ spec:
       retries: 3
   upgrade:
     remediation:
-      retries: -1
-      strategy: uninstall
+      # rollback, NOT uninstall: an upgrade timeout on 2026-07-02 triggered a
+      # full uninstall/reinstall that wiped ALS oracle registrations (see
+      # perf/RESULTS.md and the oracle-durability task)
+      retries: 3
+      strategy: rollback
   valuesFrom:
     - kind: ConfigMap
       name: mojaloop-values-override

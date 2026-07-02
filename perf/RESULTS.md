@@ -1,0 +1,89 @@
+# Performance test log
+
+One entry per run, chronological. Convention: after every k6 run, append an entry
+with the `testid` (metrics are queryable in Thanos/Grafana under that label while
+retention lasts), the configuration under test, headline numbers, and any
+confounders observed. SLO under test: **p99 < 1s client-side e2e** at the
+`POST /transfers` SDK outbound API. Environment: ml-test (Proxmox tps-1 profile,
+3 workers), DFSP VMs 201–203, observability in ml-cc.
+
+---
+
+## 2026-07-02 — baseline & quote-handler scaling campaign
+
+Switch config at start: chart mojaloop 17.2.0, all replicas 1, audit `sync: true`.
+
+### `smoke-20260702` (11:24 UTC) — harness validation
+10s @ 1 TPS. 11/11 COMPLETED. p50 1.07s, p99 2.0s. k6 → Thanos remote-write
+verified end-to-end. Discovered k6 RW output exports durations in **seconds**.
+
+### `soak-20260702-1130` (11:30–12:21) — BASELINE
+30m @ 1 TPS, 1801 transfers. **p50 1.28s, p90 2.19s, p95 2.68s, p99 3.87s**,
+0.77% timeouts (5s cap), fastest success 715ms. SLO FAIL at 1 TPS.
+Switch-side during window: handler work sums to ~290ms (prepare 93 / position 99
+/ fulfil 73 / notification 25ms); switch e2e (prepare→fulfil, incl. payee round
+trip) p50 0.85s. Most of the budget is between stages, not in handlers.
+
+### `ramp-20260702` (12:21–12:42) — find the ceiling, 1→15 TPS
+Clean ≤2 TPS; first timeouts ~3 TPS; **zero completions from 4 TPS up** (93.6%
+failure overall). Lag: 7,410 msgs on `topic-quotes-post` (all other topics ~0)
+→ quoting-service-handler is the bottleneck. Post-test: handler **stalled ~6 min**
+(lag frozen, logs silent, pod healthy) then drained at ~22 msg/s → not CPU-bound;
+per-message wait under load.
+
+### `ramp-async-audit` (13:41–13:50) — EXPERIMENT: audit `sync: false`
+Same ramp profile (1→15 shortened 1,2,4,6,8,10,12,15×2m → actually 1–15; 60s/2m
+steps). **NO EFFECT**: p50 at 1–2 TPS 1.22–1.34s (baseline 1.28s), collapse
+again at 4 TPS, lag again `topic-quotes-post`. Hypothesis eliminated; change
+reverted (audit back to `sync: true`).
+
+### Infra incident (~14:30–15:30)
+cc single-node VM starved by overloaded PVE host (192.168.88.17): etcd fsync
+4.3s → API VIP withdrawn; Loki write path hung; gw VIP ARP flaky. **ml-cc
+reinstalled fresh** → gw-int IP changed .11→.12; all pre-15:30 metrics history
+lost (numbers above survive only in this log).
+
+### `ramp-qs2` (16:00–16:09) — EXPERIMENT: qs_handler_replicas 1→2
+Ramp 1,2,3,4,6,8 ×60s. Ceiling ~unchanged (clean ≤2, collapse in 4 TPS step).
+Handlers nearly idle (≤0.12 CPU total, no throttling) → ~600ms serialized wait
+per message. **DFSP VMs only 15–25% busy at collapse** — payee side not the
+initial constraint. dfsp-202 hit 99% *after* the test draining stale quotes.
+Phase-2 DFSP metrics online (`mojaloop_connector_*`): latency budget at 1–2 TPS
+= lookup 0.2s + quote 0.5s + transfer 0.9s ≈ 1.6s e2e.
+
+### Incident: qs=6 rollout + oracle wipe (16:30–17:15)
+6 replicas unschedulable: chart's hardcoded topologySpread + default
+`nodeTaintsPolicy: Ignore` counts the tainted control plane as a 0-pod domain →
+max 1 pod/worker. Fixed via HelmRelease postRenderers adding
+`nodeTaintsPolicy: Honor` (19 enumerated Deployment targets; wildcard unsafe —
+bulk/ttk deployments render without constraints). Meanwhile the first upgrade
+attempt hit its 30m timeout → `strategy: uninstall` remediation **reinstalled
+mojaloop and wiped ALS oracle registrations** (error 3204 on every transfer;
+central-ledger data in external MySQL survived). Re-seeded via `seed.js`
+(now duplicate-tolerant). See task: "Oracle data durability" — serious risk.
+
+### `smoke-postreinstall` (17:11) — 0/10, error 3204 (oracle empty) → diagnosed above.
+### `smoke-postseed` (17:15) — 11/11 COMPLETED. System healthy, 6/6 handlers (2/2/2 spread).
+
+### `ramp-qs6` (17:16–17:25) — EXPERIMENT: qs_handler_replicas 2→6
+Ramp 1,2,3,4,6,8 ×60s. **3 TPS step 100% clean** (first config to do it);
+collapse during 4 TPS step; 30% completions overall (vs 14% qs2, 6% qs1).
+**Sublinear**: 3× pods bought +1 TPS. Failure signature changed — lag now
+distributed (`topic-notification-event` grows from minute one [notification
+handler = 1 replica], `topic-transfer-prepare` peaks 330, `topic-quotes-post`
+only 530 vs 7,400 in run 1). DFSP VMs 50–80% busy at collapse. Quote handlers
+still idle (0.31 CPU across 6). Conclusion: stacked per-message fixed costs
+give a system-wide ~3–4 TPS ceiling; replica scaling is whack-a-mole.
+
+### ⚠ CONFOUNDER discovered post-hoc: extapi-envoy OOM loop
+Both `extapi-envoy` replicas (limits **128Mi**) were **OOMKilled 9–10 times**
+during the day, last kills 17:25:20/27 — coinciding with `ramp-qs6`'s http_500
+phase. The DFSP↔switch gateway was dying inside every ramp. **All collapse
+points above are suspect until envoy gets a sane memory limit and a ramp is
+re-run.** Manifest: `gitops/env-app/routes/extapi-envoy-deployment.yaml`.
+
+### State at end of day
+- Live config: qs_handler=6 (Honor patch ×19 targets), audit sync:true, all else 1 replica.
+- Next queued: raise envoy memory limit → re-run ramp (clean baseline);
+  then Kafka consumer tuning; scale notification/prepare handlers;
+  mTLS keep-alive switch→DFSP.

@@ -32,13 +32,14 @@ spec:
 
     # Alloy configuration using River syntax
     alloy:
-      # Resource limits — Goldilocks target ~1.48Gi
+      # Right-sized 2026-07-02: with the audit-log drop stage the buffer need
+      # shrinks; 2Gi observed usage was audit-firehose backpressure
       resources:
         requests:
           cpu: 100m
           memory: 512Mi
         limits:
-          memory: 2Gi
+          memory: 1Gi
       # Enable clustering so DaemonSet pods shard scrape targets
       # instead of all pods scraping all targets (avoids duplicate metrics)
       clustering:
@@ -88,7 +89,20 @@ spec:
           // Collect logs from discovered pods
           loki.source.kubernetes "pods" {
             targets    = discovery.relabel.pods.output
+            forward_to = [loki.process.drop_noise.receiver]
+          }
+
+          // Drop the Event-SDK audit firehose before shipping: every Mojaloop
+          // service prints full audit payloads to stdout on every message.
+          // The same events already reach MongoDB via Kafka (reporting
+          // pipeline), so the Loki copy is redundant — and during load tests
+          // it dominated Alloy memory (~2Gi) and Loki/cc disk I/O.
+          loki.process "drop_noise" {
             forward_to = [loki.write.default.receiver]
+
+            stage.drop {
+              expression = "audit: LOG_EVENT_TYPE"
+            }
           }
 
           // Remote write logs to Loki in ml-cc cluster

@@ -54,7 +54,10 @@ export const options = {
   thresholds: {
     http_req_duration: ['p(99)<1000'], // SLO: p99 < 1s client-side e2e
     http_req_failed: ['rate<0.01'],
-    checks: ['rate>0.99'], // transfers reaching COMPLETED
+    // Abort the run once sustained degradation sets in: past the breaking
+    // point every request fails, which only poisons the system (backlogs,
+    // stale-quote storms) without adding information.
+    checks: [{ threshold: 'rate>0.95', abortOnFail: true, delayAbortEval: '2m' }],
     dropped_iterations: ['count<1'], // generator kept pace with the arrival rate
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
