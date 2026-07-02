@@ -46,3 +46,4 @@ resources:
   - grafana/dashboards/mojaloop/nodejs-runtime.yaml
   - grafana/dashboards/mojaloop/quoting-service.yaml
   - grafana/dashboards/mojaloop/dfsp-mtls-gateway.yaml
+  - grafana/dashboards/mojaloop/load-test.yaml
