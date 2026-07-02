@@ -106,6 +106,28 @@ designed batch knobs. Consumer tuning has correctness implications → tracing
 (no native OTel in v17.x images; Event-SDK Path A bridge needed) moves ahead of
 blind consumer tuning.
 
+### Tracing online (commits a1b9266..766813a, ~18:20–19:00)
+Event-SDK TRACE→kafka enabled; tools/trace-bridge 0.1.1 (lz4 codec needed —
+Event-SDK produces lz4) forwards topic-event-trace → Tempo OTLP. Fixed
+pre-existing bug: tempo route + Grafana datasource pointed at port 3100; Tempo
+serves on 3200 (never noticed — Tempo was always idle). ~27 spans/transfer.
+
+**First e2e waterfall (1788ms transfer, trace 2305c9bb..., idle load):**
+- Lookup phase ~230ms (ALS work 121ms, oracle fast)
+- **Quote phase ~860ms — HALF the budget**: `handleQuoteRequest` spends
+  **~315ms before forwarding** (DB persist/dupe-check path; PXC synchronous
+  replication suspect), then `forwardQuoteRequest` **188ms** and
+  `forwardQuoteUpdate` **194ms** — ~190ms per HTTP callback to a DFSP.
+  Notification handler's DFSP callbacks take only 12–22ms → the ~190ms is
+  specific to the quoting service's HTTP client (likely no keep-alive → fresh
+  mTLS handshake per forward), NOT network/DFSP.
+- Transfer phase ~660ms: CL handlers 276ms actual work + ~8 inter-stage gaps
+  of ~40–56ms each (Kafka handoffs — smaller than theorized but numerous).
+- Payee SDK turnarounds ~55ms — DFSPs fast at idle.
+
+Targets ranked: (1) quoting HTTP forward cost 2×190ms, (2) 315ms pre-forward
+DB path, (3) ~50ms×8 Kafka handoff gaps, (4) notification/CL already lean.
+
 ### `ramp-rightsized` (18:02–18:06) — REFERENCE BASELINE ✅ first clean run
 Pre-registered hypothesis: with envoy fixed the result is trustworthy; PASS =
 health delta 0. **Result: PASS — 0 restarts, 0 OOM, nodes ≤72% during load.**
