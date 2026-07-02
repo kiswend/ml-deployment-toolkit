@@ -70,6 +70,14 @@ spec:
                 secretKeyRef:
                   name: keto-secret
                   key: dsn
+      extraVolumes:
+        - name: keto-opl
+          configMap:
+            name: keto-opl
+      extraVolumeMounts:
+        - name: keto-opl
+          mountPath: /etc/keto-namespaces
+          readOnly: true
 
     keto:
       automigration:
@@ -84,16 +92,7 @@ spec:
             port: 4467
           metrics:
             port: 4468
+        # Unified OPL model (MCM Hub/Dfsp/User + FP role/permission/participant).
+        # See keto-opl.yaml. Replaces the legacy flat namespace array.
         namespaces:
-          - id: 0
-            name: role
-          - id: 1
-            name: permission
-          - id: 2
-            name: participant
-          - id: 3
-            name: User
-          - id: 4
-            name: Hub
-          - id: 5
-            name: Dfsp
+          location: file:///etc/keto-namespaces/mcm.keto.ts

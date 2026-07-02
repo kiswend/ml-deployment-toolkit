@@ -48,13 +48,24 @@ spec:
                 - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
               trusted_issuers:
                 - "https://hydra.ext.${domain}"
+              # NOTE: no target_audience. The DFSP-side @mojaloop/mcm-client sends
+              # client_credentials WITHOUT an `audience` param, so Hydra issues a
+              # token with no `aud` claim. Authorization is still enforced per-DFSP
+              # by Keto (subject = Hydra client_id = dfspId). Re-add target_audience
+              # only if the DFSP client is upgraded to request aud=connection-manager-api.
+              # Hydra lazily generates its JWT signing keyset on first use; the
+              # first machine-token validation can exceed the 1s default and 401.
+              jwks_max_wait: 5s
           cookie_session:
             enabled: true
             config:
               check_session_url: http://kratos-public/sessions/whoami
               preserve_path: true
+              preserve_query: true
               extra_from: "@this"
-              subject_from: "identity.traits.email"
+              # Keto subjects are the Kratos identity id (humans) / Hydra
+              # client_id (machines). MUST be identity.id, not the email.
+              subject_from: "identity.id"
               only:
               - ory_kratos_session
           anonymous:
@@ -95,9 +106,9 @@ spec:
             config:
               headers:
                 X-User: '{{ print .Subject }}'
-                X-Extra: '{{ print .Extra }}'
-                X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-                X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
+                X-Email: '{{ with .Extra.identity }}{{ print .traits.email }}{{ end }}'
+                X-DFSP-ID: '{{ with .Extra.identity }}{{ with .metadata_public }}{{ with .dfspId }}{{ . }}{{ end }}{{ end }}{{ end }}'
+                X-Roles: '[{{ if .Extra.identity }}{{ with .Extra.identity.metadata_public }}{{ with .role }}"{{ . }}"{{ end }}{{ with .dfspId }}"dfsp:{{ . }}"{{ end }}{{ end }}{{ else }}"dfsp:{{ print .Subject }}"{{ end }}]'
           noop:
             enabled: true
 

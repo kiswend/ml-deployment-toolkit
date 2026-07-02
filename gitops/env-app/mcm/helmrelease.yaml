@@ -41,7 +41,7 @@ spec:
     api:
       image:
         name: ndelma/connection-manager-api
-        version: pr-202
+        version: pr-202-v4
       ports:
         portName: api
       url: "https://mcm.int.${domain}"

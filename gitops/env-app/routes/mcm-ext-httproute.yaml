@@ -1,5 +1,8 @@
-# MCM external interface — DFSP-facing pm4mlapi
-# Rewrite /pm4mlapi → /api for the MCM connection manager API
+# MCM external interface — DFSP-facing PM4ML machine API.
+# DFSPs use the conventional /pm4mlapi base (ITK default). We rewrite it to /api
+# and route through Oathkeeper (JWT auth + Keto authz) — the same rules as the
+# internal host, matched by mcm.<?:int|ext>. Oathkeeper sees the rewritten /api
+# path, so no separate ext rules are needed. Previously this bypassed Oathkeeper.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -23,5 +26,6 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /api
       backendRefs:
-        - name: mcm-connection-manager-api
-          port: 3001
+        - name: oathkeeper-proxy
+          namespace: ory
+          port: 4455

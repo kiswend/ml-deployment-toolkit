@@ -1,22 +1,28 @@
-# MCM Oathkeeper Rule CRDs — fine-grained per-endpoint Keto permission checks
-# Ported from legacy sw002-main, templatized with ${domain}
-# Human users: cookie_session auth via mcm.int.${domain}
-# Machine clients (PM4ML): JWT auth via mcm.ext.${domain}
+# MCM Oathkeeper rules — the route→permission contract for connection-manager-api
+# PR#202. Ported verbatim from the image's permissions/oathkeeper-rules.yml into
+# Oathkeeper Rule CRDs.
+#
+# Host is matched non-capturing across BOTH gateways so capture-group indices
+# match PR#202 (group 1 = dfspId):
+#   mcm.int.${domain}  internal ops (humans, cookie_session)
+#   mcm.ext.${domain}  DFSP-facing PM4ML machines (jwt)
+# Every route accepts cookie_session OR jwt; Keto scopes the caller (a machine
+# client is only ever a Dfsp member). Identity headers come from the global
+# header mutator (see helmrelease-oathkeeper.yaml).
 ---
-# Authentication endpoints — open to authenticated users
+# DFSP list: any authenticated caller; the API scopes rows by X-Roles
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-api-auth
+  name: mcm-api-dfsps-list
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.int.${domain}/api/auth/<.*>"
-    methods:
-      - GET
-      - POST
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps<$>"
+    methods: [GET]
   authenticators:
     - handler: cookie_session
+    - handler: jwt
   authorizer:
     handler: allow
   mutators:
@@ -24,716 +30,394 @@ spec:
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
 ---
-# DFSP list — check dfspList permission
+# DFSP create: Hub.dfspManage
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-dfsps-list
+  name: mcm-api-dfsps-create
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.int.${domain}/api/dfsps<$>"
-    methods:
-      - GET
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps<$>"
+    methods: [POST]
   authenticators:
     - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "dfspList",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# DFSP create — check dfspManage permission
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsps-create
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps<$>"
-    methods:
-      - POST
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "dfspManage",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# Single DFSP get/update — admin OR DFSP member can view/update
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-single-get
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/<?!jwscerts|servercerts><[^/]+><$>"
-    methods:
-      - GET
-      - PUT
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-batch-auth.ory.svc.cluster.local
-      payload: |
-        {
-          "tuples": [
-            {
-              "namespace": "permission",
-              "object": "dfspManage",
-              "relation": "granted",
-              "subject_id": "{{ print .Subject }}"
-            },
-            {
-              "namespace": "role",
-              "object": "dfsp:{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
-              "relation": "member",
-              "subject_id": "{{ print .Subject }}"
-            }
-          ]
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-          X-DFSP-ID: '{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# Single DFSP delete — only admin with dfspManage
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-single-delete
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/<?!jwscerts|servercerts><[^/]+><$>"
-    methods:
-      - DELETE
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "dfspManage",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-          X-DFSP-ID: '{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# DFSP credentials — only for DFSP role members
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-credentials
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/<[^/]+>/credentials"
-    methods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "role",
-          "object": "dfsp:{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
-          "relation": "member",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-          X-DFSP-ID: '{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# DFSP-specific access — batch auth (admin OR member)
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-admin-access
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/<?!endpoints><[^/]+>/<?!credentials><.*>"
-    methods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-batch-auth.ory.svc.cluster.local
-      payload: |
-        {
-          "tuples": [
-            {
-              "namespace": "permission",
-              "object": "dfspManage",
-              "relation": "granted",
-              "subject_id": "{{ print .Subject }}"
-            },
-            {
-              "namespace": "role",
-              "object": "dfsp:{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
-              "relation": "member",
-              "subject_id": "{{ print .Subject }}"
-            }
-          ]
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-          X-DFSP-ID: '{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# DFSP endpoints/unprocessed — dfspManage permission
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-endpoints-unprocessed
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/endpoints/unprocessed"
-    methods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "dfspManage",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# DFSP servercerts — dfspManage permission
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-servercerts
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/servercerts"
-    methods:
-      - GET
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "dfspManage",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# DFSP jwscerts — dfspJwsCertsView permission
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-dfsp-jwscerts
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/dfsps/jwscerts"
-    methods:
-      - GET
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "dfspJwsCertsView",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# Monetary zones — monetaryZonesView permission
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-monetaryzones
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/monetaryzones"
-    methods:
-      - GET
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "monetaryZonesView",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# Hub endpoints — read access (hubEndpointsView permission)
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-hub-read
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/hub/<.*>"
-    methods:
-      - GET
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "hubEndpointsView",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# Hub endpoints — write access (hubEndpointsManage permission)
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-hub-write
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.int.${domain}/api/hub/<.*>"
-    methods:
-      - POST
-      - PUT
-      - DELETE
-  authenticators:
-    - handler: cookie_session
-  authorizer:
-    handler: remote_json
-    config:
-      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
-      payload: |
-        {
-          "namespace": "permission",
-          "object": "hubEndpointsManage",
-          "relation": "granted",
-          "subject_id": "{{ print .Subject }}"
-        }
-  mutators:
-    - handler: header
-      config:
-        headers:
-          X-User: '{{ print .Subject }}'
-          X-Email: '{{ print (((.Extra.identity).traits).email) }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-  upstream:
-    preserveHost: false
-    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: ""
----
-# PM4ML API — DFSP list (machine clients, JWT auth)
-apiVersion: oathkeeper.ory.sh/v1alpha1
-kind: Rule
-metadata:
-  name: mcm-pm4mlapi-dfsps-list
-  namespace: ory
-spec:
-  match:
-    url: "<https>://mcm.ext.${domain}/pm4mlapi/dfsps<$>"
-    methods:
-      - GET
-  authenticators:
     - handler: jwt
-      config:
-        jwks_urls:
-          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
-        trusted_issuers:
-          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
       remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
       payload: |
         {
-          "namespace": "permission",
-          "object": "dfspList",
-          "relation": "granted",
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "dfspManage",
           "subject_id": "{{ print .Subject }}"
         }
   mutators:
     - handler: header
-      config:
-        headers:
-          X-Client: '{{ print .Subject }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: /pm4mlapi
 ---
-# PM4ML API — DFSP create (machine clients, JWT auth)
+# All DFSPs states overview: Hub.dfspList
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-pm4mlapi-dfsps-create
+  name: mcm-api-dfsps-states-status
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.ext.${domain}/pm4mlapi/dfsps<$>"
-    methods:
-      - POST
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/states-status<$>"
+    methods: [GET]
   authenticators:
+    - handler: cookie_session
     - handler: jwt
-      config:
-        jwks_urls:
-          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
-        trusted_issuers:
-          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
       remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
       payload: |
         {
-          "namespace": "permission",
-          "object": "dfspManage",
-          "relation": "granted",
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "dfspList",
           "subject_id": "{{ print .Subject }}"
         }
   mutators:
     - handler: header
-      config:
-        headers:
-          X-Client: '{{ print .Subject }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: /pm4mlapi
 ---
-# PM4ML API — DFSP-specific owner access (machine clients, JWT auth)
+# Single DFSP read/update: Dfsp.view (member or hub admin)
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-pm4mlapi-dfsp-owner-access
+  name: mcm-api-dfsp-view
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.ext.${domain}/pm4mlapi/dfsps/<?!endpoints><[^/]+>/<?!credentials><.*>"
-    methods:
-      - GET
-      - POST
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/<?!jwscerts|servercerts|states-status|endpoints><[^/]+><$>"
+    methods: [GET, PUT]
   authenticators:
+    - handler: cookie_session
     - handler: jwt
-      config:
-        jwks_urls:
-          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
-        trusted_issuers:
-          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
       remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
       payload: |
         {
-          "namespace": "role",
-          "object": "dfsp:{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
-          "relation": "member",
+          "namespace": "Dfsp",
+          "object": "{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
+          "relation": "view",
           "subject_id": "{{ print .Subject }}"
         }
   mutators:
     - handler: header
-      config:
-        headers:
-          X-Client: '{{ print .Subject }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
-          X-DFSP-ID: '{{ printIndex .MatchContext.RegexpCaptureGroups 0 }}'
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: /pm4mlapi
 ---
-# PM4ML API — Hub endpoints read (machine clients, JWT auth)
+# Single DFSP delete: Hub.dfspManage
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-pm4mlapi-hub-read
+  name: mcm-api-dfsp-delete
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.ext.${domain}/pm4mlapi/hub/<.*>"
-    methods:
-      - GET
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/<?!jwscerts|servercerts|states-status|endpoints><[^/]+><$>"
+    methods: [DELETE]
   authenticators:
+    - handler: cookie_session
     - handler: jwt
-      config:
-        jwks_urls:
-          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
-        trusted_issuers:
-          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
       remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
       payload: |
         {
-          "namespace": "permission",
-          "object": "hubEndpointsView",
-          "relation": "granted",
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "dfspManage",
           "subject_id": "{{ print .Subject }}"
         }
   mutators:
     - handler: header
-      config:
-        headers:
-          X-Client: '{{ print .Subject }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: /pm4mlapi
 ---
-# PM4ML API — Hub endpoints write (machine clients, JWT auth)
+# PM4ML credentials: Dfsp.credentialsAccess (members only)
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-pm4mlapi-hub-write
+  name: mcm-api-dfsp-credentials
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.ext.${domain}/pm4mlapi/hub/<.*>"
-    methods:
-      - POST
-      - PUT
-      - DELETE
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/<[^/]+>/credentials<$>"
+    methods: [GET, POST, PUT, DELETE]
   authenticators:
+    - handler: cookie_session
     - handler: jwt
-      config:
-        jwks_urls:
-          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
-        trusted_issuers:
-          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
       remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
       payload: |
         {
-          "namespace": "permission",
-          "object": "hubEndpointsManage",
-          "relation": "granted",
+          "namespace": "Dfsp",
+          "object": "{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
+          "relation": "credentialsAccess",
           "subject_id": "{{ print .Subject }}"
         }
   mutators:
     - handler: header
-      config:
-        headers:
-          X-Client: '{{ print .Subject }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: /pm4mlapi
 ---
-# PM4ML API — DFSP jwscerts (machine clients, JWT auth)
+# DFSP sub-resources (certs, enrollments, endpoints, onboarding): Dfsp.manage
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: mcm-pm4mlapi-dfsp-jwscerts
+  name: mcm-api-dfsp-subpaths
   namespace: ory
 spec:
   match:
-    url: "<https>://mcm.ext.${domain}/pm4mlapi/dfsps/jwscerts"
-    methods:
-      - GET
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/<?!endpoints><[^/]+>/<?!credentials><.*>"
+    methods: [GET, POST, PUT, DELETE]
   authenticators:
+    - handler: cookie_session
     - handler: jwt
-      config:
-        jwks_urls:
-          - "http://hydra-public.ory.svc.cluster.local:4444/.well-known/jwks.json"
-        trusted_issuers:
-          - "https://hydra.ext.${domain}"
   authorizer:
     handler: remote_json
     config:
       remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
       payload: |
         {
-          "namespace": "permission",
-          "object": "dfspJwsCertsView",
-          "relation": "granted",
+          "namespace": "Dfsp",
+          "object": "{{ printIndex .MatchContext.RegexpCaptureGroups 1 }}",
+          "relation": "manage",
           "subject_id": "{{ print .Subject }}"
         }
   mutators:
     - handler: header
-      config:
-        headers:
-          X-Client: '{{ print .Subject }}'
-          X-Roles: '{{ toJson (((.Extra.identity).traits).roles) }}'
   upstream:
     preserveHost: false
     url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
-    stripPath: /pm4mlapi
+---
+# Unprocessed endpoint changes across DFSPs: Hub.dfspManage
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-dfsps-endpoints-unprocessed
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/endpoints/unprocessed<$>"
+    methods: [GET, POST, PUT, DELETE]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  authorizer:
+    handler: remote_json
+    config:
+      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
+      payload: |
+        {
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "dfspManage",
+          "subject_id": "{{ print .Subject }}"
+        }
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# All DFSPs server certs: Hub.serverCertsView
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-dfsps-servercerts
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/servercerts<$>"
+    methods: [GET]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  authorizer:
+    handler: remote_json
+    config:
+      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
+      payload: |
+        {
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "serverCertsView",
+          "subject_id": "{{ print .Subject }}"
+        }
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# All DFSPs JWS certs: Hub.jwsCertsView
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-dfsps-jwscerts
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/dfsps/jwscerts<$>"
+    methods: [GET]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  # Every DFSP needs all peers' JWS public certs to validate inbound signatures
+  # (the agent calls GET /dfsps/jwscerts). Legacy `dfsp` role had dfspJwsCertsView;
+  # PR#202 restricts it to hub admins. Open to any authenticated caller (public certs).
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# External (interscheme) DFSP JWS certs upload: Hub.dfspManage
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-external-dfsps-jwscerts
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/external-dfsps/jwscerts<$>"
+    methods: [POST]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  authorizer:
+    handler: remote_json
+    config:
+      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
+      payload: |
+        {
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "dfspManage",
+          "subject_id": "{{ print .Subject }}"
+        }
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# Monetary zones: any authenticated caller; the API scopes rows by X-Roles
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-monetaryzones
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/monetaryzones<(?:/.*)?$>"
+    methods: [GET]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# Hub endpoints read: Hub.endpointsView
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-hub-read
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/hub/<.*>"
+    methods: [GET]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  # Hub CA / server certs / endpoints are shared connection info that every
+  # PM4ML DFSP must read to self-configure (the agent calls /hub/ca,
+  # /hub/servercerts, /hub/endpoints). PR#202's OPL gates Hub.endpointsView to
+  # hub admins only, which 403s DFSPs — so open reads to any authenticated
+  # caller, matching the legacy `dfsp` role's hubEndpointsView. Writes stay admin.
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# Hub endpoints write: Hub.endpointsManage
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-hub-write
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/hub/<.*>"
+    methods: [POST, PUT, DELETE]
+  authenticators:
+    - handler: cookie_session
+    - handler: jwt
+  authorizer:
+    handler: remote_json
+    config:
+      remote: http://keto-read.ory.svc.cluster.local:80/relation-tuples/check
+      payload: |
+        {
+          "namespace": "Hub",
+          "object": "${hub_participant_name}",
+          "relation": "endpointsManage",
+          "subject_id": "{{ print .Subject }}"
+        }
+  mutators:
+    - handler: header
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001
+---
+# Liveness probe, no auth
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: mcm-api-health
+  namespace: ory
+spec:
+  match:
+    url: "<http|https>://mcm.<?:int|ext>.${domain}/api/health<$>"
+    methods: [GET]
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+  upstream:
+    preserveHost: false
+    url: http://mcm-connection-manager-api.mcm.svc.cluster.local:3001

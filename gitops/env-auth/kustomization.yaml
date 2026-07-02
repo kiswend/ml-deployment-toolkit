@@ -13,11 +13,11 @@ resources:
   - ory/helmrelease-kratos.yaml
   - ory/helmrelease-oathkeeper.yaml
   - ory/helmrelease-keto.yaml
+  - ory/keto-opl.yaml
   - ory/helmrelease-hydra.yaml
   - ory/keto-metrics-service.yaml
   - ory/helmrelease-selfservice-ui.yaml
   - ory/helmrelease-bof.yaml
-  - ory/keto-batch-auth.yaml
   - routes/auth-httproute.yaml
   - routes/vault-httproute.yaml
   - routes/mcm-httproute.yaml
