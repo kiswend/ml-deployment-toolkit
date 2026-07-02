@@ -163,7 +163,11 @@ spec:
                     config:
                       options:
                         messageCharset: utf8
-                        sync: true
+                        # async: ~27 spans/transfer; a sync acked produce per
+                        # span measurably inflated latency (observer effect,
+                        # see perf/RESULTS.md soak-traced). Span loss on crash
+                        # is acceptable for perf tracing.
+                        sync: false
                       rdkafkaConf:
                         client.id: producer-event-trace
                         compression.type: lz4
@@ -174,7 +178,7 @@ spec:
                         socket.keepalive.enable: true
                       topicConf:
                         partitioner: murmur2_random
-                        request.required.acks: all
+                        request.required.acks: "1"
             LOG: 'off'
             # TRACE: kafka → spans flow to topic-event-trace, converted to
             # OTLP/Tempo by trace-bridge (tools/trace-bridge). Toggleable per
