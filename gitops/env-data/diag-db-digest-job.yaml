@@ -1,0 +1,46 @@
+# One-shot DB diagnostic (perf campaign): statement digests need root
+# (performance_schema denied to app users). Read-only; output in pod logs.
+# Remove after the campaign.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: diag-db-digest-20260702
+  namespace: data
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql-diag
+          image: mysql:8.0
+          env:
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: mojaloop-db-secrets
+                  key: root
+          command:
+            - sh
+            - -c
+            - |
+              M="mysql -h mojaloop-db-haproxy.data.svc -u root --table"
+              echo "=== TOP STATEMENTS BY TOTAL TIME (central_ledger) ==="
+              $M -e "SELECT LEFT(digest_text,100) AS q, count_star AS calls,
+                     ROUND(avg_timer_wait/1e9,1) AS avg_ms,
+                     ROUND(sum_timer_wait/1e12,1) AS total_s,
+                     ROUND(sum_rows_examined/GREATEST(count_star,1)) AS rows_exam_avg
+                     FROM performance_schema.events_statements_summary_by_digest
+                     WHERE schema_name='central_ledger' ORDER BY sum_timer_wait DESC LIMIT 12;"
+              echo "=== TOP STATEMENTS BY AVG TIME (calls>200) ==="
+              $M -e "SELECT LEFT(digest_text,100) AS q, count_star AS calls,
+                     ROUND(avg_timer_wait/1e9,1) AS avg_ms,
+                     ROUND(sum_rows_examined/GREATEST(count_star,1)) AS rows_exam_avg,
+                     ROUND(sum_no_index_used/GREATEST(count_star,1)*100) AS pct_no_index
+                     FROM performance_schema.events_statements_summary_by_digest
+                     WHERE schema_name='central_ledger' AND count_star>200
+                     ORDER BY avg_timer_wait DESC LIMIT 12;"
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 128Mi}
