@@ -6,6 +6,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: trace-bridge
+  namespace: mojaloop
   labels:
     app.kubernetes.io/name: trace-bridge
 spec:
