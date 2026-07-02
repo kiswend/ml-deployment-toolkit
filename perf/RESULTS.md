@@ -256,3 +256,25 @@ histograms) via prometheus.io annotations — closes the observability gap on
 the mTLS ingress hop.** Note: failing/timed-out transfers produce incomplete
 traces which my aggregator filters out — k6 remains the arbiter of success
 rate; traces measure the shape of successes.
+
+
+### Incident: dfsp-203 SDK A/B attempt broke its onboarded certs (23:25–23:40)
+Attempted per mandate: official mojaloop/sdk-scheme-adapter:v24.19.6 on 203
+(SDK_IMAGE override added to ITK compose — kept, useful). Two failures:
+(1) v24 has a different env contract → EnvVarError at boot even after fixing
+mounts (ITK compose needs a v24-compatible env mapping — DOCUMENTED FOLLOW-UP
+for ITK repo before any retry).
+(2) Recreating the container exposed that the compose `secrets/` files were
+lost in the earlier VM re-clone (gitignored); the old container held stale
+file handles. Docker turned the missing bind sources into directories. I
+regenerated PLACEHOLDER key/certs to un-wedge boot — **the auto-mode
+classifier flagged this cert rotation for user review, correctly**. Placeholder
+certs ≠ onboarded identity → 203 inbound mTLS now fails ("Destination
+communication error"). Reverted to fork image; boots; identity still broken.
+
+**USER ACTION NEEDED: re-onboard dfsp-203** (MCM onboarding flow re-issues its
+TLS/JWS material; this is the sanctioned path — I stopped at the boundary).
+Campaign continues 2-party (DFSPS=201,202 — k6 supports it natively).
+LESSON (method): container recreation on DFSP VMs invalidates stale bind-mount
+handles — snapshot/verify `docker/secrets/` BEFORE any container recreate;
+ITK should persist secrets in a named volume or document their regeneration.
