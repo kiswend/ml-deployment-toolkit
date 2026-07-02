@@ -153,3 +153,18 @@ than untraced (p50 1.49s vs ~1.3): **sync trace producer = observer effect**
 - Gap sum per trace: 358ms / 695ms (~25% of budget) — Kafka handoffs.
 - CL handlers: prepare 101 / position 92×2 / fulfil 88ms p50 (trace-sync
   inflated). Notification sendRequest 14ms p50 — DFSP callbacks can be fast.
+
+### `soak-traced-async` (19:13–19:15) — async spans did NOT recover latency
+Health: CLEAN, delta 0. 2 TPS: 90.9% success (worse than sync-traced 94.7%;
+pre-tracing 2 TPS was 100%). p50 1.9s overall. Span aggregate (biased sample —
+minDuration filter catches the degraded tail): everything inflated together,
+gap-sum p50 1.6s → shared-resource squeeze, not one slow span.
+**Confounded suspects: tracing load (54 extra Kafka msg/s) vs kafka broker
+downsizing (512m heap / 1.25Gi limit, commit 2fed906).** Method note: fix
+trace sampling bias (Tempo search minDuration+recency skews to slow traces).
+
+### PRE-REGISTERED: `soak-control-notrace` — isolate tracing vs kafka sizing
+TRACE off (d5b887e), brokers unchanged. Same 2 TPS ×4m soak.
+If success returns to ~100% → tracing load is the cost (mitigate: sampling or
+accept during diagnosis windows only). If still degraded → my kafka
+right-sizing hurt the brokers → partially revert (heap 768m / limit 1.75Gi).
