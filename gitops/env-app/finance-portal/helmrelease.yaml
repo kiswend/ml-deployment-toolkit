@@ -340,7 +340,12 @@ spec:
           }
 
     reporting-aggregator-svc:
-      enabled: true
+      # EXPERIMENT (perf campaign): its transfer/quote aggregation query
+      # averages 28s/execution on grown data (1884 DB-seconds total, see
+      # perf/RESULTS.md digest analysis) and starves PXC for the transaction
+      # path. Disabled pending an index/query fix; Transfers UI stops
+      # updating while disabled.
+      enabled: false
       image:
         tag: v0.0.9
 
