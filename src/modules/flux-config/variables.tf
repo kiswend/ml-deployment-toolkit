@@ -378,6 +378,12 @@ variable "mimir_url" {
   default     = ""
 }
 
+variable "tempo_url" {
+  description = "Tempo OTLP/HTTP traces ingest URL (cross-cluster, e.g. https://tempo.int.<cc-domain>/v1/traces)"
+  type        = string
+  default     = ""
+}
+
 # --- Hub Identity ---
 
 variable "hub_participant_name" {

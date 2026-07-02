@@ -10,6 +10,15 @@ spec:
   hostnames:
     - "tempo.int.${domain}"
   rules:
+    # OTLP/HTTP ingest (moja-trace-bridge in env clusters → Tempo)
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/traces
+      backendRefs:
+        - name: tempo
+          port: 4318
+    # All other requests (Grafana queries) → Tempo query API
     - backendRefs:
         - name: tempo
           port: 3100

@@ -27,6 +27,7 @@ resources:
   - routes/extapi-cert.yaml
   - routes/extapi-envoy-config.yaml
   - routes/extapi-envoy-deployment.yaml
+  - observability/trace-bridge.yaml
   # gw-int routes (internal ops)
   - routes/intapi-httproute.yaml
   - routes/ttk-httproute.yaml

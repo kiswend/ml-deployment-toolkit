@@ -72,7 +72,7 @@ VERDICT="CLEAN"
 [ "$DELTA" -gt 0 ] && VERDICT="TAINTED (restart delta=$DELTA)"
 cat >> "$REPO_ROOT/perf/RESULTS.md" <<EOF
 
-### \`$TESTID\` ($(date -u +%Y-%m-%d) $START_UTC–$END_UTC) — TODO: hypothesis/result
+### \`$TESTID\` ($(date -u +%Y-%m-%d) ${START_UTC} to ${END_UTC}) — TODO: hypothesis/result
 Health: $VERDICT. Restart delta: $DELTA. k6 exit: $K6_EXIT.
 TODO: headline numbers, lag location, conclusion.
 EOF

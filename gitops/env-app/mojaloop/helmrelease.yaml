@@ -176,7 +176,10 @@ spec:
                         partitioner: murmur2_random
                         request.required.acks: all
             LOG: 'off'
-            TRACE: 'off'
+            # TRACE: kafka → spans flow to topic-event-trace, converted to
+            # OTLP/Tempo by trace-bridge (tools/trace-bridge). Toggleable per
+            # perf campaign; producer config for TRACE is defined above.
+            TRACE: kafka
       centralledger-handler-transfer-prepare:
         replicaCount: ${cl_handler_prepare_replicas}
         config:

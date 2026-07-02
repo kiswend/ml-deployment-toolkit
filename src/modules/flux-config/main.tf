@@ -95,6 +95,7 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       lb_ipam_stop       = split("-", var.lb_ipam_range)[1]
       loki_url           = var.loki_url
       mimir_url          = var.mimir_url
+      tempo_url          = var.tempo_url
     },
     local.is_env ? {
       mysql_host   = local.mysql_host

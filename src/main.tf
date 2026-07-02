@@ -190,6 +190,7 @@ module "flux_config" {
 
   loki_url  = try(local.config_raw.observability.loki_url, "")
   mimir_url = try(local.config_raw.observability.mimir_url, "")
+  tempo_url = try(local.config_raw.observability.tempo_url, "")
 
   profile_vars = merge(
     try({ for k, v in module.config.profile_app : k => tostring(v) }, {}),

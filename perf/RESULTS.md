@@ -87,3 +87,32 @@ re-run.** Manifest: `gitops/env-app/routes/extapi-envoy-deployment.yaml`.
 - Next queued: raise envoy memory limit → re-run ramp (clean baseline);
   then Kafka consumer tuning; scale notification/prepare handlers;
   mTLS keep-alive switch→DFSP.
+
+---
+
+## Independent campaign (mandate: 10 TPS @ p99<1s, nodes ≤70%, see memory)
+
+### Budget pass (commit 2fed906, ~18:3x UTC)
+Nodes were memory-bound (62–77% used, CPU 13–17%); big consumers were platform,
+not Mojaloop services (alloy 2.0Gi, kafka brokers ~1.6Gi each, PXC+PITR ~3.9Gi,
+vault ×3 ~1.6Gi). Changes: kafka JVM pinned 512m + limit 2Gi→1.25Gi; alloy
+audit-firehose drop stage + limit 2Gi→1Gi; envoy 128Mi→512Mi (OOM fix, funded);
+mojaloop HR remediation uninstall→rollback. Target: all nodes ≤70% mem.
+
+Also found (chart source survey): ALL stack consumers run `batchSize:1,
+sync:true, consumeTimeout:1000` (72 in centralledger + ml-api-adapter + quoting)
+— whole pipeline is serialized per pod by design. Only handler-pos-batch exposes
+designed batch knobs. Consumer tuning has correctness implications → tracing
+(no native OTel in v17.x images; Event-SDK Path A bridge needed) moves ahead of
+blind consumer tuning.
+
+### `ramp-rightsized` (18:02–18:06) — REFERENCE BASELINE ✅ first clean run
+Pre-registered hypothesis: with envoy fixed the result is trustworthy; PASS =
+health delta 0. **Result: PASS — 0 restarts, 0 OOM, nodes ≤72% during load.**
+Post-budget-pass nodes: 51/61/60% mem (from 77/62/68). Ramp 1,2,3,4,6,8×60s
+aborted (by design) mid-4-TPS-step: 381 reqs, 94.0% COMPLETED overall, clean
+through 3 TPS. Successful-only: p50 1.66s / p90 3.39s / p99 4.69s (mixed over
+ramp). **Conclusion: the ~4 TPS wall is real, not an envoy artifact** — the
+serialized per-pod consumers (batchSize:1, sync:true everywhere) + per-message
+fixed costs remain the target. Next: Event-SDK→Tempo trace bridge to measure
+per-hop where the seconds go, then targeted consumer/keep-alive fixes.
