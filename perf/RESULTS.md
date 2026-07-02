@@ -168,3 +168,31 @@ TRACE off (d5b887e), brokers unchanged. Same 2 TPS ×4m soak.
 If success returns to ~100% → tracing load is the cost (mitigate: sampling or
 accept during diagnosis windows only). If still degraded → my kafka
 right-sizing hurt the brokers → partially revert (heap 768m / limit 1.75Gi).
+
+### `soak-control-notrace` (19:38–19:40) — control run → ROOT CAUSE FOUND
+Health: TAINTED (delta 1). 73.2% success, p50 3.22s — **worse with TRACE off**
+→ tracing exonerated. Kafka GC 2–8ms/s, brokers 830Mi/1.25Gi, clean logs →
+**kafka downsizing exonerated too.**
+
+**Actual root cause of the evening's progressive degradation (100→95→91→73%):
+liveness-probe/rebalance death spiral in quoting-service-handler at 6 replicas.**
+Evidence: all 6 pods restart-looping with exit 0 (SIGTERM), events show
+"Liveness probe failed: 502", live logs show `isAssigned:false, isConnected:
+true` — the health endpoint requires partition assignment on every subscribed
+topic; during any group rebalance pods are transiently unassigned; the probe
+catches them → kill → new rebalance → next victim. Each helm rollout this
+evening (4×) kicked the spiral off again. 6 members × ~9 topics made rebalances
+slow enough to lose the race with the probe. Alloy separately OOM-looping at
+1Gi (19 restarts).
+
+**Retroactive impact:** explains qs6 sublinearity and the 16:xx "handler stall".
+Also invalidates soak-traced/-async latency comparisons (all ran during the
+spiral) — the "observer effect" claim is unproven; async trace producer kept
+anyway (strictly less work).
+
+**Stabilization (6b926ae + plan-apply):** qs_handler 6→3 (rebalance-resilient,
+frees ~0.4Gi; ramp data showed 6 bought little over 3), alloy limit 1.5Gi.
+Follow-ups queued: consumer `partition.assignment.strategy:
+cooperative-sticky` (incremental rebalancing — removes the unassigned window),
+probe relaxation via postRenderer, THEN re-run traced soak + ramp on a stable
+system.
