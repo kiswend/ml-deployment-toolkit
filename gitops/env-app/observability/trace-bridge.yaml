@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: trace-bridge
-          image: ghcr.io/kiswend/moja-trace-bridge:0.1.0
+          image: ghcr.io/kiswend/moja-trace-bridge:0.1.1
           env:
             - name: KAFKA_BROKERS
               value: "${kafka_host}:${kafka_port}"

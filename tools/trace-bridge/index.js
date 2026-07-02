@@ -9,9 +9,16 @@
 //
 // Env: KAFKA_BROKERS, TRACE_TOPIC, OTLP_URL, FLUSH_MS, BATCH_MAX, TLS_SKIP
 
-const { Kafka, logLevel } = require('kafkajs');
+const { Kafka, logLevel, CompressionTypes, CompressionCodecs } = require('kafkajs');
+const lz4 = require('lz4js');
 const https = require('https');
 const http = require('http');
+
+// Event-SDK producers use compression.type: lz4; kafkajs has no built-in codec
+CompressionCodecs[CompressionTypes.LZ4] = () => ({
+  compress: (encoder) => Buffer.from(lz4.compress(encoder.buffer)),
+  decompress: (buffer) => Buffer.from(lz4.decompress(buffer)),
+});
 
 const BROKERS = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',');
 const TOPIC = process.env.TRACE_TOPIC || 'topic-event-trace';
