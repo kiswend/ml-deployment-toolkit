@@ -19,6 +19,7 @@ spec:
         - name: tempo
           port: 4318
     # All other requests (Grafana queries) → Tempo query API
+    # (Tempo's HTTP server listens on 3200; the service has no 3100)
     - backendRefs:
         - name: tempo
-          port: 3100
+          port: 3200
