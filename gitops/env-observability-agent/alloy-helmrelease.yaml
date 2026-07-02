@@ -39,7 +39,7 @@ spec:
           cpu: 100m
           memory: 512Mi
         limits:
-          memory: 1Gi
+          memory: 1536Mi
       # Enable clustering so DaemonSet pods shard scrape targets
       # instead of all pods scraping all targets (avoids duplicate metrics)
       clustering:

@@ -70,7 +70,7 @@ app:
   als_oracle_replicas: 1
   # Quoting Service
   qs_service_replicas: 1
-  qs_handler_replicas: 6
+  qs_handler_replicas: 3
   # Central Ledger
   cl_service_replicas: 1
   cl_handler_prepare_replicas: 1
