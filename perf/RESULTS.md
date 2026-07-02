@@ -219,3 +219,22 @@ Job pattern per repo convention). Then either index fix (upstreamable),
 data lifecycle policy for perf labs, or reset-data-between-campaigns method
 rule. NOTE for method: fresh-DB vs grown-DB is a hidden variable in ALL of
 today's comparisons — future campaign baselines must record table sizes.
+
+### DB digest analysis (jobs diag-db-20260702 + diag-db-digest-20260702, ~20:30)
+Table sizes modest (quoteParty 37k / transferStateChange 36k rows) — but the
+statement digests found the killer:
+**`SELECT transfer.transferId, q.transactionReferenceId AS transactionId, ...`
+— avg 28.1 SECONDS/execution, 67 calls, 1,884 total DB-seconds** — the
+Finance Portal reporting-aggregator's transfer/quote join. As data grew it
+got slower; while running it starves PXC for the transactional path →
+explains the evening's progressive degradation and the inflating DB spans.
+Secondary: COMMIT avg 8.5ms (PXC certification ×~7/transfer ≈ 60ms/transfer),
+`migration_lock` polled 54k× (knex per-query overhead?), several fx lookups
+94–100% no-index (small tables today, future risk).
+
+### PRE-REGISTERED: `soak-no-aggregator` — aggregator disabled (171f762)
+Hypothesis: with reporting-aggregator-svc off, 2 TPS returns to ~100% success
+and DB spans return to ≤ their morning values (handleQuoteRequest ≤~260ms).
+PASS = ≥99% + CLEAN. Trade-off noted: Finance Portal Transfers UI stops
+updating while disabled; permanent fix = index/query optimization upstream
+(reporting repo) or scheduled aggregation off-peak.
