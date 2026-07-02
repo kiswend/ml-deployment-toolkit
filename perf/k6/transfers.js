@@ -52,7 +52,9 @@ const scenarios = {
 export const options = {
   scenarios: { [SCENARIO]: scenarios[SCENARIO] },
   thresholds: {
-    http_req_duration: ['p(99)<1000'], // SLO: p99 < 1s client-side e2e
+    // Campaign SLO (revised 2026-07-02): p99 < 2s at 5 TPS on tps-1 hardware.
+    // Stretch (next hardware): p99 < 1s — observed floor is ~715ms.
+    http_req_duration: ['p(99)<2000'],
     http_req_failed: ['rate<0.01'],
     // Abort the run once sustained degradation sets in: past the breaking
     // point every request fails, which only poisons the system (backlogs,

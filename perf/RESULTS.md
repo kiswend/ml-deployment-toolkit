@@ -3,8 +3,10 @@
 One entry per run, chronological. Convention: after every k6 run, append an entry
 with the `testid` (metrics are queryable in Thanos/Grafana under that label while
 retention lasts), the configuration under test, headline numbers, and any
-confounders observed. SLO under test: **p99 < 1s client-side e2e** at the
-`POST /transfers` SDK outbound API. Environment: ml-test (Proxmox tps-1 profile,
+confounders observed. SLO under test (revised 2026-07-02 evening): **5 TPS
+sustained with p99 < 2s** client-side e2e at the `POST /transfers` SDK outbound
+API on tps-1 hardware; stretch goal 10 TPS @ p99 < 1s (observed floor 715ms —
+needs hop-count/consumer-parallelism code changes or bigger hardware). Environment: ml-test (Proxmox tps-1 profile,
 3 workers), DFSP VMs 201–203, observability in ml-cc.
 
 ---
