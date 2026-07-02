@@ -278,3 +278,14 @@ Campaign continues 2-party (DFSPS=201,202 — k6 supports it natively).
 LESSON (method): container recreation on DFSP VMs invalidates stale bind-mount
 handles — snapshot/verify `docker/secrets/` BEFORE any container recreate;
 ITK should persist secrets in a named volume or document their regeneration.
+### `soak-2party-redis` (23:5x) — BEST RUN OF CAMPAIGN; two hypotheses resolved
+2 TPS ×4m full run (no abort), DFSPS=201,202: **98.95% success, p50 1.22s,
+p90 2.17s, p99 3.22s, floor 671ms (new record)**.
+(1) **Redis exonerated**: 0.03–0.11ms avg cmd, ~6 cmds/transfer — SDK
+pub/sub wait theory dead. (2) **Client≈trace again** (1.22 vs 1.34 p50) —
+the earlier ~1s "SDK phase-wait" gap was dfsp-203/storm residue, not
+systematic. Current honest budget = switch internals + tails.
+Remaining to target (p99<2s @ 5 TPS): tail variance — gap-sum p90 705ms
+(kafka handoffs) + handleQuoteRequest p90 350ms. Next: cooperative-sticky
++ probe relaxation (stability bundle), notification replicas, then the
+5 TPS ramp; kafka consumer poll tuning if tails persist.
