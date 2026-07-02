@@ -138,3 +138,18 @@ ramp). **Conclusion: the ~4 TPS wall is real, not an envoy artifact** — the
 serialized per-pod consumers (batchSize:1, sync:true everywhere) + per-message
 fixed costs remain the target. Next: Event-SDK→Tempo trace bridge to measure
 per-hop where the seconds go, then targeted consumer/keep-alive fixes.
+
+### `soak-traced` (2026-07-02 18:50:18Z to 18:52:38Z) — statistical waterfalls
+Health: CLEAN. Restart delta: 0. 2 TPS, aborted at 94.7% (266 reqs) — worse
+than untraced (p50 1.49s vs ~1.3): **sync trace producer = observer effect**
+(27 acked produces/transfer). Fixed: TRACE producer sync:false, acks=1 (e8a9e55).
+
+**Aggregate over 39 traces (p50/p90):**
+- `qs_quote_handleQuoteRequest` **261ms / 1218ms** — dominant span, huge
+  variance at only 2 TPS → DB path (PXC certification on ~10 sequential
+  writes/quote) is now TARGET #1.
+- Forwards to DFSPs: p50 23ms / p90 ~180ms — keep-alive exists but churns;
+  tail-only effect, demoted from #1.
+- Gap sum per trace: 358ms / 695ms (~25% of budget) — Kafka handoffs.
+- CL handlers: prepare 101 / position 92×2 / fulfil 88ms p50 (trace-sync
+  inflated). Notification sendRequest 14ms p50 — DFSP callbacks can be fast.
