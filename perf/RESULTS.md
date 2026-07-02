@@ -238,3 +238,21 @@ and DB spans return to ≤ their morning values (handleQuoteRequest ≤~260ms).
 PASS = ≥99% + CLEAN. Trade-off noted: Finance Portal Transfers UI stops
 updating while disabled; permanent fix = index/query optimization upstream
 (reporting repo) or scheduled aggregation off-peak.
+
+### `soak-no-aggregator` (~20:45) — partial recovery + settling
+84.6% at 2 TPS (from 77.5%). Run started during PXC buffer-pool refill after
+the aggregator kill; span sample from later in the run shows FULL recovery.
+
+### `soak-no-aggregator2` (~21:00) — AGGREGATOR CONFIRMED at switch level; new gap isolated
+k6: 83.8%, successful med 2.16s — but switch-side traces are the BEST OF DAY:
+trace total p50 1233ms / p90 1696ms; `handleQuoteRequest` p50 122ms (was 467),
+position 111ms, prepare 60ms. **The 28s aggregator query was the switch-side
+killer — confirmed.** Remaining discrepancy: client e2e ~2.2s vs trace 1.23s →
+**~1s now sits BEFORE the first trace span** (payer SDK → extapi-envoy mTLS →
+ALS ingress; segment invisible to Event-SDK tracing). Direct checks: simulator
+API 7–10ms (SQLite growth theory dead); full transfer from VM (no WAN) 2.26s.
+**Next diagnostic: scrape extapi-envoy admin :9901 stats (upstream latency
+histograms) via prometheus.io annotations — closes the observability gap on
+the mTLS ingress hop.** Note: failing/timed-out transfers produce incomplete
+traces which my aggregator filters out — k6 remains the arbiter of success
+rate; traces measure the shape of successes.
