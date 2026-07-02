@@ -42,7 +42,24 @@ done
 [ "${LAG:-1}" -le 0 ] || { echo "ABORT: kafka lag=$LAG after 10min"; exit 1; }
 PRE_RESTARTS=$(restarts_total)
 [ "$(pending_pods)" = "0" ] || { echo "ABORT: pending pods in $NS"; k -n "$NS" get pods --field-selector=status.phase=Pending; exit 1; }
-echo "  kafka lag: 0 | restarts: $PRE_RESTARTS | node mem: $(node_mem)"
+
+# Settle gate: pod readiness precedes Kafka group stability — a run started
+# right after a rollout measures rebalance chaos, not the system (learned the
+# hard way, see ramp-target5 in RESULTS.md). Require newest container start
+# to be >=180s old.
+for i in $(seq 1 20); do
+  YOUNGEST=$(k -n "$NS" get pods -o json | python3 -c '
+import json,sys,datetime
+now=datetime.datetime.now(datetime.timezone.utc)
+ages=[(now-datetime.datetime.fromisoformat(cs["state"]["running"]["startedAt"].replace("Z","+00:00"))).total_seconds()
+      for p in json.load(sys.stdin)["items"] for cs in p["status"].get("containerStatuses",[])
+      if "running" in cs.get("state",{})]
+print(int(min(ages)) if ages else 9999)')
+  [ "$YOUNGEST" -ge 180 ] && break
+  echo "  settle gate: newest container ${YOUNGEST}s old, waiting..."; sleep 30
+done
+[ "$YOUNGEST" -ge 180 ] || { echo "ABORT: pods still churning"; exit 1; }
+echo "  kafka lag: 0 | restarts: $PRE_RESTARTS | settle: ${YOUNGEST}s | node mem: $(node_mem)"
 
 echo "== run: $TESTID =="
 START_UTC=$(date -u +%H:%M:%SZ)

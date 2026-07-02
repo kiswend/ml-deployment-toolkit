@@ -289,3 +289,11 @@ Remaining to target (p99<2s @ 5 TPS): tail variance — gap-sum p90 705ms
 (kafka handoffs) + handleQuoteRequest p90 350ms. Next: cooperative-sticky
 + probe relaxation (stability bundle), notification replicas, then the
 5 TPS ramp; kafka consumer poll tuning if tails persist.
+
+### `ramp-target5` (~00:15) — INVALID: run launched during post-rollout rebalance
+6.3% success from the first step — but 3 sequential transfers COMPLETE at
+1.5-1.7s minutes later. Cause: probe-relaxation rollout restarted ~10
+deployments; `rollout status` returns at pod readiness, but Kafka groups
+stabilize later; the run measured rebalance chaos. METHOD FIX: run.sh settle
+gate (newest container >=180s old). Probe relaxation itself deployed fine
+(failureThreshold=8 on 6 consumer handlers). Re-run follows.
