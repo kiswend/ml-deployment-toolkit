@@ -196,3 +196,24 @@ Follow-ups queued: consumer `partition.assignment.strategy:
 cooperative-sticky` (incremental rebalancing — removes the unassigned window),
 probe relaxation via postRenderer, THEN re-run traced soak + ramp on a stable
 system.
+
+### `soak-traced-stable` (19:59–20:02) — spiral fixed, but degradation persists
+Health: CLEAN, delta 0 (qs=3 survived the rollout rebalances — spiral fix
+CONFIRMED). Yet 2 TPS: 77.5%, p50 2.86s (afternoon: 100% clean). Exonerated
+this run: handler crashes (0), steal (<1%), kafka produce p99 (flat 40–108ms
+all day incl. post-downsize — broker sizing conclusively cleared).
+
+**Remaining hypothesis — data-volume query degradation:** DB-heavy spans grow
+monotonically across the day at similar load while all else holds:
+`qs_quote_handleQuoteRequest` p50 261→370→467ms; `cl_transfer_position`
+92→296→344ms (p90 1150ms). MySQL q/s low, slow_queries=0 (10s threshold —
+blind to 300–500ms creep). The only monotonically growing variable is
+accumulated data (~20k transfers/quotes today: transferStateChange,
+quoteResponse, positionChange tables).
+
+**Next diagnostic:** one-off gitops Job running mysql client against
+performance_schema statement digests + table row counts (no kubectl exec —
+Job pattern per repo convention). Then either index fix (upstreamable),
+data lifecycle policy for perf labs, or reset-data-between-campaigns method
+rule. NOTE for method: fresh-DB vs grown-DB is a hidden variable in ALL of
+today's comparisons — future campaign baselines must record table sizes.
