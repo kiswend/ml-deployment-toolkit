@@ -399,3 +399,19 @@ TPS=5, 15m, champion config. PASS = ≥99%% COMPLETED and p99 < 2s.
 behind warmup, open model never recovers. Method fix: soak scenario now
 ramps in over 90s before holding (fair for a sustained-rate SLO). Re-running
 as soak-target-5tps-warm.
+
+### `soak-target-5tps-warm` (2026-07-03 09:16:07Z to 09:18:52Z) — TODO: hypothesis/result
+Health: CLEAN. Restart delta: 0. k6 exit: 99.
+TODO: headline numbers, lag location, conclusion.
+
+
+### `soak-5tps-batchtuned2` ×2 (10:2x) — INVALID: double-fired
+Operator error (mine): two converge-watchers were armed; both launched the
+same soak concurrently → ~10 TPS combined injection under one testid (29%%).
+Not a 5 TPS measurement. Also logged en route: (a) helm-controller ignores
+postRenderers-only changes (digest covers values only) → needs `flux
+reconcile --force`; (b) chart configOverride cannot deliver config/* files
+(runc cannot bind a file into the read-only configmap volume) → NODE_CONFIG
+env is the working node-config override channel. Tuned notification handler
+(batchSize 10 / consumeTimeout 5ms) is DEPLOYED and healthy. Re-running
+single clean soak.
