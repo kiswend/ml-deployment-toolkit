@@ -381,3 +381,14 @@ reproducibility before further scaling theories. Position-handler
 serialization-by-design remains the suspect for why CL scaling can't help
 (upstream-relevant); prepare-only scaling is the next candidate if 5f2
 reproduces 4-clean.
+
+### `ramp-target5f2` (09:05–09:12) — **5 TPS COMPLETIONS ACHIEVED**
+Reverted config (CL=1, notif=6, qs=3) reproduced AND exceeded 5f: 3✓, 4 held
+(~3%% trickle), **5 TPS step completed 5.08/s and 5.01/s in clean windows**,
+break at 6 TPS. Confirms 5g regression was real: CL-handler scaling hurts
+(position-stage serialization by design — upstream finding). Config frozen as
+the throughput champion. Next: the pre-registered 5 TPS soak for the
+≥99%% + p99<2s verdict.
+
+### PRE-REGISTERED: `soak-target-5tps` — the campaign target test
+TPS=5, 15m, champion config. PASS = ≥99%% COMPLETED and p99 < 2s.
