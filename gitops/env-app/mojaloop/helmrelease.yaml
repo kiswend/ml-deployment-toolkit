@@ -131,6 +131,26 @@ spec:
                 value:
                   name: NODE_CONFIG
                   value: '{"KAFKA":{"CONSUMER":{"NOTIFICATION":{"EVENT":{"config":{"options":{"batchSize":10,"consumeTimeout":5}}}}}}}'
+          # Same consumer-loop tuning for the two stages that took over the
+          # lag lead at sustained 5 TPS (prepare 350, quotes-post 326 peak).
+          # central-ledger and quoting read rc-style env (CLEDG_/QUOTE_, __
+          # nesting) — same channel their charts already use for DB config.
+          - target: {kind: Deployment, name: moja-centralledger-handler-transfer-prepare}
+            patch: |
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value: {name: CLEDG_KAFKA__CONSUMER__TRANSFER__PREPARE__config__options__batchSize, value: "10"}
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value: {name: CLEDG_KAFKA__CONSUMER__TRANSFER__PREPARE__config__options__consumeTimeout, value: "5"}
+          - target: {kind: Deployment, name: moja-quoting-service-handler}
+            patch: |
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value: {name: QUOTE_KAFKA__CONSUMER__QUOTE__POST__config__options__batchSize, value: "10"}
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value: {name: QUOTE_KAFKA__CONSUMER__QUOTE__POST__config__options__consumeTimeout, value: "5"}
   values:
     global:
       kafka:
