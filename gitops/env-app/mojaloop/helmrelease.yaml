@@ -477,6 +477,20 @@ spec:
             jwsSigningKeySecret: *switchJwsSigningKey
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
+          # Consumer-loop tuning (perf campaign): span data shows message
+          # handling is fast (~35ms) but topic-notification-event accumulates
+          # the largest lag at 5 TPS — the batchSize:1/consumeTimeout:1000
+          # poll cycle is the cost, not the work. node-config merges
+          # local.json over config/default.json.
+          config/local.json:
+            KAFKA:
+              CONSUMER:
+                NOTIFICATION:
+                  EVENT:
+                    config:
+                      options:
+                        batchSize: 10
+                        consumeTimeout: 5
 
     # --- Bulk ---
     mojaloop-bulk:
