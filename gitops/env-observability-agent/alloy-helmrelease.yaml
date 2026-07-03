@@ -32,14 +32,14 @@ spec:
 
     # Alloy configuration using River syntax
     alloy:
-      # Right-sized 2026-07-02: with the audit-log drop stage the buffer need
-      # shrinks; 2Gi observed usage was audit-firehose backpressure
+      # 2Gi limit is load-bearing: at 1536Mi the pod OOM-looped (131 kills in
+      # 15h, ~4min up / ~5min CrashLoopBackOff) leaving 50% metric blind spots
       resources:
         requests:
           cpu: 100m
           memory: 512Mi
         limits:
-          memory: 1536Mi
+          memory: 2Gi
       # Enable clustering so DaemonSet pods shard scrape targets
       # instead of all pods scraping all targets (avoids duplicate metrics)
       clustering:
