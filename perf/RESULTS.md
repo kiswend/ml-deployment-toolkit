@@ -371,3 +371,13 @@ AGAIN despite 3 replicas → notification stage still the governor.
 Lag at break DISTRIBUTED (notif 49, quotes-post 27, prepare 21, fulfil 18) →
 remaining single-replica CL handlers hit serial limits together.
 ACTION: prepare/fulfil/position-batch 1→3 → ramp-target5g (4,5,6,7).
+
+### `ramp-target5g` (09:01–09:04) — CL handlers ×3 REGRESSED
+Broke mid-4-TPS (which 5f held clean); successful med 1.69s (vs 1.07s).
+Notification lag ballooned to 110+ within the first minute; row-lock waits ~0
+(position-contention theory unproven). Ambiguous multi-factor signal →
+reverted CL handlers to 1 (exact 5f config) and re-running (5f2) to test
+reproducibility before further scaling theories. Position-handler
+serialization-by-design remains the suspect for why CL scaling can't help
+(upstream-relevant); prepare-only scaling is the next candidate if 5f2
+reproduces 4-clean.
