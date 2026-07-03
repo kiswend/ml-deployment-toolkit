@@ -439,3 +439,98 @@ peak lag with all-3-stage tuning was prepare 26 (was 350), quotes-post 36
 (was 326), notification 128 — the broker side kept up even while the request
 path was starved. 6/6 manual probes after the window: COMPLETED 1.1–1.6s.
 ACTION: identical re-run as soak-5tps-tuned3b on the quiet host.
+
+### `soak-5tps-tuned3b` (2026-07-03 10:49:55Z to 10:52:00Z) — steal theory DEAD; tail located
+Health: CLEAN. Restart delta: 0. k6 exit: 99 (checks abort at 2m eval).
+370 COMPLETED / 51 timeouts (87.9%%). Successful path much improved by the
+3-stage tuning: p50 1.38s (was 2.11s), p90 2.34s, p99 3.40s (was 4.90s).
+Distribution is now bimodal: fast majority + ~12%% hitting the 5s client cap.
+Same 12%% floor existed pre-tuning (warm 5.9%%, tuned-clean 11.3%%) → two
+identical failures back-to-back kill the steal-contamination theory for the
+timeout mode itself (tuned3's 30%% was still inflated by the steal window).
+
+Localization (SDK phase metrics + Tempo, run window):
+- party_lookup: 468 req = 468 resp, p95 0.18s — CLEAN.
+- quote: 468 req = 468 resp, p95 1.31s — completes, but slow.
+- transfer: 468 prepares → only 412 fulfil responses; phase p95 ≥10s —
+  the missing 56 (~12%%) are the k6 timeouts: final fulfil callback reaches
+  the payer SDK seconds late (SDK histogram still records it at ~10s).
+- Tempo >3s traces (all COMPLETED-slow): quote stage dominates every one —
+  either the quote sat ~2.4s in topic-quotes-post before handler pickup
+  (transient queue spike invisible to 15s-resolution lag metrics), or
+  handleQuoteRequest ran 1.4–3.2s (in one trace forwardQuoteRequest, the
+  mTLS HTTP callback to the payee, took 2.3s alone). Transfer leg (prepare→
+  fulfil→notification) consistently <1s.
+- Measurement caveat discovered: ml-test metrics arrive at Thanos in ~5-min
+  bursts (envoy counters flat then +808 at 10:55 for 10:49–10:52 traffic) —
+  short-window Kafka-lag reads under-report transient spikes. Traces are the
+  trustworthy tail instrument.
+
+CAMPAIGN PAUSED here by user request for a findings review (see summary below).
+
+---
+
+## Campaign findings summary (2026-07-03, experiments paused)
+
+**Target:** 5 TPS sustained @ p99 < 2s (tps-1 hardware). **Status: not yet met.**
+Verified: 4 TPS clean sustained; 5 TPS completions achieved in ramp windows
+(5.08/s) and ~88% in soak. Latency floor 715ms; successful-path p50 improved
+1.28s → 1.07s (idle) / 1.38s (under 5 TPS); successful p99 under 5 TPS load
+4.90s → 3.40s after consumer tuning.
+
+### What made things better (all GitOps, all committed)
+1. **Consumer-loop batch tuning** — the campaign's central platform finding.
+   The whole stack ships `batchSize:1, sync:true, consumeTimeout:1000` on all
+   ~75 consumers. Setting `batchSize:10, consumeTimeout:5` on the three lag
+   leaders (notification via NODE_CONFIG env, transfer-prepare via CLEDG_ env,
+   quotes-post via QUOTE_ env postRenderer patches) collapsed peak topic lag:
+   prepare 350→26, quotes-post 326→36. Broker-side pipeline now keeps up at
+   5 TPS.
+2. **notification=6, qs=3, CL handlers=1** — the throughput champion replica
+   set. CL-handler scaling (×3) made things WORSE (position-stage serialization
+   by design); reverting reproduced and beat the best result — upstream-relevant.
+3. **topologySpread nodeTaintsPolicy: Honor** postRenderer ×19 — without it the
+   chart's hardcoded spread constraints cap every deployment at 1 pod/worker on
+   clusters with tainted control planes (upstream PR planned).
+4. **Probe relaxation (failureThreshold 3→8)** on 6 consumer deployments —
+   stops the liveness/rebalance death spiral (health endpoint reports unhealthy
+   mid-rebalance; kills cascade).
+5. **extapi-envoy 128Mi→512Mi** (was OOMKilling through every earlier ramp),
+   **reporting-aggregator disabled** (28s query starving PXC), **kafka JVM
+   pinned**, **alloy audit-log drop stage** — resource sanity on 70%-mem nodes.
+
+### Where the remaining tail lives (the open problem)
+At 5 TPS a bimodal split appears: ~88% fast (p50 1.4s), ~12% blow past the 5s
+client timeout. Localized via SDK phase metrics + Tempo traces:
+- Party lookup is never the problem (p95 0.18s).
+- **Quote stage is the tail engine**: transient multi-second queue spikes on
+  topic-quotes-post AND `handleQuoteRequest` work items of 1.4–3.2s (DB-heavy
+  pre-forward path ~315ms at idle, worse under load; mTLS forward to payee
+  observed at 2.3s under load vs ~190ms idle — HTTP client keep-alive suspect).
+- The timed-out 12% are transfers whose **final fulfil notification reaches the
+  payer SDK ~10s late** — queued behind the same congestion wave.
+
+### Upstream findings to propose (we own the platform, not the apps)
+- helm: common.topologySpread needs nodeTaintsPolicy Honor (or configurable).
+- central-services-stream defaults (batchSize 1 / consumeTimeout 1000) are a
+  structural throughput ceiling; our 3-stage tuning results are the evidence.
+- Handler health endpoints fail during normal rebalances → death spiral with
+  default probes.
+- quoting-service: ~315ms DB path before forward, per-request mTLS forward
+  cost (no keep-alive), 500ms+ handler work under load.
+- central-ledger: position-handler serialization defeats replica scaling.
+- reporting aggregator: 28s unindexed query starves shared PXC.
+
+### Method notes
+- All runs through perf/k6/run.sh (lag gate, settle gate, restart-delta verdict).
+- ml-test metrics reach Thanos in ~5-min bursts — short-window lag/rate reads
+  under-report transient spikes; Tempo traces are the reliable tail instrument.
+- k6 soak uses 90s ramp-in (cold-start artifact) and aborts on sustained
+  degradation to avoid poisoning the system.
+
+### Recommended next steps (when campaign resumes)
+1. Quote-stage tail: enable HTTP keep-alive on quoting-service forwards if
+   config allows; else document upstream. Re-check quotes-put consumer tuning.
+2. Consider qs_handler 3→4/5 (quote queue spikes) — cheap test.
+3. p99 measurement at 4 TPS (already-clean rate) to see if SLO holds there.
+4. Oracle durability task (#1) and upstream PR (#2) remain open.
