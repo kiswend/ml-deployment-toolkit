@@ -117,6 +117,20 @@ spec:
             patch: *relaxProbe
           - target: {kind: Deployment, name: moja-ml-api-adapter-handler-notification}
             patch: *relaxProbe
+          # Consumer-loop tuning (perf campaign): notification handling is
+          # fast (~35ms/msg) but topic-notification-event accumulates the
+          # largest lag at 5 TPS — the batchSize:1/consumeTimeout:1000 poll
+          # cycle is the cost, not the work. node-config merges the
+          # NODE_CONFIG env var with highest precedence (a config/local.json
+          # file mount is impossible: runc cannot bind a file inside the
+          # read-only configmap volume at /opt/app/config).
+          - target: {kind: Deployment, name: moja-ml-api-adapter-handler-notification}
+            patch: |
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value:
+                  name: NODE_CONFIG
+                  value: '{"KAFKA":{"CONSUMER":{"NOTIFICATION":{"EVENT":{"config":{"options":{"batchSize":10,"consumeTimeout":5}}}}}}}'
   values:
     global:
       kafka:
@@ -477,20 +491,6 @@ spec:
             jwsSigningKeySecret: *switchJwsSigningKey
         configOverride:
           .EVENT_SDKrc: *eventSdkConfig
-          # Consumer-loop tuning (perf campaign): span data shows message
-          # handling is fast (~35ms) but topic-notification-event accumulates
-          # the largest lag at 5 TPS — the batchSize:1/consumeTimeout:1000
-          # poll cycle is the cost, not the work. node-config merges
-          # local.json over config/default.json.
-          config/local.json:
-            KAFKA:
-              CONSUMER:
-                NOTIFICATION:
-                  EVENT:
-                    config:
-                      options:
-                        batchSize: 10
-                        consumeTimeout: 5
 
     # --- Bulk ---
     mojaloop-bulk:
