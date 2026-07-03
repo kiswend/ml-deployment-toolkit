@@ -334,3 +334,29 @@ Campaign paused at this boundary: switch-side is in its best shape of the
 campaign (aggregator off, spiral fixed+hardened, envoy fixed, budget ok,
 qs=3, notification=3, tracing async); the remaining blockers are DFSP-side
 operational. Next measurement after DFSP restore: ramp-target5e, 3-party.
+
+
+## 2026-07-03 — DFSP layer rebuilt; scheme fully restored
+
+Morning debug chain (user rebuilding all 3 DFSPs): vault-init race (fixed in
+ITK 2d1ac66) → bind-mount dir artifacts from missing secrets → key perms vs
+non-root image (chmod 644) → **202's vault silently SEALED since ~01:00**
+(explains last night's 5d collapse + "inbound degradation"; unsealed via
+vault-init re-run) → final blocker: switch `dfsp-ca-bundle` still held the
+ORIGINAL Jun-29 DFSP CAs; fresh-vault DFSPs served new chains → all callbacks
+failed TLS. **Fixed by user clicking Onboard in MCM per DFSP** (jobs 08:32)
+→ bundle re-rendered by vault-agent → `openssl verify` OK ×3.
+
+**Verification: 6/6 directions COMPLETED. Warm paths 0.88–0.96s — first
+sub-second e2e transfers of the campaign.** All three DFSPs now on OFFICIAL
+mojaloop/sdk-scheme-adapter:latest (v24, maxsocket fix) — kirgene fork retired
+by the rebuild. Obs agents (sdk+host+redis) reporting ×3. Seeded (99%).
+
+ITK follow-ups banked: vault auto-unseal/supervision (seal = silent DFSP
+brick), secrets outside git worktree, cert-script perms+dir guards,
+v24 env mapping (done implicitly — v24 now the default and boots).
+
+### PRE-REGISTERED: `ramp-target5e` — THE target run, 3-party, all fixes in
+Config: qs=3, notification=3, probes relaxed, envoy 512Mi, aggregator off,
+official v24 SDKs, fresh DFSP PKI. Ramp 2,3,4,5,6 ×90s. PASS = 5 TPS step
+≥99% COMPLETED; then a 5 TPS soak for the p99<2s verdict.
