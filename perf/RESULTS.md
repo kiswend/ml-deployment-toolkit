@@ -392,3 +392,10 @@ the throughput champion. Next: the pre-registered 5 TPS soak for the
 
 ### PRE-REGISTERED: `soak-target-5tps` — the campaign target test
 TPS=5, 15m, champion config. PASS = ≥99%% COMPLETED and p99 < 2s.
+
+### `soak-target-5tps` (09:1x) — FAIL: cold-start saturation
+69.6%%, aborted ~2min. Constant-arrival jumps to 5 TPS from idle; the ramp's
+5 TPS success was on a warmed system. Med 3.44s from minute one = queued
+behind warmup, open model never recovers. Method fix: soak scenario now
+ramps in over 90s before holding (fair for a sustained-rate SLO). Re-running
+as soak-target-5tps-warm.

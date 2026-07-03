@@ -30,10 +30,16 @@ const rampStages = RAMP_STEPS.flatMap((rate) => [
 
 const scenarios = {
   soak: {
-    executor: 'constant-arrival-rate',
-    rate: TPS,
+    // 90s ramp-in before holding TPS: a cold jump to the target rate
+    // queues transfers behind connection/cache warmup and the open model
+    // never recovers (see soak-target-5tps in perf/RESULTS.md)
+    executor: 'ramping-arrival-rate',
+    startRate: 1,
     timeUnit: '1s',
-    duration: DURATION,
+    stages: [
+      { duration: '90s', target: TPS },
+      { duration: DURATION, target: TPS },
+    ],
     preAllocatedVUs: Math.max(20, TPS * 10),
     maxVUs: Math.max(50, TPS * 20),
     exec: 'transfer',
