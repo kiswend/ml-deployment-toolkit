@@ -87,7 +87,7 @@ app:
   tx_requests_replicas: 1
   # ML API Adapter
   ml_adapter_service_replicas: 1
-  ml_adapter_handler_notification_replicas: 1
+  ml_adapter_handler_notification_replicas: 3
   # External API (mTLS Envoy proxy)
   extapi_envoy_replicas: 2
   # MCM
