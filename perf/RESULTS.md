@@ -315,3 +315,22 @@ equivalent of the 3-party topology — consistent with the afternoon ceiling.
 is client latency). ACTION: ml_adapter_handler_notification_replicas 1->3
 (Honor + probe patches pre-staged). DFSP VMs 0.4-0.7 busy at break — becoming
 co-limiting; 3-party restore (203 re-onboarding, USER) matters for 5 TPS.
+
+### `ramp-target5d` (01:4x) — INVALID: dfsp-202 inbound degradation (not the config)
+4.25%% — envoy connect-fails to dfsp-202-cluster 0.2/s (201/203 zero); TCP+
+server cert fine; 202's SDK inbound stops accepting under load. notification=3
+rolled out fine (3/3) but unmeasured.
+
+### ⚠⚠ CRITICAL OPERATIONAL STATE — DFSP layer on borrowed time
+The 14:30 VM re-clone wiped gitignored docker/secrets/ on ALL THREE VMs.
+201/202 SDK containers run only via stale pre-clone file handles.
+**DO NOT restart/recreate SDK containers on 201/202** — bind paths re-resolve
+to empty dirs → broken like 203. USER ACTIONS NEEDED (morning):
+1. Restore/regenerate DFSP secrets via the MCM onboarding flow on all 3 VMs
+   (203 already broken; 201/202 fragile; 202 degrading under load).
+2. ITK repo should persist secrets outside the git worktree (named volume or
+   documented regeneration) — this class of loss is a distribution bug.
+Campaign paused at this boundary: switch-side is in its best shape of the
+campaign (aggregator off, spiral fixed+hardened, envoy fixed, budget ok,
+qs=3, notification=3, tracing async); the remaining blockers are DFSP-side
+operational. Next measurement after DFSP restore: ramp-target5e, 3-party.
