@@ -400,9 +400,12 @@ behind warmup, open model never recovers. Method fix: soak scenario now
 ramps in over 90s before holding (fair for a sustained-rate SLO). Re-running
 as soak-target-5tps-warm.
 
-### `soak-target-5tps-warm` (2026-07-03 09:16:07Z to 09:18:52Z) — TODO: hypothesis/result
-Health: CLEAN. Restart delta: 0. k6 exit: 99.
-TODO: headline numbers, lag location, conclusion.
+### `soak-target-5tps-warm` (2026-07-03 09:16:07Z to 09:18:52Z) — FAIL 94.1%%
+Health: CLEAN. Restart delta: 0. k6 exit: 99 (checks abort at 2m eval).
+579 COMPLETED / 36 timeouts (94.1%%); successful p50 1.98s, p99 4.77s.
+Ramp-in fixed the cold start but sustained 5 TPS still drifts into backlog.
+Hypothesis for the failures: consumer-loop serialization (batchSize 1,
+consumeTimeout 1000) on the lag-leading stages. → batch tuning experiments.
 
 
 ### `soak-5tps-batchtuned2` ×2 (10:2x) — INVALID: double-fired
@@ -415,3 +418,24 @@ reconcile --force`; (b) chart configOverride cannot deliver config/* files
 env is the working node-config override channel. Tuned notification handler
 (batchSize 10 / consumeTimeout 5ms) is DEPLOYED and healthy. Re-running
 single clean soak.
+
+### `soak-5tps-tuned-clean` (2026-07-03 10:28:09Z to 10:30:14Z) — notif tuning works; crown moves
+Health: CLEAN. Restart delta: 0. k6 exit: 99 (checks abort at 2m eval).
+360 COMPLETED / 46 timeouts (88.7%%); successful p50 2.11s, p99 4.90s.
+Notification tuning (batchSize 10 / consumeTimeout 5) worked locally: the lag
+crown moved OFF notification onto topic-transfer-prepare (peak 350) and
+topic-quotes-post (326). ACTION: same tuning on those two consumers via
+rc-style env (CLEDG_KAFKA__CONSUMER__TRANSFER__PREPARE__config__options__*,
+QUOTE_KAFKA__CONSUMER__QUOTE__POST__config__options__*) — commit 88cf0f2.
+
+### `soak-5tps-tuned3` (2026-07-03 10:44:30Z to 10:46:35Z) — CONTAMINATED (host steal)
+Health: CLEAN pods-wise but window invalid. 282 COMPLETED / 122 client
+timeouts (69.8%%) hitting ALL 3 DFSPs from second zero, AND the k6→Thanos
+remote-write timed out at the same instant (two unrelated network paths).
+Node steal spiked 3–6%% on ml-test-c-0/w-1 exactly 10:43–10:46Z — external
+PVE-host contention, same signature as the earlier backup-window incident.
+NOT a tuning verdict. The salvageable signal is strongly POSITIVE though:
+peak lag with all-3-stage tuning was prepare 26 (was 350), quotes-post 36
+(was 326), notification 128 — the broker side kept up even while the request
+path was starved. 6/6 manual probes after the window: COMPLETED 1.1–1.6s.
+ACTION: identical re-run as soak-5tps-tuned3b on the quiet host.
