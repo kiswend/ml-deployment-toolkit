@@ -305,3 +305,13 @@ PVE backup signature; same host class as the 17:32 incident). Sequential
 transfers complete fine. NOT a config verdict. Ramp auto-rescheduled for when
 host contention subsides (<0.5%% for 10 min). METHOD: steal/iowait gate worth
 adding to run.sh pre-flight permanently.
+
+### `ramp-target5c` (01:17–01:21, calm host, settle 5393s) — ceiling located
+2 TPS step 100%% clean (2.00/s); breaks entering 3 TPS (94.5%% overall, abort).
+2-party context: every transfer hits both VMs -> 3 TPS 2-party is ~4.5 TPS-
+equivalent of the 3-party topology — consistent with the afternoon ceiling.
+**Cause visible: standing lag 72 on topic-notification-event BEFORE the ramp**
+(single-replica notification handler; on the SDK completion path, so its queue
+is client latency). ACTION: ml_adapter_handler_notification_replicas 1->3
+(Honor + probe patches pre-staged). DFSP VMs 0.4-0.7 busy at break — becoming
+co-limiting; 3-party restore (203 re-onboarding, USER) matters for 5 TPS.
