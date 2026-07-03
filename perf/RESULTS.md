@@ -360,3 +360,14 @@ v24 env mapping (done implicitly — v24 now the default and boots).
 Config: qs=3, notification=3, probes relaxed, envoy 512Mi, aggregator off,
 official v24 SDKs, fresh DFSP PKI. Ramp 2,3,4,5,6 ×90s. PASS = 5 TPS step
 ≥99% COMPLETED; then a 5 TPS soak for the p99<2s verdict.
+### `ramp-target5e` (08:41–08:46) — restored-system baseline: 3 TPS clean, 4 breaks
+2✓ 3✓ (100%%, completions track injection), 4 TPS caps at ~3.0/s → abort.
+Successful p50 1.07s, floor 641ms (records). DFSP CPU only 11–15%% (v24 SDKs
+exonerate payee side for good). Break signature: notification-event lag 89
+AGAIN despite 3 replicas → notification stage still the governor.
+
+### `ramp-target5f` (08:51–08:56) — notification=6: **4 TPS WALL BROKEN**
+3✓ 4✓ (4.04/s completions — first clean 4 TPS of the campaign), 5 TPS breaks.
+Lag at break DISTRIBUTED (notif 49, quotes-post 27, prepare 21, fulfil 18) →
+remaining single-replica CL handlers hit serial limits together.
+ACTION: prepare/fulfil/position-batch 1→3 → ramp-target5g (4,5,6,7).
