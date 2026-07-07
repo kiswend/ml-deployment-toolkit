@@ -534,3 +534,23 @@ client timeout. Localized via SDK phase metrics + Tempo traces:
 2. Consider qs_handler 3→4/5 (quote queue spikes) — cheap test.
 3. p99 measurement at 4 TPS (already-clean rate) to see if SLO holds there.
 4. Oracle durability task (#1) and upstream PR (#2) remain open.
+
+### `soak10-20260706-1432` (2026-07-06 14:32:34Z to 14:33:14Z) — TODO: hypothesis/result
+Health: CLEAN. Restart delta: 0. k6 exit: 105.
+TODO: headline numbers, lag location, conclusion.
+
+### `soak10-20260706-1531` (2026-07-06 15:31:17Z to 15:32:20Z) — TODO: hypothesis/result
+Health: CLEAN. Restart delta: 0. k6 exit: 105.
+TODO: headline numbers, lag location, conclusion.
+
+### `soak10-20260706-1532` (2026-07-06 15:32:53Z to 15:34:55Z) — TODO: hypothesis/result
+Health: CLEAN. Restart delta: 0. k6 exit: 99.
+TODO: headline numbers, lag location, conclusion.
+
+### `soak10-20260706-1541` (2026-07-06 15:41:23Z to 15:54:18Z) — TODO: hypothesis/result
+Health: TAINTED (restart delta=3). Restart delta: 3. k6 exit: 99.
+TODO: headline numbers, lag location, conclusion.
+
+### `soak10-20260706-1607` (2026-07-06 16:07:06Z to 16:10:19Z) — TODO: hypothesis/result
+Health: TAINTED (restart delta=1). Restart delta: 1. k6 exit: 99.
+TODO: headline numbers, lag location, conclusion.
