@@ -5,7 +5,6 @@ resources:
   - mysql/secrets.yaml
   - mysql/mysql-metrics-service.yaml
   - mysql/mojaloop-db.yaml
-  - diag-db-digest-job.yaml
   - kafka/kafka-metrics-configmap.yaml
   - kafka/kafka-metrics-service.yaml
   - kafka/kafka-exporter-metrics-service.yaml
