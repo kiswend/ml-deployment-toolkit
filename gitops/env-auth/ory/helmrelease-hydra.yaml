@@ -69,6 +69,13 @@ spec:
                   name: hydra-secret
                   key: dsn
 
+    service:
+      admin:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "4445"
+          prometheus.io/path: "/admin/metrics/prometheus"
+
     hydra:
       automigration:
         enabled: true
