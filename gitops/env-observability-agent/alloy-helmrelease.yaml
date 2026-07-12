@@ -250,6 +250,11 @@ spec:
 
             scrape_interval = "30s"
             scrape_timeout  = "10s"
+
+            // kube-state-metrics emits the subject pod/namespace as metric
+            // labels; without this they get demoted to exported_* and the
+            // target labels (the KSM pod itself) win
+            honor_labels = true
           }
 
           /********************************************

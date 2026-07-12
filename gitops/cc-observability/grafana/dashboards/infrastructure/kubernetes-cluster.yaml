@@ -112,7 +112,7 @@ data:
           "options": { "colorMode": "background", "graphMode": "none" }
         },
         {
-          "title": "Container Restarts (24h)",
+          "title": "Container Restarts ($__range)",
           "type": "stat",
           "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
           "datasource": { "uid": "thanos" },
@@ -131,14 +131,14 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(increase(kube_pod_container_status_restarts_total{cluster_name=\"$cluster_name\"}[24h]))",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{cluster_name=\"$cluster_name\"}[$__range]))",
               "legendFormat": "restarts"
             }
           ],
           "options": { "colorMode": "background", "graphMode": "none" }
         },
         {
-          "title": "OOMKilled Containers",
+          "title": "OOM Kills ($__range)",
           "type": "stat",
           "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
           "datasource": { "uid": "thanos" },
@@ -156,7 +156,7 @@ data:
           },
           "targets": [
             {
-              "expr": "count(kube_pod_container_status_last_terminated_reason{cluster_name=\"$cluster_name\", reason=\"OOMKilled\"} == 1) or vector(0)",
+              "expr": "sum(increase(container_oom_events_total{cluster_name=\"$cluster_name\"}[$__range])) or vector(0)",
               "legendFormat": "OOMKilled"
             }
           ],
