@@ -69,13 +69,24 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "custom": { "fillOpacity": 10 }
+              "custom": { "fillOpacity": 10, "thresholdsStyle": { "mode": "line" } },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
             }
           },
           "targets": [
             {
               "expr": "node_load1{cluster_name=\"$cluster_name\", node=~\"$node\"} / count without (cpu) (count without (mode) (node_cpu_seconds_total{cluster_name=\"$cluster_name\", node=~\"$node\", mode=\"idle\"}))",
               "legendFormat": "{{node}} load1/cores"
+            },
+            {
+              "expr": "node_load15{cluster_name=\"$cluster_name\", node=~\"$node\"} / count without (cpu) (count without (mode) (node_cpu_seconds_total{cluster_name=\"$cluster_name\", node=~\"$node\", mode=\"idle\"}))",
+              "legendFormat": "{{node}} load15/cores"
             }
           ]
         },
@@ -89,7 +100,15 @@ data:
               "unit": "percentunit",
               "min": 0,
               "max": 1,
-              "custom": { "fillOpacity": 20 }
+              "custom": { "fillOpacity": 20, "thresholdsStyle": { "mode": "line" } },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.75 },
+                  { "color": "red", "value": 0.85 }
+                ]
+              }
             }
           },
           "targets": [

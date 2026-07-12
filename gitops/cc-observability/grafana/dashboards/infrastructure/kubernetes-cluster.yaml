@@ -33,15 +33,40 @@ data:
       },
       "panels": [
         {
-          "title": "Nodes",
+          "title": "Nodes Ready",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "gridPos": { "h": 4, "w": 3, "x": 0, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
-              "expr": "count(kube_node_info{cluster_name=\"$cluster_name\"})",
-              "legendFormat": "nodes"
+              "expr": "sum(kube_node_status_condition{cluster_name=\"$cluster_name\", condition=\"Ready\", status=\"true\"})",
+              "legendFormat": "ready"
+            }
+          ],
+          "options": { "colorMode": "background", "graphMode": "none" }
+        },
+        {
+          "title": "Nodes NotReady",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 3, "x": 3, "y": 0 },
+          "datasource": { "uid": "thanos" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "count(kube_node_info{cluster_name=\"$cluster_name\"}) - sum(kube_node_status_condition{cluster_name=\"$cluster_name\", condition=\"Ready\", status=\"true\"})",
+              "legendFormat": "not ready"
             }
           ],
           "options": { "colorMode": "background", "graphMode": "none" }
@@ -49,7 +74,7 @@ data:
         {
           "title": "Pods Running",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+          "gridPos": { "h": 4, "w": 4, "x": 6, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } },
           "targets": [
@@ -63,7 +88,7 @@ data:
         {
           "title": "Pods Pending",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+          "gridPos": { "h": 4, "w": 4, "x": 10, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": {
             "defaults": {
@@ -89,7 +114,7 @@ data:
         {
           "title": "Pods Failed",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+          "gridPos": { "h": 4, "w": 4, "x": 14, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": {
             "defaults": {
@@ -114,7 +139,7 @@ data:
         {
           "title": "Container Restarts ($__range)",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+          "gridPos": { "h": 4, "w": 3, "x": 18, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": {
             "defaults": {
@@ -140,7 +165,7 @@ data:
         {
           "title": "OOM Kills ($__range)",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+          "gridPos": { "h": 4, "w": 3, "x": 21, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": {
             "defaults": {
