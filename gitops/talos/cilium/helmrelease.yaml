@@ -92,6 +92,12 @@ spec:
       enabled: true
       type: wireguard
 
+    # Same trap as operator.rollOutPods below, agent-side: the agent reads
+    # cilium-config only at startup, and flag flips (e.g. enable-wireguard)
+    # don't touch the DaemonSet template — without this, config changes land
+    # in the ConfigMap but never take effect on running nodes.
+    rollOutCiliumPods: true
+
     # Cilium agent Prometheus metrics (port 9962)
     prometheus:
       enabled: true
