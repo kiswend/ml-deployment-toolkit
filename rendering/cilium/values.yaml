@@ -46,6 +46,14 @@ securityContext:
       - SYS_ADMIN
       - SYS_RESOURCE
 
+# WireGuard node-to-node encryption (ADR-013) — enabled at bootstrap so a
+# fresh cluster never runs a plaintext window before Flux takeover. Keys are
+# generated at runtime by each agent; helm renders no Secrets for this.
+# Must match gitops/talos/cilium/helmrelease.yaml.
+encryption:
+  enabled: true
+  type: wireguard
+
 # Gateway API must be enabled at bootstrap even though Flux owns the full
 # config: it sets enable-gateway-api/enable-envoy-config, and the operator
 # only registers the CiliumEnvoyConfig CRDs at startup based on those flags.

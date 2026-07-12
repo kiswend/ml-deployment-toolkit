@@ -84,6 +84,14 @@ spec:
     l2announcements:
       enabled: true
 
+    # WireGuard node-to-node encryption of pod traffic (ADR-013). Keys are
+    # generated at runtime by each agent — nothing rendered, nothing to seed.
+    # Must match rendering/cilium/values.yaml so rebuilt clusters boot
+    # encrypted instead of waiting for Flux takeover.
+    encryption:
+      enabled: true
+      type: wireguard
+
     # Cilium agent Prometheus metrics (port 9962)
     prometheus:
       enabled: true
