@@ -32,6 +32,13 @@ spec:
     adminUser: admin
     adminPassword: "${grafana_admin_password}"
 
+    # SMTP credentials via env vars (GF_SMTP_USER/GF_SMTP_PASSWORD) — see
+    # smtp-secret.yaml; pairs with the grafana.ini smtp block below
+    smtp:
+      existingSecret: grafana-smtp-credentials
+      userKey: user
+      passwordKey: password
+
     # Disable init-chown-data — fsGroup handles volume ownership
     initChownData:
       enabled: false
@@ -126,6 +133,14 @@ spec:
         searchNamespace: observability
         provider:
           foldersFromFilesStructure: false
+      # Alerting sidecar — rules/policies from ConfigMaps, contact points
+      # from Secrets (they carry credentials), all labeled grafana_alert=1
+      alerts:
+        enabled: true
+        label: grafana_alert
+        labelValue: "1"
+        searchNamespace: observability
+        resource: both
 
     # Plugins to install (grafana-piechart-panel removed — Angular plugins unsupported in Grafana 11.x)
     plugins: []
@@ -135,6 +150,17 @@ spec:
       analytics:
         check_for_updates: false
         reporting_enabled: false
+      # Alert email delivery. Always enabled by design: with the dummy
+      # defaults from .env.sample, sends fail visibly on the contact point
+      # until real SMTP values are provided (see .env.sample warning).
+      # Credentials come via smtp.existingSecret below (GF_SMTP_USER/PASSWORD
+      # env vars) — the chart rejects an inline smtp.password here.
+      smtp:
+        enabled: true
+        host: "${smtp_host}:${smtp_port}"
+        from_address: "${alert_email_from}"
+        from_name: "Grafana"
+        skip_verify: true
       server:
         root_url: "https://grafana.int.${domain}"
       auth.anonymous:

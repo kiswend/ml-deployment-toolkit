@@ -16,6 +16,20 @@ resources:
   - tempo/helmrelease.yaml
   - grafana/helmrelease.yaml
 
+  # Grafana SMTP credentials (chart smtp.existingSecret)
+  - grafana/smtp-secret.yaml
+
+  # Grafana Alerting — contact points (Secret), policy and rules (ConfigMaps)
+  - grafana/alerting/contact-points.yaml
+  - grafana/alerting/notification-policy.yaml
+  - grafana/alerting/rules-infrastructure.yaml
+  - grafana/alerting/rules-mojaloop.yaml
+  - grafana/alerting/rules-data-layer.yaml
+  - grafana/alerting/rules-platform.yaml
+
+  # Grafana Dashboards — Home (L1 entry point)
+  - grafana/dashboards/switch-overview.yaml
+
   # Grafana Dashboards — Infrastructure
   - grafana/dashboards/infrastructure/node-overview.yaml
   - grafana/dashboards/infrastructure/kubernetes-cluster.yaml
@@ -32,6 +46,7 @@ resources:
   - grafana/dashboards/data-layer/pxc-galera-cluster.yaml
   - grafana/dashboards/data-layer/redis-overview.yaml
   - grafana/dashboards/data-layer/kafka-overview.yaml
+  - grafana/dashboards/data-layer/mongodb-overview.yaml
 
   # Grafana Dashboards — Platform
   - grafana/dashboards/platform/cert-manager.yaml
@@ -39,6 +54,8 @@ resources:
   - grafana/dashboards/platform/vault.yaml
   - grafana/dashboards/platform/keycloak.yaml
   - grafana/dashboards/platform/ory-auth.yaml
+  - grafana/dashboards/platform/oathkeeper.yaml
+  - grafana/dashboards/platform/flux.yaml
 
   # Grafana Dashboards — Mojaloop
   - grafana/dashboards/mojaloop/transfer-pipeline.yaml

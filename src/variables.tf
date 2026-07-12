@@ -236,6 +236,34 @@ variable "smtp_password" {
   sensitive   = true
 }
 
+# --- Alerting Delivery (Grafana contact points; dummy defaults keep
+# provisioning valid — delivery silently fails until real values are set) ---
+
+variable "alert_email_from" {
+  description = "From address for Grafana alert emails"
+  type        = string
+  default     = "grafana@example.invalid"
+}
+
+variable "alert_email_to" {
+  description = "Recipient address(es) for Grafana alert emails (comma-separated)"
+  type        = string
+  default     = "ops@example.invalid"
+}
+
+variable "telegram_bot_token" {
+  description = "Telegram bot token for Grafana alerts (BotFather)"
+  type        = string
+  default     = "unset"
+  sensitive   = true
+}
+
+variable "telegram_chat_id" {
+  description = "Telegram chat/group id for Grafana alerts"
+  type        = string
+  default     = "0"
+}
+
 # --- Hub Identity ---
 
 variable "hub_participant_name" {

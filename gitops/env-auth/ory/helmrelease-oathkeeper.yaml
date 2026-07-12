@@ -154,3 +154,9 @@ spec:
       api:
         enabled: true
         port: 4456
+      metrics:
+        enabled: true
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9000"
+          prometheus.io/path: "/metrics"

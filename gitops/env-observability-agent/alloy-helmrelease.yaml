@@ -257,6 +257,54 @@ spec:
             honor_labels = true
           }
 
+          // --- Flux controllers (GitOps health) ---
+          // Flux is bootstrapped by Terraform, so its pods carry no
+          // prometheus.io annotations; scrape them by metrics port name.
+          discovery.kubernetes "flux" {
+            role = "pod"
+            namespaces {
+              names = ["flux-system"]
+            }
+          }
+
+          discovery.relabel "flux" {
+            targets = discovery.kubernetes.flux.targets
+
+            // Keep only the controllers' metrics port (http-prom, 8080)
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_port_name"]
+              action        = "keep"
+              regex         = "http-prom"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+
+            // source-controller, kustomize-controller, helm-controller, ...
+            rule {
+              source_labels = ["__meta_kubernetes_pod_label_app"]
+              target_label  = "controller"
+            }
+          }
+
+          prometheus.scrape "flux" {
+            targets    = discovery.relabel.flux.output
+            clustering {
+              enabled = true
+            }
+            forward_to = [prometheus.remote_write.mimir.receiver]
+
+            scrape_interval = "30s"
+            scrape_timeout  = "10s"
+          }
+
           /********************************************
            * INFRASTRUCTURE METRICS CONFIGURATION
            * Scrapes kubelet, cAdvisor, and node-exporter

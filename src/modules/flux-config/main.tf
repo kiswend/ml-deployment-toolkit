@@ -139,6 +139,16 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       minio_root_password    = var.minio_root_password
       harbor_admin_password  = var.harbor_admin_password
       grafana_admin_password = var.grafana_admin_password
+      # SMTP + alerting delivery: needed on cc (Grafana alerting) and env
+      # (Kratos courier), so they live in the common block
+      smtp_host          = var.smtp_host
+      smtp_port          = var.smtp_port
+      smtp_user          = var.smtp_user
+      smtp_password      = var.smtp_password
+      alert_email_from   = var.alert_email_from
+      alert_email_to     = var.alert_email_to
+      telegram_bot_token = var.telegram_bot_token
+      telegram_chat_id   = var.telegram_chat_id
     },
     local.is_env ? {
       mysql_root_password           = var.mysql_root_password
@@ -151,16 +161,12 @@ resource "kubernetes_secret_v1" "cluster_secrets" {
       kratos_db_password            = var.kratos_db_password
       keto_db_password              = var.keto_db_password
       mcm_db_password               = var.mcm_db_password
-      hub_admin_password = var.hub_admin_password
-      hub_admin_email    = var.hub_admin_email
+      hub_admin_password            = var.hub_admin_password
+      hub_admin_email               = var.hub_admin_email
       hubop_oidc_secret             = var.hubop_oidc_secret
       mcm_oidc_client_secret        = var.mcm_oidc_client_secret
       role_assign_svc_secret        = var.role_assign_svc_secret
       dfsp_oidc_client_secret       = var.dfsp_oidc_client_secret
-      smtp_host                     = var.smtp_host
-      smtp_port                     = var.smtp_port
-      smtp_user                     = var.smtp_user
-      smtp_password                 = var.smtp_password
       kratos_secrets_cipher         = random_password.kratos_secrets_cipher[0].result
       kratos_secrets_cookie         = random_password.kratos_secrets_cookie[0].result
       kratos_secrets_csrf_cookie    = random_password.kratos_secrets_csrf_cookie[0].result

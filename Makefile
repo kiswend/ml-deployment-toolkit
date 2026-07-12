@@ -62,7 +62,11 @@ LOAD_ENV = set -a && source ../$(ENV_FILE) && set +a && \
 	       TF_VAR_smtp_host=$${SMTP_HOST:-} \
 	       TF_VAR_smtp_port=$${SMTP_PORT:-587} \
 	       TF_VAR_smtp_user=$${SMTP_USER:-} \
-	       TF_VAR_smtp_password=$${SMTP_PASSWORD:-} && \
+	       TF_VAR_smtp_password=$${SMTP_PASSWORD:-} \
+	       TF_VAR_alert_email_from=$${ALERT_EMAIL_FROM:-grafana@example.invalid} \
+	       TF_VAR_alert_email_to=$${ALERT_EMAIL_TO:-ops@example.invalid} \
+	       TF_VAR_telegram_bot_token=$${TELEGRAM_BOT_TOKEN:-unset} \
+	       TF_VAR_telegram_chat_id=$${TELEGRAM_CHAT_ID:-0} && \
 	export AWS_ACCESS_KEY_ID=$${AWS_ACCESS_KEY_ID:-unused} \
 	       AWS_SECRET_ACCESS_KEY=$${AWS_SECRET_ACCESS_KEY:-unused}
 

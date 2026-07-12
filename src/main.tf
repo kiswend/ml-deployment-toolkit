@@ -165,7 +165,7 @@ module "flux_config" {
   mcm_db_password         = var.mcm_db_password
   hydra_db_password       = var.hydra_db_password
   hub_admin_password      = var.hub_admin_password
-  hub_admin_email    = var.hub_admin_email
+  hub_admin_email         = var.hub_admin_email
   hubop_oidc_secret       = var.hubop_oidc_secret
   mcm_oidc_client_secret  = var.mcm_oidc_client_secret
   role_assign_svc_secret  = var.role_assign_svc_secret
@@ -175,6 +175,11 @@ module "flux_config" {
   smtp_port     = var.smtp_port
   smtp_user     = var.smtp_user
   smtp_password = var.smtp_password
+
+  alert_email_from   = var.alert_email_from
+  alert_email_to     = var.alert_email_to
+  telegram_bot_token = var.telegram_bot_token
+  telegram_chat_id   = var.telegram_chat_id
 
   hub_participant_name     = var.hub_participant_name
   onboarding_funds_in      = var.onboarding_funds_in
