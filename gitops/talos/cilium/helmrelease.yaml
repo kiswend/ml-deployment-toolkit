@@ -137,12 +137,16 @@ spec:
       replicas: 1
       rollOutPods: true
 
-    # Agent resource limits (prevent OOM during BPF compilation)
+    # Agent resource limits (prevent OOM during BPF compilation). CPU limit
+    # must leave headroom for endpoint restore after a node reboot: at 1000m
+    # the agent gets throttled rebuilding BPF state on a loaded node (~90
+    # endpoints), misses its startup/liveness probes, and kubelet SIGKILLs it
+    # into a CrashLoopBackOff that takes the node's datapath down with it.
     resources:
       requests:
         cpu: 100m
         memory: 400Mi
       limits:
-        cpu: 1000m
+        cpu: 2000m
         memory: 1Gi
 
