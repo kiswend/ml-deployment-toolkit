@@ -7,6 +7,8 @@ metadata:
   namespace: mojaloop
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "extapi.${domain}"
+    external-dns.alpha.kubernetes.io/target: "${dns_public_ip}"
+
 spec:
   type: LoadBalancer
   selector:

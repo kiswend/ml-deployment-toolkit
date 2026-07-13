@@ -7,6 +7,8 @@ metadata:
   namespace: platform-system
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/target: "${dns_public_ip}"
+
 spec:
   gatewayClassName: ${gateway_class_name}
   listeners:

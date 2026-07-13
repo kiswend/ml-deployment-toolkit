@@ -35,6 +35,12 @@ variable "dns_provider" {
   type        = string
 }
 
+variable "dns_public_ip" {
+  description = "Optional public IP override for external-dns records (empty = use LB IPs)"
+  type        = string
+  default     = ""
+}
+
 variable "alert_email" {
   description = "Alert notification email"
   type        = string

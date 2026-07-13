@@ -133,6 +133,8 @@ module "flux_config" {
   cluster_vip        = try(local.config.cluster.vip, "")
   domain             = local.config.dns.domain
   dns_provider       = local.config.dns.provider
+#DNS_public_ip added here
+  dns_public_ip      = try(local.config.dns.public_ip, "")
   gateway_class_name = try(local.config_raw.cluster.gateway_class_name, "cilium")
   alert_email        = local.config.app.alert_email
   lb_ipam_range      = local.config.app.lb_ipam.range

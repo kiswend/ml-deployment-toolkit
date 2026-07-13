@@ -88,6 +88,7 @@ resource "kubernetes_config_map_v1" "cluster_config" {
       cluster_vip        = var.cluster_vip
       domain             = var.domain
       dns_provider       = var.dns_provider
+      dns_public_ip      = var.dns_public_ip
       gateway_class_name = var.gateway_class_name
       alert_email        = var.alert_email
       lb_ipam_range      = var.lb_ipam_range
