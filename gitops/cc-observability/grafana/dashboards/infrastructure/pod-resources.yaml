@@ -85,7 +85,9 @@ data:
               "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{cluster_name=\"$cluster_name\", namespace=\"$namespace\", image!=\"\"}[$__rate_interval])) / sum by (pod) (rate(container_cpu_cfs_periods_total{cluster_name=\"$cluster_name\", namespace=\"$namespace\", image!=\"\"}[$__rate_interval]))",
               "legendFormat": "{{pod}}"
             }
-          ]
+          ],
+          "description": "Only containers WITH a CPU limit emit throttling metrics; namespaces without limits show nothing. Zero = healthy (no throttling)",
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } }
         },
         {
           "title": "Memory Working Set by Pod",
@@ -110,7 +112,7 @@ data:
           "type": "timeseries",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
           "datasource": { "uid": "thanos" },
-          "description": "Memory working set as % of memory limit. Approaching 100% means OOM risk.",
+          "description": "Memory working set as % of memory limit. Approaching 100% means OOM risk. Only pods WITH a memory limit appear — a blank panel means no pod in this namespace sets one",
           "fieldConfig": {
             "defaults": {
               "unit": "percentunit",
@@ -211,6 +213,7 @@ data:
           "type": "timeseries",
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
           "datasource": { "uid": "thanos" },
+          "description": "Only restarting containers are drawn — empty means no restarts in the selected range (that's good)",
           "fieldConfig": {
             "defaults": {
               "unit": "short",
@@ -225,20 +228,31 @@ data:
           ]
         },
         {
-          "title": "Filesystem Usage by Pod",
+          "title": "PVC Usage in Namespace",
           "type": "timeseries",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
           "datasource": { "uid": "thanos" },
+          "description": "Per-container filesystem usage isn't exposed by this container runtime (cAdvisor reports device-level only), so this shows PVC utilisation for the namespace instead",
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
-              "custom": { "fillOpacity": 10 }
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "custom": { "fillOpacity": 10 },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.7 },
+                  { "color": "red", "value": 0.85 }
+                ]
+              }
             }
           },
           "targets": [
             {
-              "expr": "sum by (pod) (container_fs_usage_bytes{cluster_name=\"$cluster_name\", namespace=\"$namespace\", image!=\"\"})",
-              "legendFormat": "{{pod}}"
+              "expr": "kubelet_volume_stats_used_bytes{cluster_name=\"$cluster_name\", namespace=\"$namespace\"} / kubelet_volume_stats_capacity_bytes{cluster_name=\"$cluster_name\", namespace=\"$namespace\"}",
+              "legendFormat": "{{persistentvolumeclaim}}"
             }
           ]
         },

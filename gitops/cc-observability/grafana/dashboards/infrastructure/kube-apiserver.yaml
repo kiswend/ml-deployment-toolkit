@@ -122,10 +122,11 @@ data:
           "options": { "colorMode": "background", "graphMode": "area" }
         },
         {
-          "title": "Long-Running Requests",
+          "title": "Long-Running Requests (current)",
           "type": "stat",
           "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
           "datasource": { "uid": "thanos" },
+          "description": "Gauge of in-flight long-running requests (mostly WATCH connections). The big number is the current value by design; the sparkline behind it follows the selected time range",
           "fieldConfig": { "defaults": { "unit": "short" } },
           "targets": [
             {
@@ -417,7 +418,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
           "targets": [
             {
-              "expr": "rate(process_cpu_seconds_total{cluster_name=\"$cluster_name\", job=\"apiserver\"}[5m])",
+              "expr": "rate(process_cpu_seconds_total{cluster_name=\"$cluster_name\", job=\"prometheus.scrape.apiserver\"}[5m])",
               "legendFormat": "cpu cores"
             }
           ]
@@ -430,7 +431,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } } },
           "targets": [
             {
-              "expr": "process_resident_memory_bytes{cluster_name=\"$cluster_name\", job=\"apiserver\"}",
+              "expr": "process_resident_memory_bytes{cluster_name=\"$cluster_name\", job=\"prometheus.scrape.apiserver\"}",
               "legendFormat": "RSS"
             }
           ]

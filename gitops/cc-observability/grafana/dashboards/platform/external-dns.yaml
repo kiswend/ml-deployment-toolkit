@@ -254,6 +254,24 @@ data:
               "legendFormat": "apply changes/s"
             }
           ]
+        },
+        {
+          "title": "Recent Record Changes (logs)",
+          "type": "logs",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
+          "datasource": { "uid": "loki" },
+          "description": "external-dns metrics only expose record COUNTS — the record names live in its logs; this shows create/update/delete operations in the selected range",
+          "targets": [
+            {
+              "expr": "{cluster_name=\"$cluster_name\", namespace=\"external-dns\"} |~ \"(?i)(creat|updat|delet|upsert|applying|changes)\""
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none"
+          }
         }
       ],
       "schemaVersion": 39

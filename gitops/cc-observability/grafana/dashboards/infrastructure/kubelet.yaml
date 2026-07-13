@@ -369,7 +369,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10, "stacking": { "mode": "normal" } } } },
           "targets": [
             {
-              "expr": "sum by (code) (rate(rest_client_requests_total{cluster_name=\"$cluster_name\", node=~\"$node\", job=\"kubelet\"}[5m]))",
+              "expr": "sum by (code) (rate(rest_client_requests_total{cluster_name=\"$cluster_name\", node=~\"$node\", job=\"prometheus.scrape.kubelet\"}[5m]))",
               "legendFormat": "{{ code }}"
             }
           ],
