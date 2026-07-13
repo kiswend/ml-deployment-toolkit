@@ -12,7 +12,7 @@ data:
     {
       "uid": "moja-als",
       "title": "Account Lookup Service",
-      "description": "ALS operations: parties/participants request rates, ingress/egress/domain latency, oracle lookups, error callbacks",
+      "description": "ALS operations: parties/participants request rates, ingress/egress/domain latency, oracle lookups, error callbacks.",
       "tags": ["mojaloop", "als", "performance"],
       "timezone": "utc",
       "editable": true,
@@ -24,7 +24,7 @@ data:
             "name": "cluster_name",
             "type": "query",
             "datasource": { "uid": "thanos" },
-            "query": "label_values(moja_ing_getPartiesByTypeAndID_count{service=\"account-lookup-service\"}, cluster_name)",
+            "query": "label_values(moja_nodejs_eventloop_lag_seconds{service=\"account-lookup-service\"}, cluster_name)",
             "refresh": 2,
             "includeAll": false,
             "current": {}

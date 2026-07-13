@@ -132,7 +132,10 @@ spec:
         folderAnnotation: grafana_folder
         searchNamespace: observability
         provider:
-          foldersFromFilesStructure: false
+          # Required for folderAnnotation to materialize as Grafana folders:
+          # the sidecar writes per-annotation subdirectories, this makes the
+          # provider map them to folders
+          foldersFromFilesStructure: true
       # Alerting sidecar — rules/policies from ConfigMaps, contact points
       # from Secrets (they carry credentials), all labeled grafana_alert=1
       alerts:
@@ -150,6 +153,10 @@ spec:
       analytics:
         check_for_updates: false
         reporting_enabled: false
+      # Land on the L1 Switch Overview (sidecar mounts dashboards under
+      # /tmp/dashboards/<folderAnnotation>/)
+      dashboards:
+        default_home_dashboard_path: /tmp/dashboards/Home/switch-overview.json
       # Alert email delivery. Always enabled by design: with the dummy
       # defaults from .env.sample, sends fail visibly on the contact point
       # until real SMTP values are provided (see .env.sample warning).

@@ -12,7 +12,7 @@ data:
     {
       "uid": "platform-oathkeeper",
       "title": "Oathkeeper Gateway",
-      "description": "Ory Oathkeeper auth proxy: request rates, auth decisions (allow/deny), latency per path. Note: the service label is oathkeeper's listener (proxy = decision traffic, api = rules/judge API)",
+      "description": "Ory Oathkeeper auth proxy: request rates, auth decisions (allow/deny), latency per path. Note: the service label is oathkeeper's listener (oathkeeper-proxy = decision traffic, oathkeeper-api = rules/judge API)",
       "tags": ["platform", "ory", "oathkeeper", "auth"],
       "timezone": "utc",
       "editable": true,
@@ -33,14 +33,40 @@ data:
       },
       "panels": [
         {
+          "title": "Up",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "datasource": { "uid": "thanos" },
+          "description": "Scrape health — distinguishes 'oathkeeper down' from 'no traffic' (request panels are empty until traffic flows)",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "max(up{cluster_name=\"$cluster_name\", service=\"oathkeeper-metrics\"}) or vector(0)",
+              "legendFormat": "up"
+            }
+          ],
+          "options": { "colorMode": "background", "graphMode": "none" }
+        },
+        {
           "title": "Proxy Requests/s",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": { "defaults": { "unit": "ops", "decimals": 1 } },
           "targets": [
             {
-              "expr": "sum(rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval]))",
+              "expr": "sum(rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval]))",
               "legendFormat": ""
             }
           ],
@@ -49,13 +75,13 @@ data:
         {
           "title": "Auth Denials/s (401/403)",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "gridPos": { "h": 4, "w": 5, "x": 9, "y": 0 },
           "datasource": { "uid": "thanos" },
           "description": "Requests rejected by authentication or authorization; a sudden spike means either an attack or a broken client/credential",
           "fieldConfig": { "defaults": { "unit": "ops", "decimals": 2 } },
           "targets": [
             {
-              "expr": "sum(rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\", status_code=~\"401|403\"}[$__rate_interval])) or vector(0)",
+              "expr": "sum(rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\", status_code=~\"401|403\"}[$__rate_interval])) or vector(0)",
               "legendFormat": ""
             }
           ],
@@ -64,7 +90,7 @@ data:
         {
           "title": "5xx/s",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
           "datasource": { "uid": "thanos" },
           "fieldConfig": {
             "defaults": {
@@ -89,7 +115,7 @@ data:
         {
           "title": "Proxy Latency p99",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+          "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
           "datasource": { "uid": "thanos" },
           "description": "Includes the auth decision AND the proxied upstream response time",
           "fieldConfig": {
@@ -107,7 +133,7 @@ data:
           },
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval])) by (le))",
               "legendFormat": ""
             }
           ],
@@ -121,7 +147,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
           "targets": [
             {
-              "expr": "sum by (status_code) (rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval]))",
+              "expr": "sum by (status_code) (rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval]))",
               "legendFormat": "{{status_code}}"
             }
           ]
@@ -134,15 +160,15 @@ data:
           "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
           "targets": [
             {
-              "expr": "histogram_quantile(0.5, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval])) by (le))",
+              "expr": "histogram_quantile(0.5, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval])) by (le))",
               "legendFormat": "p50"
             },
             {
-              "expr": "histogram_quantile(0.9, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval])) by (le))",
+              "expr": "histogram_quantile(0.9, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval])) by (le))",
               "legendFormat": "p90"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(ory_oathkeeper_requests_duration_seconds_bucket{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval])) by (le))",
               "legendFormat": "p99"
             }
           ]
@@ -155,7 +181,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 20 } } },
           "targets": [
             {
-              "expr": "topk(10, sum by (request) (rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\"}[$__rate_interval])))",
+              "expr": "topk(10, sum by (request) (rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\"}[$__rate_interval])))",
               "legendFormat": "{{request}}"
             }
           ]
@@ -169,7 +195,7 @@ data:
           "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 20 } } },
           "targets": [
             {
-              "expr": "sum by (request, status_code) (rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"proxy\", status_code=~\"401|403\"}[$__rate_interval])) > 0",
+              "expr": "sum by (request, status_code) (rate(ory_oathkeeper_requests_total{cluster_name=\"$cluster_name\", namespace=\"ory\", service=\"oathkeeper-proxy\", status_code=~\"401|403\"}[$__rate_interval])) > 0",
               "legendFormat": "{{request}} ({{status_code}})"
             }
           ]

@@ -33,7 +33,7 @@ data:
             "name": "cluster_name",
             "type": "query",
             "datasource": { "uid": "thanos" },
-            "query": "label_values(moja_tx_transfer_count, cluster_name)",
+            "query": "label_values(moja_nodejs_eventloop_lag_seconds, cluster_name)",
             "refresh": 2,
             "includeAll": false,
             "current": {}

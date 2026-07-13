@@ -22,7 +22,7 @@ data:
                 relativeTimeRange: { from: 600, to: 0 }
                 datasourceUid: thanos
                 model:
-                  expr: count by (cluster_name) (max_over_time(up[24h])) unless count by (cluster_name) (max_over_time(up[10m]))
+                  expr: count by (cluster_name) (max_over_time(up[24h])) unless count by (cluster_name) (max_over_time(up[2m]))
                   instant: true
                   refId: A
               - refId: C
@@ -39,7 +39,7 @@ data:
             labels:
               severity: critical
             annotations:
-              summary: 'Cluster {{ $labels.cluster_name }} reported metrics in the last 24h but has been silent for 10+ minutes — dead agent or broken remote-write (push model produces no error, only silence).'
+              summary: 'Cluster {{ $labels.cluster_name }} reported metrics in the last 24h but has been silent for 2+ minutes — dead agent or broken remote-write (push model produces no error, only silence). Occasional fire-then-resolve during Alloy rollouts is expected at this sensitivity.'
           - uid: node-not-ready
             title: Node NotReady
             condition: C
